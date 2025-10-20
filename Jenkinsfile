@@ -1,6 +1,11 @@
 pipeline {
     agent any
     
+    tools {
+        terraform 'Terraform-1.5'
+        gradle 'Gradle 8.x'
+    }
+    
     parameters {
         choice(
             name: 'ENVIRONMENT',
@@ -133,8 +138,8 @@ pipeline {
                     echo "Building and testing application for ${params.ENVIRONMENT}..."
                     
                     # Run tests and build
-                    ./gradlew clean test
-                    ./gradlew buildLambda
+                    gradle clean test
+                    gradle buildLambda
                     
                     # Copy JAR to terraform directory for deployment
                     mkdir -p terraform/lambda-artifacts
