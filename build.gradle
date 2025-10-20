@@ -1,0 +1,142 @@
+plugins {
+    id 'java'
+}
+
+group = 'com.seatmap'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    awsSdkVersion = '2.20.162'
+    awsLambdaVersion = '1.2.3'
+    jacksonVersion = '2.15.2'
+    junitVersion = '5.10.0'
+    mockitoVersion = '5.5.0'
+    slf4jVersion = '2.0.7'
+}
+
+dependencies {
+    // AWS Lambda Core
+    implementation "com.amazonaws:aws-lambda-java-core:${awsLambdaVersion}"
+    implementation "com.amazonaws:aws-lambda-java-events:3.11.3"
+
+    // AWS SDK v2
+    implementation "software.amazon.awssdk:dynamodb:${awsSdkVersion}"
+    implementation "software.amazon.awssdk:secretsmanager:${awsSdkVersion}"
+    implementation "software.amazon.awssdk:sns:${awsSdkVersion}"
+    implementation "software.amazon.awssdk:url-connection-client:${awsSdkVersion}"
+
+    // Jackson for JSON processing
+    implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
+
+    // JWT Library
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+    // BCrypt for password hashing
+    implementation 'org.springframework.security:spring-security-crypto:6.1.4'
+
+    // Validation (Jakarta for Java 17)
+    implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
+    implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
+    implementation 'org.glassfish:jakarta.el:4.0.2'
+
+    // Logging
+    implementation "org.slf4j:slf4j-api:${slf4jVersion}"
+    implementation "org.slf4j:slf4j-simple:${slf4jVersion}"
+
+    // Test Dependencies
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+}
+
+test {
+    useJUnitPlatform()
+    
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+    }
+    
+    // Set test environment variables
+    systemProperty "JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long-for-testing"
+}
+
+// Configure JAR task to create fat JAR with all dependencies
+jar {
+    archiveClassifier = ''
+    
+    from {
+        configurations.runtimeClasspath.collect { 
+            it.isDirectory() ? it : zipTree(it) 
+        }
+    }
+    
+    // Handle duplicate files
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    
+    // Exclude signature files that can cause issues
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA' 
+    exclude 'META-INF/*.RSA'
+    exclude 'META-INF/LICENSE*'
+    exclude 'META-INF/NOTICE*'
+    
+    // Set manifest for Lambda (will be overridden per function)
+    manifest {
+        attributes(
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.version,
+            'Built-By': System.getProperty('user.name'),
+            'Built-Date': new Date(),
+            'Built-JDK': System.getProperty('java.version')
+        )
+    }
+}
+
+// Task to run tests with detailed output
+task testDetailed(type: Test) {
+    useJUnitPlatform()
+    
+    testLogging {
+        events "started", "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = true
+    }
+    
+    systemProperty "JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long-for-testing"
+}
+
+// Task to build Lambda deployment package
+task buildLambda {
+    dependsOn build
+    group = 'lambda'
+    description = 'Build Lambda deployment package with all dependencies'
+    
+    doLast {
+        println "Lambda JAR built: ${jar.archiveFile.get().asFile}"
+        println "Size: ${jar.archiveFile.get().asFile.length() / 1024 / 1024} MB"
+    }
+}
+
+// Clean task
+clean {
+    delete 'build'
+    delete '.gradle'
+}
+
+// Ensure tests run before building
+build {
+    dependsOn test
+}
