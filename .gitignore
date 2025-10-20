@@ -1,0 +1,38 @@
+# Build artifacts
+build/
+.gradle/
+*.jar
+*.class
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+
+# AWS credentials
+.aws/
+
+# Environment files
+.env
+.env.local
+
+# Project-specific exclusions
+hlds/
+Igal Past Projects/
+
+# Logs
+logs/
+*.log

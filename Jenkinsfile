@@ -76,22 +76,15 @@ pipeline {
                 expression { params.ACTION == 'bootstrap' }
             }
             steps {
-                dir('terraform') {
+                dir('terraform/bootstrap') {
                     sh """
                         echo "Running Terraform bootstrap for ${params.ENVIRONMENT}..."
                         
                         # Initialize terraform without backend (local state for bootstrap)
-                        terraform init -reconfigure \\
-                            -var="environment=${params.ENVIRONMENT}" \\
-                            -var="aws_region=${AWS_REGION}"
+                        terraform init -reconfigure
                         
                         # Plan bootstrap resources
                         terraform plan \\
-                            -target=aws_s3_bucket.terraform_state \\
-                            -target=aws_s3_bucket_versioning.terraform_state \\
-                            -target=aws_s3_bucket_server_side_encryption_configuration.terraform_state \\
-                            -target=aws_s3_bucket_public_access_block.terraform_state \\
-                            -target=aws_dynamodb_table.terraform_locks \\
                             -var="environment=${params.ENVIRONMENT}" \\
                             -var="aws_region=${AWS_REGION}" \\
                             -out=bootstrap.tfplan
@@ -208,6 +201,9 @@ pipeline {
         always {
             // Clean up plan files
             dir('terraform') {
+                sh 'rm -f *.tfplan || true'
+            }
+            dir('terraform/bootstrap') {
                 sh 'rm -f *.tfplan || true'
             }
         }
