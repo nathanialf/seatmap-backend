@@ -49,12 +49,37 @@ locals {
   }
 }
 
-# Lambda Function
+# Seat Map Lambda Function
 resource "aws_lambda_function" "seat_map" {
   filename         = local.lambda_jar_path
   function_name    = "seatmap-seat-map-${local.environment}"
   role            = aws_iam_role.lambda_role.arn
   handler         = "com.seatmap.api.handler.SeatMapHandler::handleRequest"
+  runtime         = "java17"
+  memory_size     = 1024  # Higher memory for production
+  timeout         = 30
+  
+  source_code_hash = filebase64sha256(local.lambda_jar_path)
+  
+  environment {
+    variables = {
+      ENVIRONMENT        = local.environment
+      AMADEUS_ENDPOINT   = var.amadeus_endpoint
+      AMADEUS_API_KEY    = var.amadeus_api_key
+      AMADEUS_API_SECRET = var.amadeus_api_secret
+      JWT_SECRET         = var.jwt_secret
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Auth Lambda Function
+resource "aws_lambda_function" "auth" {
+  filename         = local.lambda_jar_path
+  function_name    = "seatmap-auth-${local.environment}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "com.seatmap.auth.handler.AuthHandler::handleRequest"
   runtime         = "java17"
   memory_size     = 1024  # Higher memory for production
   timeout         = 30
@@ -127,7 +152,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.sessions.arn,
           "${aws_dynamodb_table.sessions.arn}/index/*",
           aws_dynamodb_table.subscriptions.arn,
-          "${aws_dynamodb_table.subscriptions.arn}/index/*"
+          "${aws_dynamodb_table.subscriptions.arn}/index/*",
+          aws_dynamodb_table.guest_access.arn,
+          "${aws_dynamodb_table.guest_access.arn}/index/*"
         ]
       }
     ]
@@ -251,6 +278,30 @@ resource "aws_dynamodb_table" "subscriptions" {
   })
 }
 
+resource "aws_dynamodb_table" "guest_access" {
+  name           = "seatmap-guest-access-${local.environment}"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 10
+  write_capacity = 10
+  hash_key       = "ipAddress"
+
+  attribute {
+    name = "ipAddress"
+    type = "S"
+  }
+
+  # TTL configuration for automatic cleanup after 6 months
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "Guest Access History Table"
+    Description = "Store guest access history for IP-based rate limiting"
+  })
+}
+
 # API Gateway
 resource "aws_api_gateway_rest_api" "seatmap_api" {
   name        = "seatmap-api-${local.environment}"
@@ -272,6 +323,7 @@ resource "aws_api_gateway_method" "seat_map_post" {
   resource_id   = aws_api_gateway_resource.seat_map.id
   http_method   = "POST"
   authorization = "NONE"
+  api_key_required = true
 }
 
 # API Gateway Integration
@@ -325,11 +377,112 @@ resource "aws_api_gateway_integration_response" "seat_map_integration_response" 
   depends_on = [aws_api_gateway_integration.seat_map_integration]
 }
 
+# Auth API Gateway Resources
+resource "aws_api_gateway_resource" "auth" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
+  path_part   = "auth"
+}
+
+# Auth Guest Resource
+resource "aws_api_gateway_resource" "auth_guest" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "guest"
+}
+
+# Auth Login Resource
+resource "aws_api_gateway_resource" "auth_login" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "login"
+}
+
+# Auth Register Resource
+resource "aws_api_gateway_resource" "auth_register" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "register"
+}
+
+# Auth Guest Method (POST)
+resource "aws_api_gateway_method" "auth_guest_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_guest.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Login Method (POST)
+resource "aws_api_gateway_method" "auth_login_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_login.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Register Method (POST)
+resource "aws_api_gateway_method" "auth_register_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_register.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Guest Integration
+resource "aws_api_gateway_integration" "auth_guest_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_guest.id
+  http_method = aws_api_gateway_method.auth_guest_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Login Integration
+resource "aws_api_gateway_integration" "auth_login_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_login.id
+  http_method = aws_api_gateway_method.auth_login_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Register Integration
+resource "aws_api_gateway_integration" "auth_register_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_register.id
+  http_method = aws_api_gateway_method.auth_register_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Lambda Permission for Auth API Gateway
+resource "aws_lambda_permission" "auth_api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.auth.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
+}
+
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "main" {
   depends_on = [
     aws_api_gateway_integration.seat_map_integration,
-    aws_api_gateway_integration_response.seat_map_integration_response
+    aws_api_gateway_integration_response.seat_map_integration_response,
+    aws_api_gateway_integration.auth_guest_integration,
+    aws_api_gateway_integration.auth_login_integration,
+    aws_api_gateway_integration.auth_register_integration
   ]
 
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
@@ -346,4 +499,43 @@ resource "aws_api_gateway_deployment" "main" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# API Gateway API Key
+resource "aws_api_gateway_api_key" "client_key" {
+  name        = "seatmap-client-key-${local.environment}"
+  description = "API key for seatmap client access"
+  enabled     = true
+
+  tags = local.common_tags
+}
+
+# API Gateway Usage Plan
+resource "aws_api_gateway_usage_plan" "main" {
+  name         = "seatmap-usage-plan-${local.environment}"
+  description  = "Usage plan for seatmap API"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.seatmap_api.id
+    stage  = aws_api_gateway_deployment.main.stage_name
+  }
+
+  quota_settings {
+    limit  = 50000  # Higher limit for production
+    period = "MONTH"
+  }
+
+  throttle_settings {
+    rate_limit  = 500   # Higher rate limit for production
+    burst_limit = 1000  # Higher burst limit for production
+  }
+
+  tags = local.common_tags
+}
+
+# Link API Key to Usage Plan
+resource "aws_api_gateway_usage_plan_key" "main" {
+  key_id        = aws_api_gateway_api_key.client_key.id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.main.id
 }

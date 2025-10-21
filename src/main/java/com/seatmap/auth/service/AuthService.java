@@ -3,6 +3,7 @@ package com.seatmap.auth.service;
 import com.seatmap.auth.model.AuthResponse;
 import com.seatmap.auth.model.LoginRequest;
 import com.seatmap.auth.model.RegisterRequest;
+import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.common.exception.SeatmapException;
@@ -21,15 +22,18 @@ public class AuthService {
     private final SessionRepository sessionRepository;
     private final PasswordService passwordService;
     private final JwtService jwtService;
+    private final GuestAccessRepository guestAccessRepository;
     
     public AuthService(UserRepository userRepository, 
                       SessionRepository sessionRepository,
                       PasswordService passwordService,
-                      JwtService jwtService) {
+                      JwtService jwtService,
+                      GuestAccessRepository guestAccessRepository) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.passwordService = passwordService;
         this.jwtService = jwtService;
+        this.guestAccessRepository = guestAccessRepository;
     }
     
     /**
@@ -113,27 +117,42 @@ public class AuthService {
     }
     
     /**
-     * Create guest session
+     * Create guest session (no IP limiting - limits applied at seatmap request level)
      */
-    public AuthResponse createGuestSession() throws SeatmapException {
-        logger.info("Creating guest session");
+    public AuthResponse createGuestSession(String clientIp) throws SeatmapException {
+        logger.info("Creating guest session for IP: {}", clientIp);
         
         String guestId = "guest_" + UUID.randomUUID().toString();
         
-        // Create guest session
+        // Create guest session (no rate limiting at token creation)
         Session session = new Session(UUID.randomUUID().toString(), guestId, Session.UserType.GUEST);
+        session.setIpAddress(clientIp);
         
         // Generate JWT token for guest
         String token = jwtService.generateGuestToken(guestId, 0);
         session.setJwtToken(token);
         sessionRepository.saveSession(session);
         
-        logger.info("Guest session created: {}", guestId);
+        logger.info("Guest session created: {} for IP: {}", guestId, clientIp);
+        
+        // Get remaining seatmap requests for messaging
+        int remainingRequests = guestAccessRepository.getRemainingSeatmapRequests(clientIp);
         
         AuthResponse response = AuthResponse.forGuest(token, guestId, jwtService.getTokenExpirationSeconds());
-        response.setMessage("Guest session created. You can view up to 2 seat maps.");
+        response.setMessage(String.format("Guest session created. You have %d seat map view%s remaining.", 
+            remainingRequests, remainingRequests == 1 ? "" : "s"));
         
         return response;
+    }
+    
+    /**
+     * Create guest session (backward compatibility - gets IP from context)
+     */
+    @Deprecated
+    public AuthResponse createGuestSession() throws SeatmapException {
+        // For backward compatibility, create session without IP tracking
+        logger.warn("Creating guest session without IP tracking - this should be updated");
+        return createGuestSession("unknown");
     }
     
     /**

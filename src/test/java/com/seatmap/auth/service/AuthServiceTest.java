@@ -3,6 +3,7 @@ package com.seatmap.auth.service;
 import com.seatmap.auth.model.AuthResponse;
 import com.seatmap.auth.model.LoginRequest;
 import com.seatmap.auth.model.RegisterRequest;
+import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.common.exception.SeatmapException;
@@ -36,11 +37,14 @@ class AuthServiceTest {
     @Mock
     private JwtService jwtService;
     
+    @Mock
+    private GuestAccessRepository guestAccessRepository;
+    
     private AuthService authService;
     
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService);
+        authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository);
     }
     
     @Test
@@ -206,16 +210,48 @@ class AuthServiceTest {
     }
     
     @Test
-    @DisplayName("Should create guest session successfully")
-    void shouldCreateGuestSessionSuccessfully() throws SeatmapException {
+    @DisplayName("Should create guest session successfully with IP")
+    void shouldCreateGuestSessionSuccessfullyWithIp() throws SeatmapException {
+        // Given
+        String clientIp = "192.168.1.100";
+        String guestToken = "guest_jwt_token";
+        int expirationSeconds = 86400;
+        
+        when(jwtService.generateGuestToken(anyString(), eq(0))).thenReturn(guestToken);
+        when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
+        when(guestAccessRepository.getRemainingSeatmapRequests(clientIp)).thenReturn(2);
+        
+        // When
+        AuthResponse response = authService.createGuestSession(clientIp);
+        
+        // Then
+        assertNotNull(response);
+        assertEquals(guestToken, response.getToken());
+        assertNotNull(response.getUserId());
+        assertTrue(response.getUserId().startsWith("guest_"));
+        assertEquals(expirationSeconds, response.getExpiresIn());
+        assertTrue(response.getMessage().contains("You have 2 seat map views remaining"));
+        
+        verify(sessionRepository).saveSession(argThat(session -> 
+            session.getIpAddress().equals(clientIp) &&
+            session.getUserType() == Session.UserType.GUEST
+        ));
+        verify(guestAccessRepository).getRemainingSeatmapRequests(clientIp);
+    }
+    
+    @Test
+    @DisplayName("Should create guest session with backward compatibility")
+    void shouldCreateGuestSessionWithBackwardCompatibility() throws SeatmapException {
         // Given
         String guestToken = "guest_jwt_token";
         int expirationSeconds = 86400;
         
         when(jwtService.generateGuestToken(anyString(), eq(0))).thenReturn(guestToken);
         when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
+        when(guestAccessRepository.getRemainingSeatmapRequests("unknown")).thenReturn(2);
         
         // When
+        @SuppressWarnings("deprecation")
         AuthResponse response = authService.createGuestSession();
         
         // Then
@@ -224,12 +260,57 @@ class AuthServiceTest {
         assertNotNull(response.getUserId());
         assertTrue(response.getUserId().startsWith("guest_"));
         assertEquals(expirationSeconds, response.getExpiresIn());
-        assertNotNull(response.getGuestLimits());
-        assertEquals(0, response.getGuestLimits().getFlightsViewed());
-        assertEquals(2, response.getGuestLimits().getMaxFlights());
-        assertEquals("Guest session created. You can view up to 2 seat maps.", response.getMessage());
+        assertTrue(response.getMessage().contains("You have 2 seat map views remaining"));
         
         verify(sessionRepository).saveSession(any(Session.class));
+        verify(guestAccessRepository).getRemainingSeatmapRequests("unknown");
+    }
+    
+    @Test
+    @DisplayName("Should create guest session with correct message formatting")
+    void shouldCreateGuestSessionWithCorrectMessageFormatting() throws SeatmapException {
+        // Given
+        String clientIp = "192.168.1.101";
+        String guestToken = "guest_jwt_token";
+        int expirationSeconds = 86400;
+        
+        when(jwtService.generateGuestToken(anyString(), eq(0))).thenReturn(guestToken);
+        when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
+        when(guestAccessRepository.getRemainingSeatmapRequests(clientIp)).thenReturn(1);
+        
+        // When
+        AuthResponse response = authService.createGuestSession(clientIp);
+        
+        // Then
+        assertTrue(response.getMessage().contains("You have 1 seat map view remaining"));
+        assertFalse(response.getMessage().contains("views remaining"));
+        
+        verify(guestAccessRepository).getRemainingSeatmapRequests(clientIp);
+    }
+    
+    @Test
+    @DisplayName("Should create guest session even with zero remaining requests")
+    void shouldCreateGuestSessionEvenWithZeroRemainingRequests() throws SeatmapException {
+        // Given
+        String clientIp = "192.168.1.102";
+        String guestToken = "guest_jwt_token";
+        int expirationSeconds = 86400;
+        
+        when(jwtService.generateGuestToken(anyString(), eq(0))).thenReturn(guestToken);
+        when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
+        when(guestAccessRepository.getRemainingSeatmapRequests(clientIp)).thenReturn(0);
+        
+        // When
+        AuthResponse response = authService.createGuestSession(clientIp);
+        
+        // Then
+        assertNotNull(response);
+        assertEquals(guestToken, response.getToken());
+        assertTrue(response.getMessage().contains("You have 0 seat map views remaining"));
+        
+        // Token creation should succeed even with 0 remaining - limits enforced at seatmap level
+        verify(sessionRepository).saveSession(any(Session.class));
+        verify(guestAccessRepository).getRemainingSeatmapRequests(clientIp);
     }
     
     @Test

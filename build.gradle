@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'jacoco'
 }
 
 group = 'com.seatmap'
@@ -80,7 +81,10 @@ test {
     }
     
     // Set test environment variables
-    systemProperty "JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long-for-testing"
+    environment "JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long-for-testing"
+    environment "AMADEUS_API_KEY", "test-api-key"
+    environment "AMADEUS_API_SECRET", "test-api-secret"
+    environment "AMADEUS_ENDPOINT", "test.api.amadeus.com"
 }
 
 // Configure JAR task to create fat JAR with all dependencies
@@ -125,7 +129,10 @@ task testDetailed(type: Test) {
         showStandardStreams = true
     }
     
-    systemProperty "JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long-for-testing"
+    environment "JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long-for-testing"
+    environment "AMADEUS_API_KEY", "test-api-key"
+    environment "AMADEUS_API_SECRET", "test-api-secret"
+    environment "AMADEUS_ENDPOINT", "test.api.amadeus.com"
 }
 
 // Task to build Lambda deployment package

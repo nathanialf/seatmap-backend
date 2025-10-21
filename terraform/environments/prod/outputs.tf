@@ -14,6 +14,21 @@ output "lambda_invoke_arn" {
   value       = aws_lambda_function.seat_map.invoke_arn
 }
 
+output "auth_lambda_function_name" {
+  description = "Name of the Auth Lambda function"
+  value       = aws_lambda_function.auth.function_name
+}
+
+output "auth_lambda_function_arn" {
+  description = "ARN of the Auth Lambda function"
+  value       = aws_lambda_function.auth.arn
+}
+
+output "auth_lambda_invoke_arn" {
+  description = "Invoke ARN of the Auth Lambda function"
+  value       = aws_lambda_function.auth.invoke_arn
+}
+
 # API Gateway Outputs
 output "api_gateway_id" {
   description = "ID of the API Gateway"
@@ -33,6 +48,21 @@ output "api_gateway_stage" {
 output "seat_map_endpoint" {
   description = "Full URL for the seat map endpoint"
   value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/seat-map"
+}
+
+output "auth_guest_endpoint" {
+  description = "Full URL for the guest authentication endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/guest"
+}
+
+output "auth_login_endpoint" {
+  description = "Full URL for the login authentication endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/login"
+}
+
+output "auth_register_endpoint" {
+  description = "Full URL for the registration authentication endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/register"
 }
 
 # DynamoDB Outputs
@@ -66,6 +96,16 @@ output "subscriptions_table_arn" {
   value       = aws_dynamodb_table.subscriptions.arn
 }
 
+output "guest_access_table_name" {
+  description = "Name of the guest access DynamoDB table"
+  value       = aws_dynamodb_table.guest_access.name
+}
+
+output "guest_access_table_arn" {
+  description = "ARN of the guest access DynamoDB table"
+  value       = aws_dynamodb_table.guest_access.arn
+}
+
 # IAM Outputs
 output "lambda_role_arn" {
   description = "ARN of the Lambda execution role"
@@ -91,4 +131,21 @@ output "aws_region" {
 output "aws_account_id" {
   description = "AWS account ID"
   value       = data.aws_caller_identity.current.account_id
+}
+
+# API Key Outputs
+output "api_key_id" {
+  description = "API Gateway API key ID"
+  value       = aws_api_gateway_api_key.client_key.id
+}
+
+output "api_key_name" {
+  description = "API Gateway API key name"
+  value       = aws_api_gateway_api_key.client_key.name
+}
+
+output "api_key_value" {
+  description = "API Gateway API key value"
+  value       = aws_api_gateway_api_key.client_key.value
+  sensitive   = true
 }
