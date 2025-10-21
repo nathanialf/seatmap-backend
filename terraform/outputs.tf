@@ -67,3 +67,20 @@ output "project_name" {
   description = "Project name"
   value       = var.project_name
 }
+
+# API Gateway Outputs
+output "api_gateway_url" {
+  description = "Base URL of the API Gateway"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}"
+}
+
+output "seat_map_endpoint" {
+  description = "Full URL for the seat map endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}/seat-map"
+}
+
+# Lambda Outputs
+output "seat_map_lambda_function_name" {
+  description = "Name of the seat map Lambda function"
+  value       = aws_lambda_function.seat_map.function_name
+}

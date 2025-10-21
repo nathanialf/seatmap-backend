@@ -51,20 +51,30 @@ pipeline {
         stage('Load Credentials') {
             steps {
                 script {
-                    // Load AWS credentials based on environment
+                    // Load AWS and Amadeus credentials based on environment
                     if (params.ENVIRONMENT == 'dev') {
                         withCredentials([
-                            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-dev']
+                            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-dev'],
+                            string(credentialsId: 'amadeus-test-apikey', variable: 'AMADEUS_API_KEY'),
+                            string(credentialsId: 'amadeus-test-secret', variable: 'AMADEUS_API_SECRET')
                         ]) {
                             env.AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
                             env.AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
+                            env.AMADEUS_API_KEY = AMADEUS_API_KEY
+                            env.AMADEUS_API_SECRET = AMADEUS_API_SECRET
+                            env.AMADEUS_ENDPOINT = 'test.api.amadeus.com'
                         }
                     } else if (params.ENVIRONMENT == 'prod') {
                         withCredentials([
-                            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-prod']
+                            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-prod'],
+                            string(credentialsId: 'amadeus-prod-apikey', variable: 'AMADEUS_API_KEY'),
+                            string(credentialsId: 'amadeus-prod-secret', variable: 'AMADEUS_API_SECRET')
                         ]) {
                             env.AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
                             env.AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
+                            env.AMADEUS_API_KEY = AMADEUS_API_KEY
+                            env.AMADEUS_API_SECRET = AMADEUS_API_SECRET
+                            env.AMADEUS_ENDPOINT = 'api.amadeus.com'
                         }
                     }
                 }
@@ -155,6 +165,9 @@ pipeline {
                         terraform plan \\
                             -var="environment=${params.ENVIRONMENT}" \\
                             -var="aws_region=${AWS_REGION}" \\
+                            -var="amadeus_api_key=${AMADEUS_API_KEY}" \\
+                            -var="amadeus_api_secret=${AMADEUS_API_SECRET}" \\
+                            -var="amadeus_endpoint=${AMADEUS_ENDPOINT}" \\
                             -out=terraform.tfplan
                     """
                 }
@@ -190,7 +203,10 @@ pipeline {
                         
                         terraform destroy -auto-approve \\
                             -var="environment=${params.ENVIRONMENT}" \\
-                            -var="aws_region=${AWS_REGION}"
+                            -var="aws_region=${AWS_REGION}" \\
+                            -var="amadeus_api_key=${AMADEUS_API_KEY}" \\
+                            -var="amadeus_api_secret=${AMADEUS_API_SECRET}" \\
+                            -var="amadeus_endpoint=${AMADEUS_ENDPOINT}"
                     """
                 }
             }

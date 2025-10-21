@@ -11,11 +11,12 @@ A serverless REST API built on AWS that aggregates flight seat availability data
 
 ## Current Progress
 
-### ✅ **Completed (Phase 1 MVP - 75%)**
+### ✅ **Completed (Phase 1 MVP - 95%)**
 
 #### **Infrastructure & DevOps**
 - ✅ **Terraform Infrastructure**: Complete AWS infrastructure as code
   - DynamoDB tables with proper indexes and TTL
+  - Lambda functions with API Gateway integration
   - S3 backend for state management with locking
   - Environment separation (dev/prod)
 - ✅ **Jenkins CI/CD Pipeline**: 4-action deployment pipeline
@@ -23,9 +24,10 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - `plan`: Builds application + shows infrastructure changes
   - `apply`: Deploys application and infrastructure  
   - `destroy`: Removes all resources
+  - Amadeus API credentials integration
 - ✅ **Build System**: Gradle 8.4 with Java 17
   - Fat JAR packaging for Lambda deployment
-  - Comprehensive test suite with JUnit 5
+  - Comprehensive test suite with JUnit 5 (90 tests)
   - Jakarta validation for request validation
 
 #### **Authentication System**
@@ -41,15 +43,27 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Session repository with TTL management
   - Comprehensive test coverage (42 tests)
 
+#### **Amadeus Seat Map API**
+- ✅ **API Integration**: Complete Amadeus seat map service
+  - OAuth2 token management with auto-refresh
+  - Seat map retrieval with flight validation
+  - Error handling and network resilience
+- ✅ **Lambda Handler**: HTTP request processing
+  - JWT authentication with guest limits
+  - Request validation (flight number, dates, airports)
+  - CORS support for web frontend
+- ✅ **API Gateway**: REST endpoint configuration
+  - POST /seat-map endpoint with OPTIONS CORS
+  - Proper integration with Lambda functions
+- ✅ **Test Coverage**: 48 comprehensive tests
+  - AmadeusService: API integration and token management
+  - SeatMapHandler: Request processing and validation
+  - SeatMapRequest/Response: Data models and validation
+
 ### 🔄 **In Progress**
 
 #### **API Layer (Phase 2)**
-- 🔄 **Lambda Handlers**: HTTP request processing
-- 🔄 **API Gateway**: REST endpoints with rate limiting
-
-#### **Flight Search Integration (Phase 3)**  
-- 🔄 **Amadeus API**: Flight search and seat map retrieval
-- 🔄 **External API Service**: Caching and error handling
+- 🔄 **Additional Endpoints**: User profile, bookmarks management
 
 ### 📅 **Planned Features**
 - Google OAuth 2.0 and Apple Sign In
@@ -128,6 +142,9 @@ open build/reports/tests/test/index.html
 ### Environment Variables (for testing)
 ```bash
 export JWT_SECRET="your-jwt-secret-key-at-least-32-characters-long"
+export AMADEUS_API_KEY="your-amadeus-api-key"
+export AMADEUS_API_SECRET="your-amadeus-api-secret"
+export AMADEUS_ENDPOINT="test.api.amadeus.com"
 ```
 
 ## Deployment
@@ -185,11 +202,16 @@ terraform apply -var="environment=dev" -var="aws_region=us-west-1"
 
 ## Testing
 
-### Test Coverage
+### Test Coverage (90 tests total)
 - **Authentication Services**: 42 comprehensive tests
-- **Password Security**: bcrypt validation, strength requirements
-- **JWT Tokens**: Generation, validation, expiration handling
-- **User Management**: Registration, login, session management
+  - Password Security: bcrypt validation, strength requirements
+  - JWT Tokens: Generation, validation, expiration handling
+  - User Management: Registration, login, session management
+- **Amadeus Seat Map API**: 48 comprehensive tests
+  - AmadeusService: OAuth2 integration, error handling, token management
+  - SeatMapHandler: Lambda request processing, JWT validation, CORS
+  - SeatMapRequest: Jakarta validation for flight data
+  - SeatMapResponse: Response model handling and JSON preservation
 
 ### Running Tests
 ```bash
@@ -236,9 +258,55 @@ Content-Type: application/json
 POST /auth/guest
 ```
 
+#### Get Seat Map
+```http
+POST /seat-map
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "flightNumber": "AA123",
+  "departureDate": "2024-12-01",
+  "origin": "LAX",
+  "destination": "JFK"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Seat map retrieved successfully",
+  "data": {
+    "data": [
+      {
+        "type": "seat-map",
+        "flightNumber": "AA123",
+        "aircraft": { "code": "32A" },
+        "decks": [
+          {
+            "deckType": "MAIN",
+            "seats": [
+              {
+                "number": "1A",
+                "characteristicsCodes": ["A", "W"],
+                "travelerPricing": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "flightNumber": "AA123",
+  "departureDate": "2024-12-01",
+  "origin": "LAX",
+  "destination": "JFK"
+}
+```
+
 ### Planned Endpoints
 - `POST /flights/search` - Search flights across Amadeus and Sabre
-- `GET /flights/{flightId}/seatmap` - Get seat map (with guest limits)
 - `POST /bookmarks` - Save flight bookmark
 - `POST /subscriptions/subscribe` - Create Stripe subscription
 
@@ -283,4 +351,4 @@ POST /auth/guest
 
 ---
 
-**Status**: Phase 1 MVP (75% complete) - Authentication system ready for production deployment
+**Status**: Phase 1 MVP (95% complete) - Authentication system and Amadeus seat map API ready for production deployment

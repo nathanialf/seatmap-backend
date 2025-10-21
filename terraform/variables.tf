@@ -84,3 +84,32 @@ variable "seat_map_cache_ttl_seconds" {
   type        = number
   default     = 300 # 5 minutes
 }
+
+# JWT Configuration
+variable "jwt_secret" {
+  description = "Secret key for JWT token signing"
+  type        = string
+  sensitive   = true
+  default     = "your-jwt-secret-key-here"
+}
+
+# Amadeus API Configuration
+variable "amadeus_api_key" {
+  description = "Amadeus API Key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "amadeus_api_secret" {
+  description = "Amadeus API Secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "amadeus_endpoint" {
+  description = "Amadeus API Endpoint"
+  type        = string
+  default     = "test.api.amadeus.com"
+}
