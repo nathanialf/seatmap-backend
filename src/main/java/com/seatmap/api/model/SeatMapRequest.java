@@ -1,62 +1,34 @@
 package com.seatmap.api.model;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 
 public class SeatMapRequest {
-    @NotBlank(message = "Flight number is required")
-    private String flightNumber;
+    @NotBlank(message = "Flight offer ID is required")
+    private String flightOfferId;
     
-    @NotBlank(message = "Departure date is required")
-    @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}", message = "Departure date must be in YYYY-MM-DD format")
-    private String departureDate;
-    
-    @NotBlank(message = "Origin airport code is required")
-    @Pattern(regexp = "[A-Z]{3}", message = "Origin must be a 3-letter IATA airport code")
-    private String origin;
-    
-    @NotBlank(message = "Destination airport code is required")
-    @Pattern(regexp = "[A-Z]{3}", message = "Destination must be a 3-letter IATA airport code")
-    private String destination;
+    @NotBlank(message = "Flight offer data is required")
+    private String flightOfferData; // JSON string of complete flight offer from search
     
     public SeatMapRequest() {}
     
-    public SeatMapRequest(String flightNumber, String departureDate, String origin, String destination) {
-        this.flightNumber = flightNumber;
-        this.departureDate = departureDate;
-        this.origin = origin;
-        this.destination = destination;
+    public SeatMapRequest(String flightOfferId, String flightOfferData) {
+        this.flightOfferId = flightOfferId;
+        this.flightOfferData = flightOfferData;
     }
     
-    public String getFlightNumber() {
-        return flightNumber;
+    public String getFlightOfferId() {
+        return flightOfferId;
     }
     
-    public void setFlightNumber(String flightNumber) {
-        this.flightNumber = flightNumber;
+    public void setFlightOfferId(String flightOfferId) {
+        this.flightOfferId = flightOfferId;
     }
     
-    public String getDepartureDate() {
-        return departureDate;
+    public String getFlightOfferData() {
+        return flightOfferData;
     }
     
-    public void setDepartureDate(String departureDate) {
-        this.departureDate = departureDate;
-    }
-    
-    public String getOrigin() {
-        return origin;
-    }
-    
-    public void setOrigin(String origin) {
-        this.origin = origin;
-    }
-    
-    public String getDestination() {
-        return destination;
-    }
-    
-    public void setDestination(String destination) {
-        this.destination = destination;
+    public void setFlightOfferData(String flightOfferData) {
+        this.flightOfferData = flightOfferData;
     }
 }

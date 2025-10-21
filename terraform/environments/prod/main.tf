@@ -99,6 +99,31 @@ resource "aws_lambda_function" "auth" {
   tags = local.common_tags
 }
 
+# Flight Offers Lambda Function
+resource "aws_lambda_function" "flight_offers" {
+  filename         = local.lambda_jar_path
+  function_name    = "seatmap-flight-offers-${local.environment}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "com.seatmap.api.handler.FlightOffersHandler::handleRequest"
+  runtime         = "java17"
+  memory_size     = 1024  # Higher memory for production
+  timeout         = 30
+  
+  source_code_hash = filebase64sha256(local.lambda_jar_path)
+  
+  environment {
+    variables = {
+      ENVIRONMENT        = local.environment
+      AMADEUS_ENDPOINT   = var.amadeus_endpoint
+      AMADEUS_API_KEY    = var.amadeus_api_key
+      AMADEUS_API_SECRET = var.amadeus_api_secret
+      JWT_SECRET         = var.jwt_secret
+    }
+  }
+
+  tags = local.common_tags
+}
+
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
   name = "seatmap-lambda-role-${local.environment}"
@@ -475,6 +500,43 @@ resource "aws_lambda_permission" "auth_api_gateway" {
   source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
 }
 
+# Flight Offers API Gateway Resource
+resource "aws_api_gateway_resource" "flight_offers" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
+  path_part   = "flight-offers"
+}
+
+# Flight Offers Method (POST)
+resource "aws_api_gateway_method" "flight_offers_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.flight_offers.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Flight Offers Integration
+resource "aws_api_gateway_integration" "flight_offers_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.flight_offers.id
+  http_method = aws_api_gateway_method.flight_offers_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.flight_offers.invoke_arn
+}
+
+# Lambda Permission for Flight Offers API Gateway
+resource "aws_lambda_permission" "flight_offers_api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.flight_offers.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
+}
+
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "main" {
   depends_on = [
@@ -482,7 +544,8 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_integration_response.seat_map_integration_response,
     aws_api_gateway_integration.auth_guest_integration,
     aws_api_gateway_integration.auth_login_integration,
-    aws_api_gateway_integration.auth_register_integration
+    aws_api_gateway_integration.auth_register_integration,
+    aws_api_gateway_integration.flight_offers_integration
   ]
 
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
@@ -493,6 +556,19 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_resource.seat_map.id,
       aws_api_gateway_method.seat_map_post.id,
       aws_api_gateway_integration.seat_map_integration.id,
+      aws_api_gateway_resource.auth.id,
+      aws_api_gateway_resource.auth_guest.id,
+      aws_api_gateway_resource.auth_login.id,
+      aws_api_gateway_resource.auth_register.id,
+      aws_api_gateway_method.auth_guest_post.id,
+      aws_api_gateway_method.auth_login_post.id,
+      aws_api_gateway_method.auth_register_post.id,
+      aws_api_gateway_integration.auth_guest_integration.id,
+      aws_api_gateway_integration.auth_login_integration.id,
+      aws_api_gateway_integration.auth_register_integration.id,
+      aws_api_gateway_resource.flight_offers.id,
+      aws_api_gateway_method.flight_offers_post.id,
+      aws_api_gateway_integration.flight_offers_integration.id,
     ]))
   }
 

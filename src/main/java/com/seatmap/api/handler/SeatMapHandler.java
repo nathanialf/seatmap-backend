@@ -103,21 +103,15 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 return createErrorResponse(400, "Validation errors: " + errors.toString());
             }
             
-            // Call Amadeus API
-            JsonNode seatMapData = amadeusService.getSeatMap(
-                request.getFlightNumber(),
-                request.getDepartureDate(),
-                request.getOrigin(),
-                request.getDestination()
+            // Call Amadeus API with flight offer data
+            JsonNode seatMapData = amadeusService.getSeatMapFromOfferData(
+                request.getFlightOfferData()
             );
             
             // Create successful response
             SeatMapResponse response = SeatMapResponse.success(
                 seatMapData,
-                request.getFlightNumber(),
-                request.getDepartureDate(),
-                request.getOrigin(),
-                request.getDestination()
+                request.getFlightOfferId()
             );
             
             // Only record seatmap request for guest users after successful response creation

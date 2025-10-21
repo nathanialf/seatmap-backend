@@ -6,10 +6,7 @@ public class SeatMapResponse {
     private boolean success;
     private String message;
     private JsonNode data;
-    private String flightNumber;
-    private String departureDate;
-    private String origin;
-    private String destination;
+    private String flightOfferId;
     
     public SeatMapResponse() {}
     
@@ -18,13 +15,10 @@ public class SeatMapResponse {
         this.message = message;
     }
     
-    public static SeatMapResponse success(JsonNode data, String flightNumber, String departureDate, String origin, String destination) {
+    public static SeatMapResponse success(JsonNode data, String flightOfferId) {
         SeatMapResponse response = new SeatMapResponse(true, "Seat map retrieved successfully");
         response.setData(data);
-        response.setFlightNumber(flightNumber);
-        response.setDepartureDate(departureDate);
-        response.setOrigin(origin);
-        response.setDestination(destination);
+        response.setFlightOfferId(flightOfferId);
         return response;
     }
     
@@ -56,35 +50,11 @@ public class SeatMapResponse {
         this.data = data;
     }
     
-    public String getFlightNumber() {
-        return flightNumber;
+    public String getFlightOfferId() {
+        return flightOfferId;
     }
     
-    public void setFlightNumber(String flightNumber) {
-        this.flightNumber = flightNumber;
-    }
-    
-    public String getDepartureDate() {
-        return departureDate;
-    }
-    
-    public void setDepartureDate(String departureDate) {
-        this.departureDate = departureDate;
-    }
-    
-    public String getOrigin() {
-        return origin;
-    }
-    
-    public void setOrigin(String origin) {
-        this.origin = origin;
-    }
-    
-    public String getDestination() {
-        return destination;
-    }
-    
-    public void setDestination(String destination) {
-        this.destination = destination;
+    public void setFlightOfferId(String flightOfferId) {
+        this.flightOfferId = flightOfferId;
     }
 }

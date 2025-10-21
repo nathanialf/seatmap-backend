@@ -47,33 +47,114 @@ public class AmadeusService {
         try {
             ensureValidToken();
             
-            String url = String.format("https://%s/v1/shopping/seatmaps?flightNumber=%s&departureDate=%s&origin=%s&destination=%s",
-                endpoint,
-                URLEncoder.encode(flightNumber, StandardCharsets.UTF_8),
-                URLEncoder.encode(departureDate, StandardCharsets.UTF_8),
-                URLEncoder.encode(origin, StandardCharsets.UTF_8),
-                URLEncoder.encode(destination, StandardCharsets.UTF_8)
-            );
+            // Step 1: Search for flight offers using Flight Offers Search API
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, flightNumber, 10);
             
-            HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Authorization", "Bearer " + accessToken)
-                .header("Content-Type", "application/json")
-                .GET()
-                .build();
-            
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            
-            if (response.statusCode() == 200) {
-                return objectMapper.readTree(response.body());
-            } else {
-                logger.error("Amadeus API error: {} - {}", response.statusCode(), response.body());
-                throw new SeatmapException("Failed to retrieve seat map: " + response.statusCode());
+            if (flightOffers == null || !flightOffers.has("data") || flightOffers.get("data").size() == 0) {
+                throw new SeatmapException("No flight offers found for the specified criteria");
             }
+            
+            // Step 2: Get seat map using the first flight offer
+            JsonNode firstOffer = flightOffers.get("data").get(0);
+            return getSeatMapFromOffer(firstOffer);
             
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
             throw new SeatmapException("Network error calling Amadeus API", e);
+        }
+    }
+    
+    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SeatmapException {
+        try {
+            ensureValidToken();
+            return searchFlightOffersInternal(origin, destination, departureDate, flightNumber, maxResults);
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error calling Amadeus API", e);
+            throw new SeatmapException("Network error calling Amadeus API", e);
+        }
+    }
+    
+    public JsonNode getSeatMapFromOfferData(String flightOfferData) throws SeatmapException {
+        try {
+            ensureValidToken();
+            
+            // Parse the flight offer data
+            JsonNode flightOffer = objectMapper.readTree(flightOfferData);
+            return getSeatMapFromOffer(flightOffer);
+            
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error calling Amadeus API", e);
+            throw new SeatmapException("Network error calling Amadeus API", e);
+        }
+    }
+    
+    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SeatmapException, IOException, InterruptedException {
+        int max = maxResults != null ? maxResults : 10;
+        String url = String.format("https://%s/v2/shopping/flight-offers?originLocationCode=%s&destinationLocationCode=%s&departureDate=%s&adults=1&max=%d",
+            endpoint,
+            URLEncoder.encode(origin, StandardCharsets.UTF_8),
+            URLEncoder.encode(destination, StandardCharsets.UTF_8),
+            URLEncoder.encode(departureDate, StandardCharsets.UTF_8),
+            max
+        );
+        
+        // Add flight number filter if specified
+        if (flightNumber != null && !flightNumber.trim().isEmpty()) {
+            // Extract carrier code (first 2-3 characters) and flight number
+            String carrierCode = flightNumber.replaceAll("\\d", "").trim();
+            if (!carrierCode.isEmpty()) {
+                url += "&includedAirlineCodes=" + URLEncoder.encode(carrierCode, StandardCharsets.UTF_8);
+            }
+        }
+        
+        logger.info("Searching flight offers: {}", url);
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Content-Type", "application/json")
+            .GET()
+            .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            JsonNode result = objectMapper.readTree(response.body());
+            logger.info("Found {} flight offers", result.has("data") ? result.get("data").size() : 0);
+            return result;
+        } else {
+            logger.error("Flight offers search error: {} - {}", response.statusCode(), response.body());
+            throw new SeatmapException("Failed to search flight offers: " + response.statusCode());
+        }
+    }
+    
+    private JsonNode getSeatMapFromOffer(JsonNode flightOffer) throws SeatmapException, IOException, InterruptedException {
+        String url = "https://" + endpoint + "/v1/shopping/seatmaps";
+        
+        // Create request body with flight offer
+        String requestBody = objectMapper.writeValueAsString(
+            objectMapper.createObjectNode()
+                .set("data", objectMapper.createArrayNode().add(flightOffer))
+        );
+        
+        logger.info("Getting seat map for flight offer: {}", flightOffer.get("id"));
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            JsonNode result = objectMapper.readTree(response.body());
+            logger.info("Successfully retrieved seat map data");
+            return result;
+        } else {
+            logger.error("Seat map API error: {} - {}", response.statusCode(), response.body());
+            throw new SeatmapException("Failed to retrieve seat map: " + response.statusCode());
         }
     }
     
