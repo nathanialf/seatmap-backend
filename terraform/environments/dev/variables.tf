@@ -19,7 +19,7 @@ variable "amadeus_api_secret" {
 variable "amadeus_endpoint" {
   description = "Amadeus API endpoint"
   type        = string
-  default     = "test.api.amadeus.com"
+  default     = "api.amadeus.com"
 }
 
 variable "jwt_secret" {

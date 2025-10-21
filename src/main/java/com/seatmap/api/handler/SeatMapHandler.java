@@ -111,17 +111,6 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 request.getDestination()
             );
             
-            // Record seatmap request for guest users (for rate limiting)
-            try {
-                if (jwtService.isGuestToken(token)) {
-                    guestAccessRepository.recordSeatmapRequest(clientIp);
-                    logger.info("Recorded seatmap request for guest IP: {}", clientIp);
-                }
-            } catch (Exception e) {
-                logger.warn("Failed to record seatmap request for IP {}: {}", clientIp, e.getMessage());
-                // Don't fail the request if recording fails
-            }
-            
             // Create successful response
             SeatMapResponse response = SeatMapResponse.success(
                 seatMapData,
@@ -130,6 +119,17 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 request.getOrigin(),
                 request.getDestination()
             );
+            
+            // Only record seatmap request for guest users after successful response creation
+            try {
+                if (jwtService.isGuestToken(token)) {
+                    guestAccessRepository.recordSeatmapRequest(clientIp);
+                    logger.info("Recorded seatmap request for guest IP: {} after successful response", clientIp);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to record seatmap request for IP {}: {}", clientIp, e.getMessage());
+                // Don't fail the request if recording fails
+            }
             
             return createSuccessResponse(response);
             

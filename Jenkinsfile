@@ -55,15 +55,15 @@ pipeline {
                     if (params.ENVIRONMENT == 'dev') {
                         withCredentials([
                             [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-dev'],
-                            string(credentialsId: 'amadeus-test-apikey', variable: 'AMADEUS_API_KEY'),
-                            string(credentialsId: 'amadeus-test-secret', variable: 'AMADEUS_API_SECRET'),
+                            string(credentialsId: 'amadeus-prod-apikey', variable: 'AMADEUS_API_KEY'),
+                            string(credentialsId: 'amadeus-prod-secret', variable: 'AMADEUS_API_SECRET'),
                             string(credentialsId: 'jwt-secret-dev', variable: 'JWT_SECRET')
                         ]) {
                             env.AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
                             env.AWS_SECRET_ACCESS_KEY = AWS_SECRET_ACCESS_KEY
                             env.AMADEUS_API_KEY = AMADEUS_API_KEY
                             env.AMADEUS_API_SECRET = AMADEUS_API_SECRET
-                            env.AMADEUS_ENDPOINT = 'test.api.amadeus.com'
+                            env.AMADEUS_ENDPOINT = 'api.amadeus.com'
                             env.JWT_SECRET = JWT_SECRET
                         }
                     } else if (params.ENVIRONMENT == 'prod') {
