@@ -477,6 +477,16 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_resource.seat_map.id,
       aws_api_gateway_method.seat_map_post.id,
       aws_api_gateway_integration.seat_map_integration.id,
+      aws_api_gateway_resource.auth.id,
+      aws_api_gateway_resource.auth_guest.id,
+      aws_api_gateway_resource.auth_login.id,
+      aws_api_gateway_resource.auth_register.id,
+      aws_api_gateway_method.auth_guest_post.id,
+      aws_api_gateway_method.auth_login_post.id,
+      aws_api_gateway_method.auth_register_post.id,
+      aws_api_gateway_integration.auth_guest_integration.id,
+      aws_api_gateway_integration.auth_login_integration.id,
+      aws_api_gateway_integration.auth_register_integration.id,
     ]))
   }
 
