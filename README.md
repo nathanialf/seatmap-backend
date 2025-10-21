@@ -15,10 +15,11 @@ A serverless REST API built on AWS that aggregates flight seat availability data
 
 #### **Infrastructure & DevOps**
 - ✅ **Terraform Infrastructure**: Complete AWS infrastructure as code
+  - Environment-specific directories (`terraform/environments/dev`, `terraform/environments/prod`)
   - DynamoDB tables with proper indexes and TTL
   - Lambda functions with API Gateway integration
   - S3 backend for state management with locking
-  - Environment separation (dev/prod)
+  - Hardcoded backend configuration per environment
 - ✅ **Jenkins CI/CD Pipeline**: 4-action deployment pipeline
   - `bootstrap`: Creates S3 + DynamoDB for Terraform state
   - `plan`: Builds application + shows infrastructure changes
@@ -183,21 +184,30 @@ The deployment is managed through Jenkins with these actions:
 
 ### Manual Terraform (Alternative)
 
+**With the new environment-specific structure, manual Terraform is much simpler:**
+
 ```bash
-cd terraform
+# For dev environment
+cd terraform/environments/dev
 
-# Initialize
-terraform init \
-  -backend-config="bucket=seatmap-backend-terraform-state-dev" \
-  -backend-config="key=seatmap-backend/terraform.tfstate" \
-  -backend-config="region=us-west-1" \
-  -backend-config="dynamodb_table=seatmap-backend-terraform-locks-dev"
+# Initialize (backend config is hardcoded)
+terraform init
 
-# Plan
-terraform plan -var="environment=dev" -var="aws_region=us-west-1"
+# Plan (only need API secrets)
+terraform plan \
+  -var="amadeus_api_key=YOUR_AMADEUS_KEY" \
+  -var="amadeus_api_secret=YOUR_AMADEUS_SECRET" \
+  -var="jwt_secret=YOUR_JWT_SECRET"
 
 # Apply
-terraform apply -var="environment=dev" -var="aws_region=us-west-1"
+terraform apply \
+  -var="amadeus_api_key=YOUR_AMADEUS_KEY" \
+  -var="amadeus_api_secret=YOUR_AMADEUS_SECRET" \
+  -var="jwt_secret=YOUR_JWT_SECRET"
+
+# For prod environment
+cd terraform/environments/prod
+# Same commands, different environment
 ```
 
 ## Testing

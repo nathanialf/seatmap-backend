@@ -120,14 +120,10 @@ pipeline {
                 }
             }
             steps {
-                dir('terraform') {
+                dir("terraform/environments/${params.ENVIRONMENT}") {
                     sh """
-                        echo "Initializing Terraform with S3 backend for ${params.ENVIRONMENT}..."
-                        terraform init -reconfigure \\
-                            -backend-config="bucket=${STATE_BUCKET}" \\
-                            -backend-config="key=seatmap-backend/terraform.tfstate" \\
-                            -backend-config="region=${AWS_REGION}" \\
-                            -backend-config="dynamodb_table=${LOCK_TABLE}"
+                        echo "Initializing Terraform for ${params.ENVIRONMENT} environment..."
+                        terraform init
                     """
                 }
             }
@@ -148,9 +144,7 @@ pipeline {
                     gradle clean test
                     gradle buildLambda
                     
-                    # Copy JAR to terraform directory for deployment
-                    mkdir -p terraform/lambda-artifacts
-                    cp build/libs/SEATMAP-Backend-1.0.0.jar terraform/lambda-artifacts/
+                    # JAR will be referenced directly from build/libs by terraform
                 """
             }
         }
@@ -163,15 +157,14 @@ pipeline {
                 }
             }
             steps {
-                dir('terraform') {
+                dir("terraform/environments/${params.ENVIRONMENT}") {
                     sh """
                         echo "Running Terraform plan for ${params.ENVIRONMENT}..."
                         terraform plan \\
-                            -var="environment=${params.ENVIRONMENT}" \\
-                            -var="aws_region=${AWS_REGION}" \\
                             -var="amadeus_api_key=${AMADEUS_API_KEY}" \\
                             -var="amadeus_api_secret=${AMADEUS_API_SECRET}" \\
                             -var="amadeus_endpoint=${AMADEUS_ENDPOINT}" \\
+                            -var="jwt_secret=${JWT_SECRET}" \\
                             -out=terraform.tfplan
                     """
                 }
@@ -183,7 +176,7 @@ pipeline {
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                dir('terraform') {
+                dir("terraform/environments/${params.ENVIRONMENT}") {
                     sh """
                         echo "Applying Terraform changes for ${params.ENVIRONMENT}..."
                         terraform apply -auto-approve terraform.tfplan
@@ -200,17 +193,16 @@ pipeline {
                 expression { params.ACTION == 'destroy' }
             }
             steps {
-                dir('terraform') {
+                dir("terraform/environments/${params.ENVIRONMENT}") {
                     sh """
                         echo "Destroying all resources in ${params.ENVIRONMENT} environment..."
                         echo "WARNING: This will destroy all resources!"
                         
                         terraform destroy -auto-approve \\
-                            -var="environment=${params.ENVIRONMENT}" \\
-                            -var="aws_region=${AWS_REGION}" \\
                             -var="amadeus_api_key=${AMADEUS_API_KEY}" \\
                             -var="amadeus_api_secret=${AMADEUS_API_SECRET}" \\
-                            -var="amadeus_endpoint=${AMADEUS_ENDPOINT}"
+                            -var="amadeus_endpoint=${AMADEUS_ENDPOINT}" \\
+                            -var="jwt_secret=${JWT_SECRET}"
                     """
                 }
             }
@@ -220,7 +212,7 @@ pipeline {
     post {
         always {
             // Clean up plan files
-            dir('terraform') {
+            dir("terraform/environments/${params.ENVIRONMENT}") {
                 sh 'rm -f *.tfplan || true'
             }
             dir('terraform/bootstrap') {

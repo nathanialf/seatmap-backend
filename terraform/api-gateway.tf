@@ -61,10 +61,10 @@ resource "aws_api_gateway_integration_response" "seat_map_integration_response" 
   http_method = aws_api_gateway_method.seat_map_post.http_method
   status_code = aws_api_gateway_method_response.seat_map_response.status_code
 
-  response_headers = {
-    "Access-Control-Allow-Origin"  = "'*'"
-    "Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
-    "Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
   }
 
   depends_on = [aws_api_gateway_integration.seat_map_integration]
@@ -108,10 +108,10 @@ resource "aws_api_gateway_integration_response" "seat_map_options_integration_re
   http_method = aws_api_gateway_method.seat_map_options.http_method
   status_code = aws_api_gateway_method_response.seat_map_options_response.status_code
 
-  response_headers = {
-    "Access-Control-Allow-Origin"  = "'*'"
-    "Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
-    "Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
   }
 
   depends_on = [aws_api_gateway_integration.seat_map_options_integration]
