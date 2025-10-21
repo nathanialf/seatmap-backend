@@ -24,14 +24,16 @@ resource "aws_dynamodb_table" "users" {
 
   # GSI for email lookup
   global_secondary_index {
-    name     = "email-index"
-    hash_key = "email"
+    name            = "email-index"
+    hash_key        = "email"
+    projection_type = "ALL"
   }
 
   # GSI for OAuth ID lookup (Google/Apple users)
   global_secondary_index {
-    name     = "oauth-id-index"
-    hash_key = "oauthId"
+    name            = "oauth-id-index"
+    hash_key        = "oauthId"
+    projection_type = "ALL"
   }
 
   tags = {
@@ -139,8 +141,9 @@ resource "aws_dynamodb_table" "subscriptions" {
 
   # GSI for Stripe customer lookup
   global_secondary_index {
-    name     = "stripe-customer-index"
-    hash_key = "stripeCustomerId"
+    name            = "stripe-customer-index"
+    hash_key        = "stripeCustomerId"
+    projection_type = "ALL"
   }
 
   tags = {
