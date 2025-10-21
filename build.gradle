@@ -10,6 +10,15 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
+// Configure UTF-8 encoding for compilation
+compileJava {
+    options.encoding = 'UTF-8'
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
 }
