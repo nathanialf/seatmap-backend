@@ -57,6 +57,8 @@ pipeline {
                             [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-dev'],
                             string(credentialsId: 'amadeus-prod-apikey', variable: 'AMADEUS_API_KEY'),
                             string(credentialsId: 'amadeus-prod-secret', variable: 'AMADEUS_API_SECRET'),
+                            string(credentialsId: 'sabre-userid', variable: 'SABRE_USER_ID'),
+                            string(credentialsId: 'sabre-password', variable: 'SABRE_PASSWORD'),
                             string(credentialsId: 'jwt-secret-dev', variable: 'JWT_SECRET')
                         ]) {
                             env.AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
@@ -64,6 +66,9 @@ pipeline {
                             env.AMADEUS_API_KEY = AMADEUS_API_KEY
                             env.AMADEUS_API_SECRET = AMADEUS_API_SECRET
                             env.AMADEUS_ENDPOINT = 'api.amadeus.com'
+                            env.SABRE_USER_ID = SABRE_USER_ID
+                            env.SABRE_PASSWORD = SABRE_PASSWORD
+                            env.SABRE_ENDPOINT = 'https://webservices.cert.platform.sabre.com'
                             env.JWT_SECRET = JWT_SECRET
                         }
                     } else if (params.ENVIRONMENT == 'prod') {
@@ -71,6 +76,8 @@ pipeline {
                             [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'seatmap-prod'],
                             string(credentialsId: 'amadeus-prod-apikey', variable: 'AMADEUS_API_KEY'),
                             string(credentialsId: 'amadeus-prod-secret', variable: 'AMADEUS_API_SECRET'),
+                            string(credentialsId: 'sabre-userid', variable: 'SABRE_USER_ID'),
+                            string(credentialsId: 'sabre-password', variable: 'SABRE_PASSWORD'),
                             string(credentialsId: 'jwt-secret-prod', variable: 'JWT_SECRET')
                         ]) {
                             env.AWS_ACCESS_KEY_ID = AWS_ACCESS_KEY_ID
@@ -78,6 +85,9 @@ pipeline {
                             env.AMADEUS_API_KEY = AMADEUS_API_KEY
                             env.AMADEUS_API_SECRET = AMADEUS_API_SECRET
                             env.AMADEUS_ENDPOINT = 'api.amadeus.com'
+                            env.SABRE_USER_ID = SABRE_USER_ID
+                            env.SABRE_PASSWORD = SABRE_PASSWORD
+                            env.SABRE_ENDPOINT = 'https://webservices.sabre.com'
                             env.JWT_SECRET = JWT_SECRET
                         }
                     }
@@ -164,6 +174,9 @@ pipeline {
                             -var="amadeus_api_key=${AMADEUS_API_KEY}" \\
                             -var="amadeus_api_secret=${AMADEUS_API_SECRET}" \\
                             -var="amadeus_endpoint=${AMADEUS_ENDPOINT}" \\
+                            -var="sabre_user_id=${SABRE_USER_ID}" \\
+                            -var="sabre_password=${SABRE_PASSWORD}" \\
+                            -var="sabre_endpoint=${SABRE_ENDPOINT}" \\
                             -var="jwt_secret=${JWT_SECRET}" \\
                             -out=terraform.tfplan
                     """
@@ -202,6 +215,9 @@ pipeline {
                             -var="amadeus_api_key=${AMADEUS_API_KEY}" \\
                             -var="amadeus_api_secret=${AMADEUS_API_SECRET}" \\
                             -var="amadeus_endpoint=${AMADEUS_ENDPOINT}" \\
+                            -var="sabre_user_id=${SABRE_USER_ID}" \\
+                            -var="sabre_password=${SABRE_PASSWORD}" \\
+                            -var="sabre_endpoint=${SABRE_ENDPOINT}" \\
                             -var="jwt_secret=${JWT_SECRET}"
                     """
                 }

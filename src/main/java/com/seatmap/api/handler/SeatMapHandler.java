@@ -11,6 +11,7 @@ import io.jsonwebtoken.Claims;
 import com.seatmap.api.model.SeatMapRequest;
 import com.seatmap.api.model.SeatMapResponse;
 import com.seatmap.api.service.AmadeusService;
+import com.seatmap.api.service.SabreService;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.service.JwtService;
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
     private final ObjectMapper objectMapper;
     private final Validator validator;
     private final AmadeusService amadeusService;
+    private final SabreService sabreService;
     private final JwtService jwtService;
     private final GuestAccessRepository guestAccessRepository;
     
@@ -38,6 +40,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         this.objectMapper = new ObjectMapper();
         this.validator = Validation.buildDefaultValidatorFactory().getValidator();
         this.amadeusService = new AmadeusService();
+        this.sabreService = new SabreService();
         this.jwtService = new JwtService();
         
         // Initialize guest access repository with explicit HTTP client to avoid conflicts
@@ -103,10 +106,8 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 return createErrorResponse(400, "Validation errors: " + errors.toString());
             }
             
-            // Call Amadeus API with flight offer data
-            JsonNode seatMapData = amadeusService.getSeatMapFromOfferData(
-                request.getFlightOfferData()
-            );
+            // Route seat map request based on flight source
+            JsonNode seatMapData = getSeatMapBySource(request);
             
             // Create successful response
             SeatMapResponse response = SeatMapResponse.success(
@@ -133,6 +134,69 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         } catch (Exception e) {
             logger.error("Unexpected error processing seat map request", e);
             return createErrorResponse(500, "Internal server error");
+        }
+    }
+    
+    private JsonNode getSeatMapBySource(SeatMapRequest request) throws SeatmapException {
+        try {
+            // Parse the flight offer data to determine the source
+            JsonNode flightOfferData = objectMapper.readTree(request.getFlightOfferData());
+            String dataSource = flightOfferData.path("dataSource").asText("AMADEUS");
+            
+            logger.info("Routing seat map request to {} based on flight data source", dataSource);
+            
+            if ("SABRE".equals(dataSource)) {
+                // Extract flight details for Sabre API
+                return getSeatMapFromSabre(flightOfferData);
+            } else {
+                // Default to Amadeus (handles both "AMADEUS" and missing source)
+                return amadeusService.getSeatMapFromOfferData(request.getFlightOfferData());
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error parsing flight offer data for source routing", e);
+            // Fall back to Amadeus if parsing fails
+            return amadeusService.getSeatMapFromOfferData(request.getFlightOfferData());
+        }
+    }
+    
+    private JsonNode getSeatMapFromSabre(JsonNode flightOfferData) throws SeatmapException {
+        // Extract flight details from the flight offer data
+        String carrierCode = "";
+        String flightNumber = "";
+        String departureDate = "";
+        String origin = "";
+        String destination = "";
+        
+        try {
+            if (flightOfferData.has("itineraries") && flightOfferData.get("itineraries").isArray() && flightOfferData.get("itineraries").size() > 0) {
+                JsonNode firstItinerary = flightOfferData.get("itineraries").get(0);
+                if (firstItinerary.has("segments") && firstItinerary.get("segments").isArray() && firstItinerary.get("segments").size() > 0) {
+                    JsonNode firstSegment = firstItinerary.get("segments").get(0);
+                    
+                    carrierCode = firstSegment.path("carrierCode").asText("");
+                    flightNumber = firstSegment.path("number").asText("");
+                    origin = firstSegment.path("departure").path("iataCode").asText("");
+                    destination = firstSegment.path("arrival").path("iataCode").asText("");
+                    
+                    String departureDateTime = firstSegment.path("departure").path("at").asText("");
+                    if (departureDateTime.length() >= 10) {
+                        departureDate = departureDateTime.substring(0, 10); // Extract date part
+                    }
+                }
+            }
+            
+            if (carrierCode.isEmpty() || flightNumber.isEmpty() || origin.isEmpty() || destination.isEmpty()) {
+                throw new SeatmapException("Missing required flight details for Sabre seat map request");
+            }
+            
+            logger.info("Calling Sabre seat map API for flight {}{}  from {} to {} on {}", carrierCode, flightNumber, origin, destination, departureDate);
+            
+            return sabreService.getSeatMapFromFlight(carrierCode, flightNumber, departureDate, origin, destination);
+            
+        } catch (Exception e) {
+            logger.error("Error extracting flight details for Sabre seat map request", e);
+            throw new SeatmapException("Failed to process Sabre seat map request", e);
         }
     }
     

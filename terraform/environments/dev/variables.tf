@@ -27,3 +27,21 @@ variable "jwt_secret" {
   type        = string
   sensitive   = true
 }
+
+variable "sabre_user_id" {
+  description = "Sabre API user ID for SOAP integration"
+  type        = string
+  sensitive   = true
+}
+
+variable "sabre_password" {
+  description = "Sabre API password for SOAP integration"
+  type        = string
+  sensitive   = true
+}
+
+variable "sabre_endpoint" {
+  description = "Sabre API endpoint"
+  type        = string
+  default     = "https://webservices.cert.platform.sabre.com"
+}

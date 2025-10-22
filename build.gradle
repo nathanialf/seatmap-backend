@@ -61,6 +61,11 @@ dependencies {
     implementation 'org.hibernate.validator:hibernate-validator:8.0.1.Final'
     implementation 'org.glassfish:jakarta.el:4.0.2'
 
+    // SOAP dependencies for Sabre integration
+    implementation 'jakarta.xml.soap:jakarta.xml.soap-api:3.0.0'
+    implementation 'com.sun.xml.messaging.saaj:saaj-impl:3.0.0'
+    implementation 'jakarta.xml.ws:jakarta.xml.ws-api:4.0.0'
+
     // Logging
     implementation "org.slf4j:slf4j-api:${slf4jVersion}"
     implementation "org.slf4j:slf4j-simple:${slf4jVersion}"
@@ -85,6 +90,9 @@ test {
     environment "AMADEUS_API_KEY", "test-api-key"
     environment "AMADEUS_API_SECRET", "test-api-secret"
     environment "AMADEUS_ENDPOINT", "test.api.amadeus.com"
+    environment "SABRE_USER_ID", "test-sabre-user"
+    environment "SABRE_PASSWORD", "test-sabre-password"
+    environment "SABRE_ENDPOINT", "https://webservices.cert.platform.sabre.com"
 }
 
 // Configure JAR task to create fat JAR with all dependencies
