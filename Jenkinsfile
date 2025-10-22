@@ -68,7 +68,7 @@ pipeline {
                             env.AMADEUS_ENDPOINT = 'api.amadeus.com'
                             env.SABRE_USER_ID = SABRE_USER_ID
                             env.SABRE_PASSWORD = SABRE_PASSWORD
-                            env.SABRE_ENDPOINT = 'https://webservices.cert.platform.sabre.com'
+                            env.SABRE_ENDPOINT = 'https://webservices.platform.sabre.com'
                             env.JWT_SECRET = JWT_SECRET
                         }
                     } else if (params.ENVIRONMENT == 'prod') {
@@ -87,7 +87,7 @@ pipeline {
                             env.AMADEUS_ENDPOINT = 'api.amadeus.com'
                             env.SABRE_USER_ID = SABRE_USER_ID
                             env.SABRE_PASSWORD = SABRE_PASSWORD
-                            env.SABRE_ENDPOINT = 'https://webservices.sabre.com'
+                            env.SABRE_ENDPOINT = 'https://webservices.platform.sabre.com'
                             env.JWT_SECRET = JWT_SECRET
                         }
                     }

@@ -92,7 +92,7 @@ test {
     environment "AMADEUS_ENDPOINT", "test.api.amadeus.com"
     environment "SABRE_USER_ID", "test-sabre-user"
     environment "SABRE_PASSWORD", "test-sabre-password"
-    environment "SABRE_ENDPOINT", "https://webservices.cert.platform.sabre.com"
+    environment "SABRE_ENDPOINT", "https://webservices.platform.sabre.com"
 }
 
 // Configure JAR task to create fat JAR with all dependencies

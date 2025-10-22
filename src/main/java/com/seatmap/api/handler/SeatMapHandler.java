@@ -115,11 +115,16 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 request.getFlightOfferId()
             );
             
-            // Only record seatmap request for guest users after successful response creation
+            // Only record seatmap request for guest users if we actually got valid seat map data
             try {
                 if (jwtService.isGuestToken(token)) {
-                    guestAccessRepository.recordSeatmapRequest(clientIp);
-                    logger.info("Recorded seatmap request for guest IP: {} after successful response", clientIp);
+                    // Check if we got valid seat map data (not just an error response)
+                    if (seatMapData != null && seatMapData.has("data") && seatMapData.get("data").isArray() && seatMapData.get("data").size() > 0) {
+                        guestAccessRepository.recordSeatmapRequest(clientIp);
+                        logger.info("Recorded seatmap request for guest IP: {} after successful seat map retrieval", clientIp);
+                    } else {
+                        logger.info("Skipping seatmap request recording for guest IP: {} - no valid seat map data returned", clientIp);
+                    }
                 }
             } catch (Exception e) {
                 logger.warn("Failed to record seatmap request for IP {}: {}", clientIp, e.getMessage());
@@ -233,38 +238,48 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
      * Handles X-Forwarded-For header and fallback to source IP
      */
     private String extractClientIp(APIGatewayProxyRequestEvent event) {
+        logger.info("Attempting to extract client IP from request");
+        
         // First try X-Forwarded-For header (API Gateway adds this)
         Map<String, String> headers = event.getHeaders();
+        logger.info("Request headers available: {}", headers != null);
         if (headers != null) {
+            logger.info("Available headers: {}", headers.keySet());
             String forwardedFor = headers.get("X-Forwarded-For");
+            logger.info("X-Forwarded-For header: '{}'", forwardedFor);
             if (forwardedFor != null && !forwardedFor.trim().isEmpty()) {
                 // X-Forwarded-For can contain multiple IPs, first one is the original client
                 String[] ips = forwardedFor.split(",");
                 String clientIp = ips[0].trim();
-                logger.debug("Client IP from X-Forwarded-For: {}", clientIp);
+                logger.info("Client IP extracted from X-Forwarded-For: {}", clientIp);
                 return clientIp;
             }
             
             // Try other forwarded headers as fallback
             String xRealIp = headers.get("X-Real-IP");
+            logger.info("X-Real-IP header: '{}'", xRealIp);
             if (xRealIp != null && !xRealIp.trim().isEmpty()) {
-                logger.debug("Client IP from X-Real-IP: {}", xRealIp);
+                logger.info("Client IP extracted from X-Real-IP: {}", xRealIp);
                 return xRealIp.trim();
             }
         }
         
         // Fallback to source IP from request context
-        if (event.getRequestContext() != null && 
-            event.getRequestContext().getIdentity() != null) {
-            String sourceIp = event.getRequestContext().getIdentity().getSourceIp();
-            if (sourceIp != null && !sourceIp.trim().isEmpty()) {
-                logger.debug("Client IP from source IP: {}", sourceIp);
-                return sourceIp.trim();
+        logger.info("Request context available: {}", event.getRequestContext() != null);
+        if (event.getRequestContext() != null) {
+            logger.info("Request context identity available: {}", event.getRequestContext().getIdentity() != null);
+            if (event.getRequestContext().getIdentity() != null) {
+                String sourceIp = event.getRequestContext().getIdentity().getSourceIp();
+                logger.info("Source IP from request context: '{}'", sourceIp);
+                if (sourceIp != null && !sourceIp.trim().isEmpty()) {
+                    logger.info("Client IP extracted from request context source IP: {}", sourceIp);
+                    return sourceIp.trim();
+                }
             }
         }
         
         // Last resort fallback
-        logger.warn("Could not extract client IP, using fallback");
+        logger.warn("Could not extract client IP from any source, using fallback 'unknown'");
         return "unknown";
     }
     
