@@ -50,10 +50,7 @@ class SeatMapResponseTest {
         assertFalse(response.isSuccess());
         assertNull(response.getMessage());
         assertNull(response.getData());
-        assertNull(response.getFlightNumber());
-        assertNull(response.getDepartureDate());
-        assertNull(response.getOrigin());
-        assertNull(response.getDestination());
+        assertNull(response.getFlightOfferId());
     }
     
     @Test
@@ -69,19 +66,13 @@ class SeatMapResponseTest {
     void success_StaticMethod_CreatesSuccessfulResponse() {
         SeatMapResponse response = SeatMapResponse.success(
             mockSeatMapData, 
-            "AA123", 
-            "2024-12-01", 
-            "LAX", 
-            "JFK"
+            "offer123"
         );
         
         assertTrue(response.isSuccess());
         assertEquals("Seat map retrieved successfully", response.getMessage());
         assertEquals(mockSeatMapData, response.getData());
-        assertEquals("AA123", response.getFlightNumber());
-        assertEquals("2024-12-01", response.getDepartureDate());
-        assertEquals("LAX", response.getOrigin());
-        assertEquals("JFK", response.getDestination());
+        assertEquals("offer123", response.getFlightOfferId());
     }
     
     @Test
@@ -91,10 +82,7 @@ class SeatMapResponseTest {
         assertFalse(response.isSuccess());
         assertEquals("Error occurred", response.getMessage());
         assertNull(response.getData());
-        assertNull(response.getFlightNumber());
-        assertNull(response.getDepartureDate());
-        assertNull(response.getOrigin());
-        assertNull(response.getDestination());
+        assertNull(response.getFlightOfferId());
     }
     
     @Test
@@ -104,72 +92,51 @@ class SeatMapResponseTest {
         response.setSuccess(true);
         response.setMessage("Test message");
         response.setData(mockSeatMapData);
-        response.setFlightNumber("DL456");
-        response.setDepartureDate("2024-11-15");
-        response.setOrigin("SFO");
-        response.setDestination("BOS");
+        response.setFlightOfferId("offer456");
         
         assertTrue(response.isSuccess());
         assertEquals("Test message", response.getMessage());
         assertEquals(mockSeatMapData, response.getData());
-        assertEquals("DL456", response.getFlightNumber());
-        assertEquals("2024-11-15", response.getDepartureDate());
-        assertEquals("SFO", response.getOrigin());
-        assertEquals("BOS", response.getDestination());
+        assertEquals("offer456", response.getFlightOfferId());
     }
     
     @Test
     void success_WithNullData_HandlesGracefully() {
         SeatMapResponse response = SeatMapResponse.success(
             null, 
-            "AA123", 
-            "2024-12-01", 
-            "LAX", 
-            "JFK"
+            "offer123"
         );
         
         assertTrue(response.isSuccess());
         assertEquals("Seat map retrieved successfully", response.getMessage());
         assertNull(response.getData());
-        assertEquals("AA123", response.getFlightNumber());
+        assertEquals("offer123", response.getFlightOfferId());
     }
     
     @Test
-    void success_WithEmptyStrings_HandlesGracefully() {
+    void success_WithEmptyFlightOfferId_HandlesGracefully() {
         SeatMapResponse response = SeatMapResponse.success(
             mockSeatMapData, 
-            "", 
-            "", 
-            "", 
             ""
         );
         
         assertTrue(response.isSuccess());
         assertEquals("Seat map retrieved successfully", response.getMessage());
         assertEquals(mockSeatMapData, response.getData());
-        assertEquals("", response.getFlightNumber());
-        assertEquals("", response.getDepartureDate());
-        assertEquals("", response.getOrigin());
-        assertEquals("", response.getDestination());
+        assertEquals("", response.getFlightOfferId());
     }
     
     @Test
-    void success_WithNullStrings_HandlesGracefully() {
+    void success_WithNullFlightOfferId_HandlesGracefully() {
         SeatMapResponse response = SeatMapResponse.success(
             mockSeatMapData, 
-            null, 
-            null, 
-            null, 
             null
         );
         
         assertTrue(response.isSuccess());
         assertEquals("Seat map retrieved successfully", response.getMessage());
         assertEquals(mockSeatMapData, response.getData());
-        assertNull(response.getFlightNumber());
-        assertNull(response.getDepartureDate());
-        assertNull(response.getOrigin());
-        assertNull(response.getDestination());
+        assertNull(response.getFlightOfferId());
     }
     
     @Test
@@ -197,7 +164,7 @@ class SeatMapResponseTest {
                 "data": [
                     {
                         "type": "seat-map",
-                        "flightNumber": "LH401",
+                        "flightOfferId": "LH401_OFFER_123",
                         "departure": {
                             "iataCode": "FRA",
                             "terminal": "1"
@@ -248,10 +215,7 @@ class SeatMapResponseTest {
         
         SeatMapResponse response = SeatMapResponse.success(
             complexData,
-            "LH401",
-            "2024-12-15",
-            "FRA",
-            "LAX"
+            "LH401_OFFER_123"
         );
         
         assertTrue(response.isSuccess());
@@ -259,22 +223,18 @@ class SeatMapResponseTest {
         assertNotNull(response.getData());
         assertTrue(response.getData().has("data"));
         assertTrue(response.getData().get("data").isArray());
-        assertEquals("LH401", response.getFlightNumber());
+        assertEquals("LH401_OFFER_123", response.getFlightOfferId());
     }
     
     @Test
-    void response_HandlesSpecialCharactersInFlightInfo() {
+    void response_HandlesSpecialCharactersInFlightOfferId() {
         SeatMapResponse response = SeatMapResponse.success(
             mockSeatMapData,
-            "ABC123", // ASCII characters in flight number
-            "2024-12-01",
-            "MUC", // Munich airport code
-            "JFK"
+            "ABC123_OFFER_456-XYZ"
         );
         
         assertTrue(response.isSuccess());
-        assertEquals("ABC123", response.getFlightNumber());
-        assertEquals("MUC", response.getOrigin());
+        assertEquals("ABC123_OFFER_456-XYZ", response.getFlightOfferId());
     }
     
     @Test
@@ -308,10 +268,7 @@ class SeatMapResponseTest {
         
         SeatMapResponse response = SeatMapResponse.success(
             originalData,
-            "TEST123",
-            "2024-12-01", 
-            "TST",
-            "TES"
+            "TEST123_OFFER"
         );
         
         JsonNode responseData = response.getData();

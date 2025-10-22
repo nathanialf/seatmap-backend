@@ -87,7 +87,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
@@ -98,7 +98,7 @@ class SeatMapHandlerGuestLimitTest {
         // Verify seatmap request was recorded after successful call
         verify(mockGuestAccessRepository).canMakeSeatmapRequest("192.168.1.100");
         verify(mockGuestAccessRepository).recordSeatmapRequest("192.168.1.100");
-        verify(mockAmadeusService).getSeatMap("AA123", "2024-12-01", "LAX", "JFK");
+        verify(mockAmadeusService).getSeatMapFromOfferData(anyString());
     }
     
     @Test
@@ -145,7 +145,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
@@ -178,7 +178,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
@@ -208,7 +208,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
@@ -234,7 +234,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
@@ -244,7 +244,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Verify that guest access repository was never called for user tokens
         verifyNoInteractions(mockGuestAccessRepository);
-        verify(mockAmadeusService).getSeatMap("AA123", "2024-12-01", "LAX", "JFK");
+        verify(mockAmadeusService).getSeatMapFromOfferData(anyString());
     }
     
     @Test
@@ -283,7 +283,7 @@ class SeatMapHandlerGuestLimitTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         // Mock recording to fail (should not fail the request)
@@ -298,7 +298,7 @@ class SeatMapHandlerGuestLimitTest {
         
         verify(mockGuestAccessRepository).canMakeSeatmapRequest("192.168.1.103");
         verify(mockGuestAccessRepository).recordSeatmapRequest("192.168.1.103");
-        verify(mockAmadeusService).getSeatMap("AA123", "2024-12-01", "LAX", "JFK");
+        verify(mockAmadeusService).getSeatMapFromOfferData(anyString());
     }
     
     @Test
@@ -314,7 +314,7 @@ class SeatMapHandlerGuestLimitTest {
         when(mockGuestAccessRepository.canMakeSeatmapRequest(ip1)).thenReturn(true);
         
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response1 = handler.handleRequest(request1, mockContext);
@@ -337,7 +337,8 @@ class SeatMapHandlerGuestLimitTest {
     private APIGatewayProxyRequestEvent createValidSeatMapRequest() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer guest-token"));
-        request.setBody("{\"flightNumber\":\"AA123\",\"departureDate\":\"2024-12-01\",\"origin\":\"LAX\",\"destination\":\"JFK\"}");
+        String flightOfferData = "{\"id\":\"offer123\",\"type\":\"flight-offer\",\"source\":\"GDS\",\"itineraries\":[{\"segments\":[{\"departure\":{\"iataCode\":\"LAX\"},\"arrival\":{\"iataCode\":\"JFK\"},\"carrierCode\":\"AA\",\"number\":\"123\"}]}]}";
+        request.setBody("{\"flightOfferId\":\"offer123\",\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
         return request;
     }
     

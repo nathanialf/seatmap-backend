@@ -62,10 +62,11 @@ class SeatMapHandlerTest {
     
     @Test
     void handleRequest_WithValidUserToken_ReturnsSuccess() throws Exception {
-        // Setup request
+        // Setup request with flight offer data
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer valid-token"));
-        request.setBody("{\"flightNumber\":\"AA123\",\"departureDate\":\"2024-12-01\",\"origin\":\"LAX\",\"destination\":\"JFK\"}");
+        String flightOfferData = "{\"id\":\"offer123\",\"type\":\"flight-offer\",\"source\":\"GDS\",\"itineraries\":[{\"segments\":[{\"departure\":{\"iataCode\":\"LAX\"},\"arrival\":{\"iataCode\":\"JFK\"},\"carrierCode\":\"AA\",\"number\":\"123\"}]}]}";
+        request.setBody("{\"flightOfferId\":\"offer123\",\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
         
         // Mock JWT validation
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
@@ -73,14 +74,14 @@ class SeatMapHandlerTest {
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
-        when(mockAmadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenReturn(mockSeatMapData);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("\"success\":true"));
-        verify(mockAmadeusService).getSeatMap("AA123", "2024-12-01", "LAX", "JFK");
+        verify(mockAmadeusService).getSeatMapFromOfferData(anyString());
     }
     
     @Test
@@ -119,25 +120,9 @@ class SeatMapHandlerTest {
         assertTrue(response.getBody().contains("Invalid or expired token"));
     }
     
-    @Test
-    void handleRequest_WithGuestTokenAtLimit_ReturnsForbidden() throws Exception {
-        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
-        request.setHeaders(Map.of("Authorization", "Bearer guest-token"));
-        
-        // Mock guest token with limits
-        Map<String, Object> guestLimits = Map.of(
-            "flightsViewed", 2,
-            "maxFlights", 2
-        );
-        when(mockClaims.get("guestLimits")).thenReturn(guestLimits);
-        when(mockJwtService.validateToken("guest-token")).thenReturn(mockClaims);
-        when(mockJwtService.isGuestToken("guest-token")).thenReturn(true);
-        
-        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
-        
-        assertEquals(403, response.getStatusCode());
-        assertTrue(response.getBody().contains("Guest seat map limit reached"));
-    }
+    // NOTE: Guest token limiting is now handled by IP-based approach in SeatMapHandlerGuestLimitTest
+    // This test was removed since the new implementation uses IP-based guest limiting via GuestAccessRepository
+    // rather than token-based claims
     
     @Test
     void handleRequest_WithInvalidRequestBody_ReturnsBadRequest() throws Exception {
@@ -158,7 +143,7 @@ class SeatMapHandlerTest {
     void handleRequest_WithValidationErrors_ReturnsBadRequest() throws Exception {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer valid-token"));
-        request.setBody("{\"flightNumber\":\"\",\"departureDate\":\"2024-12-01\"}"); // Missing required fields
+        request.setBody("{\"flightOfferId\":\"\",\"flightOfferData\":\"\"}"); // Missing required fields
         
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
@@ -173,11 +158,12 @@ class SeatMapHandlerTest {
     void handleRequest_WithAmadeusServiceError_ReturnsInternalServerError() throws Exception {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer valid-token"));
-        request.setBody("{\"flightNumber\":\"AA123\",\"departureDate\":\"2024-12-01\",\"origin\":\"LAX\",\"destination\":\"JFK\"}");
+        String flightOfferData = "{\"id\":\"offer123\",\"type\":\"flight-offer\"}";
+        request.setBody("{\"flightOfferId\":\"offer123\",\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
         
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
-        when(mockAmadeusService.getSeatMap(anyString(), anyString(), anyString(), anyString()))
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
             .thenThrow(new SeatmapException("Amadeus API error"));
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
