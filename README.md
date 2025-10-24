@@ -28,7 +28,7 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Amadeus API credentials integration
 - ✅ **Build System**: Gradle 8.4 with Java 17
   - Fat JAR packaging for Lambda deployment
-  - Comprehensive test suite with JUnit 5 (90 tests)
+  - Comprehensive test suite with JUnit 5 (277 tests, 70% coverage)
   - Jakarta validation for request validation
 
 #### **Authentication System**
@@ -36,30 +36,35 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Email/password registration with bcrypt hashing
   - JWT token generation and validation
   - Session management with 24-hour expiration
-- ✅ **Guest Access**: Limited guest functionality
-  - 2 seat map views before registration required
-  - Automatic session expiration
+- ✅ **Guest Access**: IP-based rate limiting
+  - 2 seat map views per IP before registration required
+  - Real-time IP extraction from X-Forwarded-For headers
+  - Fixed guest access tracking for successful retrievals only
 - ✅ **Data Layer**: DynamoDB integration
   - User repository with email/OAuth lookups
-  - Session repository with TTL management
-  - Comprehensive test coverage (42 tests)
+  - Guest access history with TTL management
+  - Fixed Jackson serialization with @JsonIgnore annotations
+  - Comprehensive test coverage (100+ tests)
 
-#### **Amadeus Seat Map API**
-- ✅ **API Integration**: Complete Amadeus seat map service
-  - OAuth2 token management with auto-refresh
-  - Seat map retrieval with flight validation
-  - Error handling and network resilience
-- ✅ **Lambda Handler**: HTTP request processing
-  - JWT authentication with guest limits
+#### **Flight Search & Seat Map APIs**
+- ✅ **Multi-Source Integration**: Amadeus + Sabre unified search
+  - OAuth2 token management with auto-refresh for Amadeus
+  - SOAP API integration for Sabre flight schedules
+  - Intelligent flight meshing with source prioritization
+  - Concurrent API calls for optimal performance
+- ✅ **Lambda Handlers**: HTTP request processing
+  - JWT authentication with IP-based guest rate limiting
   - Request validation (flight number, dates, airports)
   - CORS support for web frontend
+  - Source routing based on flight data origin
 - ✅ **API Gateway**: REST endpoint configuration
-  - POST /seat-map endpoint with OPTIONS CORS
-  - Proper integration with Lambda functions
-- ✅ **Test Coverage**: 48 comprehensive tests
-  - AmadeusService: API integration and token management
-  - SeatMapHandler: Request processing and validation
-  - SeatMapRequest/Response: Data models and validation
+  - POST /seat-map endpoint for seat availability
+  - POST /flights/search endpoint for flight discovery
+  - OPTIONS CORS with proper integration
+- ✅ **Test Coverage**: 64 comprehensive tests
+  - FlightOffersHandler: 19 tests (concurrent calls, meshing, error handling)
+  - SeatMapHandler: 38 tests (authentication, routing, rate limiting)
+  - AmadeusService: 7 tests (API integration, token management)
 
 ### 🔄 **In Progress**
 
@@ -212,16 +217,21 @@ cd terraform/environments/prod
 
 ## Testing
 
-### Test Coverage (90 tests total)
-- **Authentication Services**: 42 comprehensive tests
-  - Password Security: bcrypt validation, strength requirements
-  - JWT Tokens: Generation, validation, expiration handling
+### Test Coverage (277 tests total - 70% instruction coverage)
+- **API Handlers**: 57 comprehensive tests (93% coverage)
+  - SeatMapHandler: 38 tests - JWT validation, guest rate limiting, Sabre/Amadeus routing
+  - FlightOffersHandler: 19 tests - concurrent API calls, error handling, flight meshing
+- **Authentication Services**: 100 comprehensive tests (94% coverage)
+  - Password Security: bcrypt validation, strength requirements  
+  - JWT Tokens: Generation, validation, expiration, security edge cases
   - User Management: Registration, login, session management
-- **Amadeus Seat Map API**: 48 comprehensive tests
+  - Guest Access: IP-based rate limiting (2 seat map views max)
+- **API Services**: 7 tests (35% coverage)
   - AmadeusService: OAuth2 integration, error handling, token management
-  - SeatMapHandler: Lambda request processing, JWT validation, CORS
-  - SeatMapRequest: Jakarta validation for flight data
-  - SeatMapResponse: Response model handling and JSON preservation
+- **Data Layer**: 42 comprehensive tests (40-78% coverage)
+  - DynamoDB repositories with serialization testing
+  - User and guest access models with JSON validation
+  - Rate limiting integration tests
 
 ### Running Tests
 ```bash
@@ -315,8 +325,22 @@ Content-Type: application/json
 }
 ```
 
+#### Search Flights (Implemented)
+```http
+POST /flights/search
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "origin": "LAX",
+  "destination": "JFK", 
+  "departureDate": "2024-12-01",
+  "flightNumber": "AA123",
+  "maxResults": 10
+}
+```
+
 ### Planned Endpoints
-- `POST /flights/search` - Search flights across Amadeus and Sabre
 - `POST /bookmarks` - Save flight bookmark
 - `POST /subscriptions/subscribe` - Create Stripe subscription
 
@@ -324,15 +348,16 @@ Content-Type: application/json
 
 ### Implemented
 - ✅ **Password Security**: bcrypt with cost factor 12
-- ✅ **JWT Tokens**: 24-hour expiration, secure generation
-- ✅ **Guest Limits**: 2 seat map views before registration required
+- ✅ **JWT Tokens**: 24-hour expiration, secure generation, signature validation
+- ✅ **IP-Based Rate Limiting**: 2 seat map views per IP before registration required
 - ✅ **Session Management**: Automatic expiration with TTL
+- ✅ **Input Validation**: Jakarta validation on all request models
+- ✅ **CORS**: Proper cross-origin support for web clients
 
 ### Planned
-- API key authentication for client applications
-- Rate limiting per endpoint
+- API key authentication for client applications  
 - OAuth 2.0 integration (Google, Apple)
-- Input validation on all endpoints
+- Advanced rate limiting per endpoint and user
 
 ## Monitoring & Operations
 

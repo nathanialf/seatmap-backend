@@ -1,6 +1,7 @@
 package com.seatmap.common.repository;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.common.exception.SeatmapException;
@@ -19,6 +20,7 @@ public abstract class DynamoDbRepository<T> {
         this.tableName = tableName;
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
+        this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
     
     protected abstract Class<T> getEntityClass();

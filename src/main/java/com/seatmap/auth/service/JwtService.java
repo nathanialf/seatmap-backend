@@ -82,6 +82,9 @@ public class JwtService {
         } catch (SecurityException e) {
             logger.warn("Invalid JWT signature: {}", e.getMessage());
             throw SeatmapException.unauthorized("Invalid token signature");
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            logger.warn("Invalid JWT signature: {}", e.getMessage());
+            throw SeatmapException.unauthorized("Invalid token signature");
         } catch (IllegalArgumentException e) {
             logger.warn("JWT token compact of handler are invalid: {}", e.getMessage());
             throw SeatmapException.unauthorized("Invalid token");

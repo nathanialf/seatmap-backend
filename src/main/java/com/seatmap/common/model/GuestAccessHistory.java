@@ -1,6 +1,7 @@
 package com.seatmap.common.model;
 
 import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Tracks guest access history by IP address to enforce seatmap request limiting
@@ -35,6 +36,7 @@ public class GuestAccessHistory {
     /**
      * Get remaining seatmap requests for this IP
      */
+    @JsonIgnore
     public int getRemainingSeatmapRequests() {
         return Math.max(0, 2 - seatmapRequestsUsed);
     }
@@ -60,6 +62,7 @@ public class GuestAccessHistory {
     /**
      * Get a user-friendly error message for why seatmap access is denied
      */
+    @JsonIgnore
     public String getSeatmapDenialMessage() {
         if (hasExceededSeatmapLimit()) {
             return String.format("You've used your %d free seat map views. Please register for unlimited seat map access.", 2);
