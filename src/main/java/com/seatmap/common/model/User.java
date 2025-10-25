@@ -20,6 +20,13 @@ public class User {
     private Instant createdAt;
     private Instant updatedAt;
     private UserStatus status;
+    
+    // Email verification fields
+    private Boolean emailVerified = false;  // Visible in JSON responses
+    @JsonIgnore
+    private String verificationToken;       // Hidden from JSON
+    @JsonIgnore
+    private Instant verificationExpiresAt;  // Hidden from JSON
 
     public enum AuthProvider {
         EMAIL, GOOGLE, APPLE
@@ -68,6 +75,15 @@ public class User {
 
     public UserStatus getStatus() { return status; }
     public void setStatus(UserStatus status) { this.status = status; }
+
+    public Boolean getEmailVerified() { return emailVerified != null ? emailVerified : false; }
+    public void setEmailVerified(Boolean emailVerified) { this.emailVerified = emailVerified; }
+
+    public String getVerificationToken() { return verificationToken; }
+    public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
+
+    public Instant getVerificationExpiresAt() { return verificationExpiresAt; }
+    public void setVerificationExpiresAt(Instant verificationExpiresAt) { this.verificationExpiresAt = verificationExpiresAt; }
 
     @JsonProperty("fullName")
     public String getFullName() {

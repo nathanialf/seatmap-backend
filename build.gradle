@@ -42,6 +42,7 @@ dependencies {
     implementation "software.amazon.awssdk:dynamodb:${awsSdkVersion}"
     implementation "software.amazon.awssdk:secretsmanager:${awsSdkVersion}"
     implementation "software.amazon.awssdk:sns:${awsSdkVersion}"
+    implementation "software.amazon.awssdk:ses:${awsSdkVersion}"
     implementation "software.amazon.awssdk:url-connection-client:${awsSdkVersion}"
 
     // Jackson for JSON processing

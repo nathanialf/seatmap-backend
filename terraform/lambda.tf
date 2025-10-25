@@ -51,6 +51,14 @@ resource "aws_iam_role_policy" "lambda_execution_policy" {
           aws_dynamodb_table.sessions.arn,
           "${aws_dynamodb_table.sessions.arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = "*"
       }
     ]
   })

@@ -34,6 +34,7 @@ A serverless REST API built on AWS that aggregates flight seat availability data
 #### **Authentication System**
 - ✅ **User Management**: Complete user lifecycle
   - Email/password registration with bcrypt hashing
+  - Email verification system with 1-hour token expiration
   - JWT token generation and validation
   - Session management with 24-hour expiration
 - ✅ **Guest Access**: IP-based rate limiting
@@ -41,9 +42,10 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Real-time IP extraction from X-Forwarded-For headers
   - Fixed guest access tracking for successful retrievals only
 - ✅ **Data Layer**: DynamoDB integration
-  - User repository with email/OAuth lookups
+  - User repository with email/OAuth/verification token lookups
   - Guest access history with TTL management
   - Fixed Jackson serialization with @JsonIgnore annotations
+  - AWS SES integration for verification emails
   - Comprehensive test coverage (100+ tests)
 
 #### **Flight Search & Seat Map APIs**
@@ -104,7 +106,7 @@ A serverless REST API built on AWS that aggregates flight seat availability data
 │  │                                                             │ │
 │  │  Users Table                                                │ │
 │  │   - PK: userId                                             │ │
-│  │   - GSI: email-index, oauth-id-index                      │ │
+│  │   - GSI: email-index, oauth-id-index, verification-token-index │ │
 │  │                                                             │ │
 │  │  Sessions Table                                             │ │
 │  │   - PK: sessionId, SK: userId                             │ │
@@ -278,6 +280,21 @@ Content-Type: application/json
 POST /auth/guest
 ```
 
+#### Verify Email
+```http
+GET /auth/verify?token=<verification-token>
+```
+
+#### Resend Verification Email
+```http
+POST /auth/resend-verification
+Content-Type: application/json
+
+{
+  "email": "user@example.com"
+}
+```
+
 #### Get Seat Map
 ```http
 POST /seat-map
@@ -349,6 +366,7 @@ Content-Type: application/json
 ### Implemented
 - ✅ **Password Security**: bcrypt with cost factor 12
 - ✅ **JWT Tokens**: 24-hour expiration, secure generation, signature validation
+- ✅ **Email Verification**: Mandatory verification with 1-hour token expiration
 - ✅ **IP-Based Rate Limiting**: 2 seat map views per IP before registration required
 - ✅ **Session Management**: Automatic expiration with TTL
 - ✅ **Input Validation**: Jakarta validation on all request models

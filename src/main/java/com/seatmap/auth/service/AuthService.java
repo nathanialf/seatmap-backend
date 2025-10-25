@@ -9,11 +9,14 @@ import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.common.model.Session;
 import com.seatmap.common.model.User;
+import com.seatmap.email.service.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.security.SecureRandom;
 
 public class AuthService {
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
@@ -23,17 +26,20 @@ public class AuthService {
     private final PasswordService passwordService;
     private final JwtService jwtService;
     private final GuestAccessRepository guestAccessRepository;
+    private final EmailService emailService;
     
     public AuthService(UserRepository userRepository, 
                       SessionRepository sessionRepository,
                       PasswordService passwordService,
                       JwtService jwtService,
-                      GuestAccessRepository guestAccessRepository) {
+                      GuestAccessRepository guestAccessRepository,
+                      EmailService emailService) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.passwordService = passwordService;
         this.jwtService = jwtService;
         this.guestAccessRepository = guestAccessRepository;
+        this.emailService = emailService;
     }
     
     /**
@@ -53,7 +59,7 @@ public class AuthService {
             throw SeatmapException.conflict("Email address is already registered");
         }
         
-        // Create new user
+        // Create new user (unverified)
         User user = new User();
         user.setUserId(UUID.randomUUID().toString());
         user.setEmail(request.getEmail().toLowerCase().trim());
@@ -62,20 +68,30 @@ public class AuthService {
         user.setLastName(request.getLastName().trim());
         user.setAuthProvider(User.AuthProvider.EMAIL);
         
-        // Save user
+        // Set email verification fields
+        user.setEmailVerified(false);
+        user.setVerificationToken(generateVerificationToken());
+        user.setVerificationExpiresAt(Instant.now().plusSeconds(3600)); // 1 hour
+        
+        // Save unverified user
         userRepository.saveUser(user);
         
-        // Create session
-        Session session = createUserSession(user);
+        // Send verification email
+        emailService.sendVerificationEmail(user.getEmail(), user.getVerificationToken());
         
-        // Generate JWT token
-        String token = jwtService.generateToken(user);
-        session.setJwtToken(token);
-        sessionRepository.saveSession(session);
+        logger.info("User registered (unverified): {}", user.getEmail());
         
-        logger.info("User registered successfully: {}", user.getUserId());
+        // Return response without JWT token (user must verify email first)
+        AuthResponse response = new AuthResponse();
+        response.setSuccess(true);
+        response.setMessage("Registration successful. Please check your email to verify your account.");
+        response.setEmail(user.getEmail());
+        response.setFirstName(user.getFirstName());
+        response.setLastName(user.getLastName());
+        response.setNewUser(true);
+        response.setPending(true); // Indicates email verification required
         
-        return new AuthResponse(token, user, jwtService.getTokenExpirationSeconds());
+        return response;
     }
     
     /**
@@ -103,6 +119,11 @@ public class AuthService {
             throw SeatmapException.forbidden("Account is suspended");
         }
         
+        // Check if email is verified
+        if (!user.getEmailVerified()) {
+            throw SeatmapException.forbidden("Please verify your email address before logging in");
+        }
+        
         // Create session
         Session session = createUserSession(user);
         
@@ -128,15 +149,16 @@ public class AuthService {
         Session session = new Session(UUID.randomUUID().toString(), guestId, Session.UserType.GUEST);
         session.setIpAddress(clientIp);
         
-        // Generate JWT token for guest
-        String token = jwtService.generateGuestToken(guestId, 0);
+        // Get actual seatmap usage for this IP to include in JWT claims
+        int remainingRequests = guestAccessRepository.getRemainingSeatmapRequests(clientIp);
+        int usedRequests = 2 - remainingRequests; // Calculate actual usage
+        
+        // Generate JWT token for guest with accurate usage data
+        String token = jwtService.generateGuestToken(guestId, usedRequests);
         session.setJwtToken(token);
         sessionRepository.saveSession(session);
         
-        logger.info("Guest session created: {} for IP: {}", guestId, clientIp);
-        
-        // Get remaining seatmap requests for messaging
-        int remainingRequests = guestAccessRepository.getRemainingSeatmapRequests(clientIp);
+        logger.info("Guest session created: {} for IP: {} (used: {}/2)", guestId, clientIp, usedRequests);
         
         AuthResponse response = AuthResponse.forGuest(token, guestId, jwtService.getTokenExpirationSeconds());
         response.setMessage(String.format("Guest session created. You have %d seat map view%s remaining.", 
@@ -209,6 +231,96 @@ public class AuthService {
     }
     
     /**
+     * Resend email verification token
+     */
+    public AuthResponse resendVerificationEmail(String email) throws SeatmapException {
+        logger.info("Processing resend verification for email: {}", email);
+        
+        // Find user by email
+        Optional<User> userOpt = userRepository.findByEmail(email.toLowerCase().trim());
+        if (userOpt.isEmpty()) {
+            throw SeatmapException.notFound("User not found");
+        }
+        
+        User user = userOpt.get();
+        
+        // Check if already verified
+        if (user.getEmailVerified()) {
+            throw SeatmapException.badRequest("Email is already verified");
+        }
+        
+        // Generate new verification token
+        user.setVerificationToken(generateVerificationToken());
+        user.setVerificationExpiresAt(Instant.now().plusSeconds(3600)); // 1 hour
+        user.updateTimestamp();
+        
+        // Save updated user
+        userRepository.saveUser(user);
+        
+        // Send new verification email
+        emailService.sendVerificationEmail(user.getEmail(), user.getVerificationToken());
+        
+        logger.info("Verification email resent for user: {}", user.getEmail());
+        
+        AuthResponse response = new AuthResponse();
+        response.setSuccess(true);
+        response.setMessage("Verification email has been resent. Please check your email.");
+        response.setEmail(user.getEmail());
+        response.setPending(true);
+        
+        return response;
+    }
+    
+    /**
+     * Verify email address with verification token
+     */
+    public AuthResponse verifyEmail(String verificationToken) throws SeatmapException {
+        logger.info("Processing email verification for token: {}", verificationToken.substring(0, 8) + "...");
+        
+        // Find user by verification token
+        Optional<User> userOpt = userRepository.findByVerificationToken(verificationToken);
+        if (userOpt.isEmpty()) {
+            throw SeatmapException.badRequest("Invalid or expired verification token");
+        }
+        
+        User user = userOpt.get();
+        
+        // Check if already verified
+        if (user.getEmailVerified()) {
+            throw SeatmapException.badRequest("Email is already verified");
+        }
+        
+        // Check if token is expired
+        if (user.getVerificationExpiresAt().isBefore(Instant.now())) {
+            throw SeatmapException.badRequest("Verification token has expired");
+        }
+        
+        // Verify the user
+        user.setEmailVerified(true);
+        user.setVerificationToken(null);
+        user.setVerificationExpiresAt(null);
+        user.updateTimestamp();
+        
+        // Save verified user
+        userRepository.saveUser(user);
+        
+        // Send welcome email
+        emailService.sendWelcomeEmail(user.getEmail(), user.getFirstName());
+        
+        // Create session and JWT token for verified user
+        Session session = createUserSession(user);
+        String token = jwtService.generateToken(user);
+        session.setJwtToken(token);
+        sessionRepository.saveSession(session);
+        
+        logger.info("Email verified successfully for user: {}", user.getEmail());
+        
+        AuthResponse response = new AuthResponse(token, user, jwtService.getTokenExpirationSeconds());
+        response.setMessage("Email verified successfully! Welcome to Seatmap.");
+        return response;
+    }
+    
+    /**
      * Logout user (invalidate session)
      */
     public void logout(String token) throws SeatmapException {
@@ -229,5 +341,16 @@ public class AuthService {
         session.setUserId(user.getUserId());
         session.setUserType(Session.UserType.USER);
         return session;
+    }
+    
+    private String generateVerificationToken() {
+        SecureRandom random = new SecureRandom();
+        byte[] bytes = new byte[32];
+        random.nextBytes(bytes);
+        StringBuilder token = new StringBuilder();
+        for (byte b : bytes) {
+            token.append(String.format("%02x", b));
+        }
+        return token.toString();
     }
 }

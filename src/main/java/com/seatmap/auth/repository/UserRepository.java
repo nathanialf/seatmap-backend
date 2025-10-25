@@ -84,6 +84,31 @@ public class UserRepository extends DynamoDbRepository<User> {
         return findByOauthId(oauthId).isPresent();
     }
     
+    public Optional<User> findByVerificationToken(String verificationToken) throws SeatmapException {
+        try {
+            // Query the verification-token-index GSI
+            Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+            expressionAttributeValues.put(":token", AttributeValue.builder().s(verificationToken).build());
+            
+            QueryRequest request = QueryRequest.builder()
+                    .tableName(tableName)
+                    .indexName("verification-token-index")
+                    .keyConditionExpression("verificationToken = :token")
+                    .expressionAttributeValues(expressionAttributeValues)
+                    .build();
+                    
+            QueryResponse response = dynamoDbClient.query(request);
+            
+            if (!response.items().isEmpty()) {
+                return Optional.of(fromAttributeValueMap(response.items().get(0)));
+            } else {
+                return Optional.empty();
+            }
+        } catch (DynamoDbException e) {
+            throw SeatmapException.internalError("Failed to find user by verification token: " + e.getMessage());
+        }
+    }
+    
     public void saveUser(User user) throws SeatmapException {
         // Update timestamp before saving
         user.updateTimestamp();

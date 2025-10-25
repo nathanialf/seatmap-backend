@@ -5,6 +5,7 @@ import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.common.exception.SeatmapException;
+import com.seatmap.email.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +34,9 @@ class IpBasedGuestLimitingTest {
     @Mock
     private GuestAccessRepository mockGuestAccessRepository;
     
+    @Mock
+    private EmailService mockEmailService;
+    
     private AuthService authService;
     
     @BeforeEach
@@ -42,7 +46,8 @@ class IpBasedGuestLimitingTest {
             mockSessionRepository, 
             mockPasswordService,
             mockJwtService,
-            mockGuestAccessRepository
+            mockGuestAccessRepository,
+            mockEmailService
         );
         
         // Default mock setup
@@ -193,8 +198,8 @@ class IpBasedGuestLimitingTest {
         assertEquals("Database connection failed", exception.getMessage());
         
         verify(mockGuestAccessRepository).getRemainingSeatmapRequests(clientIp);
-        // Session is saved before getting remaining requests, so it should still be called
-        verify(mockSessionRepository).saveSession(any());
+        // Since the exception occurs before session creation, session should NOT be saved
+        verify(mockSessionRepository, never()).saveSession(any());
     }
     
     @Test

@@ -22,6 +22,11 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "verificationToken"
+    type = "S"
+  }
+
   # GSI for email lookup
   global_secondary_index {
     name            = "email-index"
@@ -33,6 +38,13 @@ resource "aws_dynamodb_table" "users" {
   global_secondary_index {
     name            = "oauth-id-index"
     hash_key        = "oauthId"
+    projection_type = "ALL"
+  }
+
+  # GSI for email verification token lookup
+  global_secondary_index {
+    name            = "verification-token-index"
+    hash_key        = "verificationToken"
     projection_type = "ALL"
   }
 

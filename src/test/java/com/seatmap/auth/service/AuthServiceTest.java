@@ -9,6 +9,7 @@ import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.common.model.Session;
 import com.seatmap.common.model.User;
+import com.seatmap.email.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -40,42 +41,53 @@ class AuthServiceTest {
     @Mock
     private GuestAccessRepository guestAccessRepository;
     
+    @Mock
+    private EmailService emailService;
+    
     private AuthService authService;
     
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository);
+        authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
     }
     
     @Test
-    @DisplayName("Should register user successfully")
-    void shouldRegisterUserSuccessfully() throws SeatmapException {
+    @DisplayName("Should register user successfully without JWT token")
+    void shouldRegisterUserSuccessfullyWithoutJwtToken() throws SeatmapException {
         // Given
         RegisterRequest request = new RegisterRequest("test@example.com", "StrongPass123!", "John", "Doe");
         String hashedPassword = "hashed_password";
-        String jwtToken = "jwt_token";
-        int expirationSeconds = 86400;
         
         when(passwordService.getPasswordValidationError(anyString())).thenReturn(null);
         when(userRepository.emailExists(anyString())).thenReturn(false);
         when(passwordService.hashPassword(anyString())).thenReturn(hashedPassword);
-        when(jwtService.generateToken(any(User.class))).thenReturn(jwtToken);
-        when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
         
         // When
         AuthResponse response = authService.register(request);
         
         // Then
         assertNotNull(response);
-        assertEquals(jwtToken, response.getToken());
+        assertNull(response.getToken()); // No JWT token until email verified
         assertEquals("test@example.com", response.getEmail());
         assertEquals("John", response.getFirstName());
         assertEquals("Doe", response.getLastName());
-        assertEquals(User.AuthProvider.EMAIL, response.getAuthProvider());
-        assertEquals(expirationSeconds, response.getExpiresIn());
+        assertTrue(response.isNewUser());
+        assertTrue(response.isPending());
+        assertTrue(response.getMessage().contains("verify your account"));
         
-        verify(userRepository).saveUser(any(User.class));
-        verify(sessionRepository).saveSession(any(Session.class));
+        // Verify user is saved as unverified
+        verify(userRepository).saveUser(argThat(user -> 
+            user.getEmail().equals("test@example.com") &&
+            !user.getEmailVerified() &&
+            user.getVerificationToken() != null &&
+            user.getVerificationExpiresAt() != null
+        ));
+        
+        // Verify verification email is sent
+        verify(emailService).sendVerificationEmail(eq("test@example.com"), anyString());
+        
+        // No session created until verification
+        verify(sessionRepository, never()).saveSession(any(Session.class));
     }
     
     @Test
@@ -274,7 +286,7 @@ class AuthServiceTest {
         String guestToken = "guest_jwt_token";
         int expirationSeconds = 86400;
         
-        when(jwtService.generateGuestToken(anyString(), eq(0))).thenReturn(guestToken);
+        when(jwtService.generateGuestToken(anyString(), eq(1))).thenReturn(guestToken);
         when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
         when(guestAccessRepository.getRemainingSeatmapRequests(clientIp)).thenReturn(1);
         
@@ -296,7 +308,7 @@ class AuthServiceTest {
         String guestToken = "guest_jwt_token";
         int expirationSeconds = 86400;
         
-        when(jwtService.generateGuestToken(anyString(), eq(0))).thenReturn(guestToken);
+        when(jwtService.generateGuestToken(anyString(), eq(2))).thenReturn(guestToken);
         when(jwtService.getTokenExpirationSeconds()).thenReturn(expirationSeconds);
         when(guestAccessRepository.getRemainingSeatmapRequests(clientIp)).thenReturn(0);
         
@@ -442,6 +454,7 @@ class AuthServiceTest {
         user.setLastName("User");
         user.setAuthProvider(User.AuthProvider.EMAIL);
         user.setStatus(User.UserStatus.ACTIVE);
+        user.setEmailVerified(true); // Email verified by default for login tests
         return user;
     }
 }

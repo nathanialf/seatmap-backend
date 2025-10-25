@@ -14,6 +14,8 @@ public class AuthResponse {
     private int expiresIn;
     private GuestLimits guestLimits;
     private String message;
+    private boolean success = true;
+    private boolean pending = false;
 
     public AuthResponse() {}
 
@@ -71,6 +73,12 @@ public class AuthResponse {
 
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+
+    public boolean isSuccess() { return success; }
+    public void setSuccess(boolean success) { this.success = success; }
+
+    public boolean isPending() { return pending; }
+    public void setPending(boolean pending) { this.pending = pending; }
 
     public static class GuestLimits {
         private int flightsViewed;

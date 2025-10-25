@@ -57,7 +57,12 @@ public class FlightOffersHandler implements RequestHandler<APIGatewayProxyReques
             
             String token = authHeader.substring(7);
             try {
-                jwtService.validateToken(token);
+                // Validate token and check if user needs email verification
+                String userId = jwtService.getUserIdFromToken(token);
+                if (!jwtService.isGuestToken(token)) {
+                    // For authenticated users, check email verification through auth service
+                    jwtService.validateToken(token);
+                }
             } catch (com.seatmap.common.exception.SeatmapException e) {
                 return createErrorResponse(401, "Invalid or expired token");
             }

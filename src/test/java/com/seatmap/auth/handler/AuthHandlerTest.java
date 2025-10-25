@@ -9,6 +9,7 @@ import com.seatmap.auth.model.LoginRequest;
 import com.seatmap.auth.model.RegisterRequest;
 import com.seatmap.auth.service.AuthService;
 import com.seatmap.common.exception.SeatmapException;
+import com.seatmap.email.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -31,6 +33,9 @@ class AuthHandlerTest {
     private AuthService mockAuthService;
     
     @Mock
+    private EmailService mockEmailService;
+    
+    @Mock
     private Context mockContext;
     
     private ObjectMapper objectMapper;
@@ -40,7 +45,7 @@ class AuthHandlerTest {
         objectMapper = new ObjectMapper();
         handler = new AuthHandler();
         
-        // Use reflection to inject mock
+        // Use reflection to inject mocks
         try {
             var authServiceField = AuthHandler.class.getDeclaredField("authService");
             authServiceField.setAccessible(true);
@@ -61,14 +66,14 @@ class AuthHandlerTest {
         // Mock auth service response
         AuthResponse mockResponse = AuthResponse.forGuest("guest-token", "guest-123", 86400);
         mockResponse.setMessage("Guest session created. You can view up to 2 seat maps.");
-        when(mockAuthService.createGuestSession()).thenReturn(mockResponse);
+        when(mockAuthService.createGuestSession(anyString())).thenReturn(mockResponse);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("guest-token"));
         assertTrue(response.getBody().contains("Guest session created"));
-        verify(mockAuthService).createGuestSession();
+        verify(mockAuthService).createGuestSession(anyString());
     }
     
     @Test
@@ -130,25 +135,26 @@ class AuthHandlerTest {
         
         RegisterRequest registerRequest = new RegisterRequest();
         registerRequest.setEmail("newuser@example.com");
-        registerRequest.setPassword("password123");
+        registerRequest.setPassword("Password123!");
         registerRequest.setFirstName("John");
         registerRequest.setLastName("Doe");
         request.setBody(objectMapper.writeValueAsString(registerRequest));
         
-        // Mock auth service response
+        // Mock auth service response - now returns pending response without JWT
         AuthResponse mockResponse = new AuthResponse();
-        mockResponse.setToken("new-user-token");
-        mockResponse.setUserId("user-456");
+        mockResponse.setSuccess(true);
+        mockResponse.setPending(true);
         mockResponse.setEmail("newuser@example.com");
-        mockResponse.setExpiresIn(86400);
-        mockResponse.setNewUser(true);
+        mockResponse.setMessage("Registration successful! Please check your email to verify your account.");
         when(mockAuthService.register(any(RegisterRequest.class))).thenReturn(mockResponse);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(200, response.getStatusCode());
-        assertTrue(response.getBody().contains("new-user-token"));
+        assertTrue(response.getBody().contains("Registration successful"));
         assertTrue(response.getBody().contains("newuser@example.com"));
+        assertTrue(response.getBody().contains("\"token\":null"));
+        assertTrue(response.getBody().contains("\"pending\":true"));
         verify(mockAuthService).register(any(RegisterRequest.class));
     }
     
@@ -162,18 +168,18 @@ class AuthHandlerTest {
         
         RegisterRequest registerRequest = new RegisterRequest();
         registerRequest.setEmail("existing@example.com");
-        registerRequest.setPassword("password123");
+        registerRequest.setPassword("Password123!");
         registerRequest.setFirstName("John");
         registerRequest.setLastName("Doe");
         request.setBody(objectMapper.writeValueAsString(registerRequest));
         
-        // Mock auth service to throw conflict exception
+        // Mock auth service to throw bad request exception (changed from conflict)
         when(mockAuthService.register(any(RegisterRequest.class)))
-            .thenThrow(SeatmapException.conflict("Email address is already registered"));
+            .thenThrow(SeatmapException.badRequest("Email address is already registered"));
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
-        assertEquals(409, response.getStatusCode());
+        assertEquals(400, response.getStatusCode());
         assertTrue(response.getBody().contains("Email address is already registered"));
         verify(mockAuthService).register(any(RegisterRequest.class));
     }
@@ -305,14 +311,14 @@ class AuthHandlerTest {
         request.setHeaders(new HashMap<>());
         
         // Mock auth service to throw unexpected exception
-        when(mockAuthService.createGuestSession())
+        when(mockAuthService.createGuestSession("unknown"))
             .thenThrow(new RuntimeException("Database connection failed"));
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(500, response.getStatusCode());
         assertTrue(response.getBody().contains("Internal server error"));
-        verify(mockAuthService).createGuestSession();
+        verify(mockAuthService).createGuestSession("unknown");
     }
     
     @Test

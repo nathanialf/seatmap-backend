@@ -99,6 +99,7 @@ resource "aws_lambda_function" "auth" {
       SABRE_PASSWORD     = var.sabre_password
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
+      BASE_URL          = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
     }
   }
 
@@ -178,7 +179,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "dynamodb:Query",
           "dynamodb:Scan",
           "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem"
+          "dynamodb:DeleteItem",
+          "ses:SendEmail",
+          "ses:SendRawEmail"
         ]
         Resource = [
           aws_dynamodb_table.users.arn,
@@ -218,6 +221,11 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "verificationToken"
+    type = "S"
+  }
+
   # GSI for email lookup
   global_secondary_index {
     name            = "email-index"
@@ -233,6 +241,15 @@ resource "aws_dynamodb_table" "users" {
     hash_key        = "oauthId"
     read_capacity   = 10
     write_capacity  = 10
+    projection_type = "ALL"
+  }
+
+  # GSI for verification token lookup
+  global_secondary_index {
+    name            = "verification-token-index"
+    hash_key        = "verificationToken"
+    read_capacity   = 5
+    write_capacity  = 5
     projection_type = "ALL"
   }
 

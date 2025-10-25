@@ -99,6 +99,7 @@ resource "aws_lambda_function" "auth" {
       SABRE_PASSWORD     = var.sabre_password
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
+      BASE_URL           = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
     }
   }
 
@@ -190,6 +191,14 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.guest_access.arn,
           "${aws_dynamodb_table.guest_access.arn}/index/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -216,6 +225,11 @@ resource "aws_dynamodb_table" "users" {
     type = "S"
   }
 
+  attribute {
+    name = "verificationToken"
+    type = "S"
+  }
+
   # GSI for email lookup
   global_secondary_index {
     name            = "email-index"
@@ -227,6 +241,13 @@ resource "aws_dynamodb_table" "users" {
   global_secondary_index {
     name            = "oauth-id-index"
     hash_key        = "oauthId"
+    projection_type = "ALL"
+  }
+
+  # GSI for email verification token lookup
+  global_secondary_index {
+    name            = "verification-token-index"
+    hash_key        = "verificationToken"
     projection_type = "ALL"
   }
 

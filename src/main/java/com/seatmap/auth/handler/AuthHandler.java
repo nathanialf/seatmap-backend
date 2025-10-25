@@ -14,6 +14,7 @@ import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.auth.service.AuthService;
 import com.seatmap.auth.service.JwtService;
 import com.seatmap.auth.service.PasswordService;
+import com.seatmap.email.service.EmailService;
 import com.seatmap.common.exception.SeatmapException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,8 +58,9 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
         GuestAccessRepository guestAccessRepository = new GuestAccessRepository(dynamoDbClient);
         PasswordService passwordService = new PasswordService();
         JwtService jwtService = new JwtService();
+        EmailService emailService = new EmailService();
         
-        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository);
+        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
     }
     
     @Override
@@ -80,6 +82,10 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
                         return handleRegister(event);
                     case "/auth/refresh":
                         return handleRefreshToken(event);
+                    case "/auth/verify":
+                        return handleVerifyEmail(event);
+                    case "/auth/resend-verification":
+                        return handleResendVerification(event);
                     default:
                         return createErrorResponse(404, "Endpoint not found");
                 }
@@ -223,6 +229,41 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
                 .withHeaders(createCorsHeaders())
                 .withBody("{\"success\":false,\"message\":\"" + message + "\"}");
         }
+    }
+    
+    private APIGatewayProxyResponseEvent handleVerifyEmail(APIGatewayProxyRequestEvent event) throws SeatmapException {
+        logger.info("Processing email verification request");
+        
+        // Get verification token from query parameter
+        Map<String, String> queryParams = event.getQueryStringParameters();
+        if (queryParams == null || !queryParams.containsKey("token")) {
+            return createErrorResponse(400, "Verification token required");
+        }
+        
+        String verificationToken = queryParams.get("token");
+        AuthResponse response = authService.verifyEmail(verificationToken);
+        return createSuccessResponse(response);
+    }
+    
+    private APIGatewayProxyResponseEvent handleResendVerification(APIGatewayProxyRequestEvent event) throws SeatmapException {
+        logger.info("Processing resend verification request");
+        
+        // Parse request body for email
+        Map<String, String> requestBody;
+        try {
+            requestBody = objectMapper.readValue(event.getBody(), Map.class);
+        } catch (Exception e) {
+            logger.error("Error parsing resend verification request body", e);
+            return createErrorResponse(400, "Invalid request format");
+        }
+        
+        String email = requestBody.get("email");
+        if (email == null || email.trim().isEmpty()) {
+            return createErrorResponse(400, "Email is required");
+        }
+        
+        AuthResponse response = authService.resendVerificationEmail(email);
+        return createSuccessResponse(response);
     }
     
     /**
