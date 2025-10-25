@@ -454,6 +454,20 @@ resource "aws_api_gateway_resource" "auth_register" {
   path_part   = "register"
 }
 
+# Auth Verify Resource
+resource "aws_api_gateway_resource" "auth_verify" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "verify"
+}
+
+# Auth Resend Verification Resource
+resource "aws_api_gateway_resource" "auth_resend_verification" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "resend-verification"
+}
+
 # Auth Guest Method (POST)
 resource "aws_api_gateway_method" "auth_guest_post" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
@@ -476,6 +490,24 @@ resource "aws_api_gateway_method" "auth_login_post" {
 resource "aws_api_gateway_method" "auth_register_post" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
   resource_id   = aws_api_gateway_resource.auth_register.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Verify Method (GET)
+resource "aws_api_gateway_method" "auth_verify_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_verify.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = false  # No API key needed for email verification links
+}
+
+# Auth Resend Verification Method (POST)
+resource "aws_api_gateway_method" "auth_resend_verification_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_resend_verification.id
   http_method   = "POST"
   authorization = "NONE"
   api_key_required = true
@@ -508,6 +540,28 @@ resource "aws_api_gateway_integration" "auth_register_integration" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
   resource_id = aws_api_gateway_resource.auth_register.id
   http_method = aws_api_gateway_method.auth_register_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Verify Integration
+resource "aws_api_gateway_integration" "auth_verify_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_verify.id
+  http_method = aws_api_gateway_method.auth_verify_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Resend Verification Integration
+resource "aws_api_gateway_integration" "auth_resend_verification_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_resend_verification.id
+  http_method = aws_api_gateway_method.auth_resend_verification_post.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
@@ -569,6 +623,8 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_integration.auth_guest_integration,
     aws_api_gateway_integration.auth_login_integration,
     aws_api_gateway_integration.auth_register_integration,
+    aws_api_gateway_integration.auth_verify_integration,
+    aws_api_gateway_integration.auth_resend_verification_integration,
     aws_api_gateway_integration.flight_offers_integration
   ]
 
@@ -584,12 +640,18 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_resource.auth_guest.id,
       aws_api_gateway_resource.auth_login.id,
       aws_api_gateway_resource.auth_register.id,
+      aws_api_gateway_resource.auth_verify.id,
+      aws_api_gateway_resource.auth_resend_verification.id,
       aws_api_gateway_method.auth_guest_post.id,
       aws_api_gateway_method.auth_login_post.id,
       aws_api_gateway_method.auth_register_post.id,
+      aws_api_gateway_method.auth_verify_get.id,
+      aws_api_gateway_method.auth_resend_verification_post.id,
       aws_api_gateway_integration.auth_guest_integration.id,
       aws_api_gateway_integration.auth_login_integration.id,
       aws_api_gateway_integration.auth_register_integration.id,
+      aws_api_gateway_integration.auth_verify_integration.id,
+      aws_api_gateway_integration.auth_resend_verification_integration.id,
       aws_api_gateway_resource.flight_offers.id,
       aws_api_gateway_method.flight_offers_post.id,
       aws_api_gateway_integration.flight_offers_integration.id,
