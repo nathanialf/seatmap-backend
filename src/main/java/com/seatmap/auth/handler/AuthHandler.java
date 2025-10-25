@@ -5,13 +5,16 @@ import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.auth.model.AuthResponse;
 import com.seatmap.auth.model.LoginRequest;
+import com.seatmap.auth.model.ProfileRequest;
 import com.seatmap.auth.model.RegisterRequest;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
 import com.seatmap.auth.service.AuthService;
+import com.seatmap.common.model.User;
 import com.seatmap.auth.service.JwtService;
 import com.seatmap.auth.service.PasswordService;
 import com.seatmap.email.service.EmailService;
@@ -34,9 +37,11 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
     private final ObjectMapper objectMapper;
     private final Validator validator;
     private final AuthService authService;
+    private final UserRepository userRepository;
     
     public AuthHandler() {
         this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
         this.validator = Validation.buildDefaultValidatorFactory().getValidator();
         
         // Initialize AWS services with explicit HTTP client to avoid conflicts
@@ -53,7 +58,7 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
         String sessionsTable = "seatmap-sessions-" + environment;
         String guestAccessTable = "seatmap-guest-access-" + environment;
         
-        UserRepository userRepository = new UserRepository(dynamoDbClient, usersTable);
+        this.userRepository = new UserRepository(dynamoDbClient, usersTable);
         SessionRepository sessionRepository = new SessionRepository(dynamoDbClient, sessionsTable);
         GuestAccessRepository guestAccessRepository = new GuestAccessRepository(dynamoDbClient);
         PasswordService passwordService = new PasswordService();
@@ -91,8 +96,14 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
                 }
             } else if ("DELETE".equals(httpMethod) && "/auth/logout".equals(path)) {
                 return handleLogout(event);
-            } else if ("GET".equals(httpMethod) && "/auth/verify".equals(path)) {
-                return handleVerifyEmail(event);
+            } else if ("GET".equals(httpMethod)) {
+                if ("/auth/verify".equals(path)) {
+                    return handleVerifyEmail(event);
+                } else if ("/auth/profile".equals(path)) {
+                    return handleGetProfile(event);
+                }
+            } else if ("PUT".equals(httpMethod) && "/auth/profile".equals(path)) {
+                return handleUpdateProfile(event);
             }
             
             return createErrorResponse(405, "Method not allowed");
@@ -266,6 +277,83 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
         
         AuthResponse response = authService.resendVerificationEmail(email);
         return createSuccessResponse(response);
+    }
+    
+    private APIGatewayProxyResponseEvent handleGetProfile(APIGatewayProxyRequestEvent event) throws SeatmapException {
+        logger.info("Processing get profile request");
+        
+        // Get token from Authorization header
+        String authHeader = event.getHeaders().get("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return createErrorResponse(401, "Authorization token required");
+        }
+        
+        String token = authHeader.substring(7);
+        
+        // Validate token and get user (guest tokens not allowed for profile)
+        User user = authService.validateToken(token);
+        if (user == null) {
+            return createErrorResponse(401, "Invalid or guest token - profile access requires user authentication");
+        }
+        
+        // Return user profile (Jackson will automatically exclude @JsonIgnore fields)
+        return createSuccessResponse(user);
+    }
+    
+    private APIGatewayProxyResponseEvent handleUpdateProfile(APIGatewayProxyRequestEvent event) throws SeatmapException {
+        logger.info("Processing update profile request");
+        
+        // Get token from Authorization header
+        String authHeader = event.getHeaders().get("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return createErrorResponse(401, "Authorization token required");
+        }
+        
+        String token = authHeader.substring(7);
+        
+        // Validate token and get user (guest tokens not allowed for profile)
+        User user = authService.validateToken(token);
+        if (user == null) {
+            return createErrorResponse(401, "Invalid or guest token - profile access requires user authentication");
+        }
+        
+        // Parse request body
+        ProfileRequest request;
+        try {
+            request = objectMapper.readValue(event.getBody(), ProfileRequest.class);
+        } catch (Exception e) {
+            logger.error("Error parsing profile update request body", e);
+            return createErrorResponse(400, "Invalid request format");
+        }
+        
+        // Validate request
+        Set<ConstraintViolation<ProfileRequest>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            StringBuilder errors = new StringBuilder();
+            for (ConstraintViolation<ProfileRequest> violation : violations) {
+                errors.append(violation.getMessage()).append("; ");
+            }
+            return createErrorResponse(400, "Validation errors: " + errors.toString());
+        }
+        
+        // Update user profile fields
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+        if (request.getProfilePicture() != null) {
+            user.setProfilePicture(request.getProfilePicture());
+        }
+        
+        // Save updated user
+        userRepository.saveUser(user);
+        
+        logger.info("Profile updated successfully for user: {}", user.getUserId());
+        
+        // Return updated user profile
+        return createSuccessResponse(user);
     }
     
     /**

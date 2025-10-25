@@ -456,6 +456,13 @@ resource "aws_api_gateway_resource" "auth_register" {
   path_part   = "register"
 }
 
+# Auth Profile Resource
+resource "aws_api_gateway_resource" "auth_profile" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "profile"
+}
+
 # Auth Guest Method (POST)
 resource "aws_api_gateway_method" "auth_guest_post" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
@@ -479,6 +486,24 @@ resource "aws_api_gateway_method" "auth_register_post" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
   resource_id   = aws_api_gateway_resource.auth_register.id
   http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Profile Method (GET)
+resource "aws_api_gateway_method" "auth_profile_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_profile.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Profile Method (PUT)
+resource "aws_api_gateway_method" "auth_profile_put" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_profile.id
+  http_method   = "PUT"
   authorization = "NONE"
   api_key_required = true
 }
@@ -510,6 +535,28 @@ resource "aws_api_gateway_integration" "auth_register_integration" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
   resource_id = aws_api_gateway_resource.auth_register.id
   http_method = aws_api_gateway_method.auth_register_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Profile GET Integration
+resource "aws_api_gateway_integration" "auth_profile_get_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_profile.id
+  http_method = aws_api_gateway_method.auth_profile_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Profile PUT Integration
+resource "aws_api_gateway_integration" "auth_profile_put_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_profile.id
+  http_method = aws_api_gateway_method.auth_profile_put.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
@@ -586,12 +633,17 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_resource.auth_guest.id,
       aws_api_gateway_resource.auth_login.id,
       aws_api_gateway_resource.auth_register.id,
+      aws_api_gateway_resource.auth_profile.id,
       aws_api_gateway_method.auth_guest_post.id,
       aws_api_gateway_method.auth_login_post.id,
       aws_api_gateway_method.auth_register_post.id,
+      aws_api_gateway_method.auth_profile_get.id,
+      aws_api_gateway_method.auth_profile_put.id,
       aws_api_gateway_integration.auth_guest_integration.id,
       aws_api_gateway_integration.auth_login_integration.id,
       aws_api_gateway_integration.auth_register_integration.id,
+      aws_api_gateway_integration.auth_profile_get_integration.id,
+      aws_api_gateway_integration.auth_profile_put_integration.id,
       aws_api_gateway_resource.flight_offers.id,
       aws_api_gateway_method.flight_offers_post.id,
       aws_api_gateway_integration.flight_offers_integration.id,
