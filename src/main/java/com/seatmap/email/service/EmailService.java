@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 public class EmailService {
     private static final Logger logger = LoggerFactory.getLogger(EmailService.class);
     
-    private static final String FROM_EMAIL = "noreply@seatmap.com";
+    private static final String FROM_EMAIL = "myseatmapapp@gmail.com";
     private static final String BASE_URL = System.getenv("BASE_URL");
     
     private final SesClient sesClient;
