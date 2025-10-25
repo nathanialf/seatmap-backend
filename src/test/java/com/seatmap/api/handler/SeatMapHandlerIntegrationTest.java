@@ -255,7 +255,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String sabreFlightData = createSabreFlightOfferData();
-        request.setBody(createSeatMapRequestBody("offer123", sabreFlightData));
+        request.setBody(createSeatMapRequestBody("SABRE", sabreFlightData));
         
         setupValidUserToken();
         JsonNode mockSabreResponse = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\",\"source\":\"sabre\"}]}");
@@ -279,7 +279,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String amadeusFlightData = createAmadeusFlightOfferData();
-        request.setBody(createSeatMapRequestBody("offer123", amadeusFlightData));
+        request.setBody(createSeatMapRequestBody("AMADEUS", amadeusFlightData));
         
         setupValidUserToken();
         setupValidAmadeusResponse();
@@ -301,7 +301,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String flightDataWithoutSource = "{\"id\":\"offer123\",\"type\":\"flight-offer\"}";
-        request.setBody(createSeatMapRequestBody("offer123", flightDataWithoutSource));
+        request.setBody(createSeatMapRequestBody("AMADEUS", flightDataWithoutSource));
         
         setupValidUserToken();
         setupValidAmadeusResponse();
@@ -323,7 +323,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String invalidFlightData = "invalid-json-data";
-        request.setBody(createSeatMapRequestBody("offer123", invalidFlightData));
+        request.setBody(createSeatMapRequestBody("AMADEUS", invalidFlightData));
         
         setupValidUserToken();
         setupValidAmadeusResponse();
@@ -344,7 +344,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String sabreFlightData = createSabreFlightOfferData();
-        request.setBody(createSeatMapRequestBody("offer123", sabreFlightData));
+        request.setBody(createSeatMapRequestBody("SABRE", sabreFlightData));
         
         setupValidUserToken();
         
@@ -545,7 +545,7 @@ class SeatMapHandlerIntegrationTest {
     private APIGatewayProxyRequestEvent createBasicRequest() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         String flightOfferData = createAmadeusFlightOfferData();
-        request.setBody(createSeatMapRequestBody("offer123", flightOfferData));
+        request.setBody(createSeatMapRequestBody("AMADEUS", flightOfferData));
         return request;
     }
     
@@ -558,9 +558,9 @@ class SeatMapHandlerIntegrationTest {
         return request;
     }
     
-    private String createSeatMapRequestBody(String offerId, String flightOfferData) {
-        return String.format("{\"flightOfferId\":\"%s\",\"flightOfferData\":\"%s\"}", 
-            offerId, flightOfferData.replace("\"", "\\\""));
+    private String createSeatMapRequestBody(String source, String flightOfferData) {
+        return String.format("{\"source\":\"%s\",\"flightOfferData\":\"%s\"}", 
+            source, flightOfferData.replace("\"", "\\\""));
     }
     
     private String createAmadeusFlightOfferData() {

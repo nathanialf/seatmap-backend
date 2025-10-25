@@ -3,25 +3,25 @@ package com.seatmap.api.model;
 import jakarta.validation.constraints.NotBlank;
 
 public class SeatMapRequest {
-    @NotBlank(message = "Flight offer ID is required")
-    private String flightOfferId;
+    @NotBlank(message = "Source is required")
+    private String source;
     
     @NotBlank(message = "Flight offer data is required")
     private String flightOfferData; // JSON string of complete flight offer from search
     
     public SeatMapRequest() {}
     
-    public SeatMapRequest(String flightOfferId, String flightOfferData) {
-        this.flightOfferId = flightOfferId;
+    public SeatMapRequest(String source, String flightOfferData) {
+        this.source = source;
         this.flightOfferData = flightOfferData;
     }
     
-    public String getFlightOfferId() {
-        return flightOfferId;
+    public String getSource() {
+        return source;
     }
     
-    public void setFlightOfferId(String flightOfferId) {
-        this.flightOfferId = flightOfferId;
+    public void setSource(String source) {
+        this.source = source;
     }
     
     public String getFlightOfferData() {

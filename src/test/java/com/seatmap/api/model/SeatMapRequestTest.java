@@ -38,23 +38,23 @@ class SeatMapRequestTest {
         
         assertEquals(1, violations.size());
         ConstraintViolation<SeatMapRequest> violation = violations.iterator().next();
-        assertEquals("Flight offer ID is required", violation.getMessage());
-        assertEquals("flightOfferId", violation.getPropertyPath().toString());
+        assertEquals("Source is required", violation.getMessage());
+        assertEquals("source", violation.getPropertyPath().toString());
     }
     
     @Test
-    void nullFlightOfferId_FailsValidation() {
+    void nullSource_FailsValidation() {
         SeatMapRequest request = new SeatMapRequest(null, "{\"id\":\"offer123\",\"source\":\"GDS\"}");
         
         Set<ConstraintViolation<SeatMapRequest>> violations = validator.validate(request);
         
         assertEquals(1, violations.size());
-        assertTrue(violations.iterator().next().getMessage().contains("Flight offer ID is required"));
+        assertTrue(violations.iterator().next().getMessage().contains("Source is required"));
     }
     
     @Test
     void emptyFlightOfferData_FailsValidation() {
-        SeatMapRequest request = new SeatMapRequest("offer123", "");
+        SeatMapRequest request = new SeatMapRequest("AMADEUS", "");
         
         Set<ConstraintViolation<SeatMapRequest>> violations = validator.validate(request);
         
@@ -64,7 +64,7 @@ class SeatMapRequestTest {
     
     @Test
     void nullFlightOfferData_FailsValidation() {
-        SeatMapRequest request = new SeatMapRequest("offer123", null);
+        SeatMapRequest request = new SeatMapRequest("AMADEUS", null);
         
         Set<ConstraintViolation<SeatMapRequest>> violations = validator.validate(request);
         
@@ -79,7 +79,7 @@ class SeatMapRequestTest {
         Set<ConstraintViolation<SeatMapRequest>> violations = validator.validate(request);
         
         assertEquals(2, violations.size());
-        assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Flight offer ID is required")));
+        assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Source is required")));
         assertTrue(violations.stream().anyMatch(v -> v.getMessage().contains("Flight offer data is required")));
     }
     
@@ -87,18 +87,18 @@ class SeatMapRequestTest {
     void gettersAndSetters_WorkCorrectly() {
         SeatMapRequest request = new SeatMapRequest();
         
-        request.setFlightOfferId("offer456");
+        request.setSource("AMADEUS");
         request.setFlightOfferData("{\"id\":\"offer456\",\"source\":\"API\"}");
         
-        assertEquals("offer456", request.getFlightOfferId());
+        assertEquals("AMADEUS", request.getSource());
         assertEquals("{\"id\":\"offer456\",\"source\":\"API\"}", request.getFlightOfferData());
     }
     
     @Test
     void constructor_WithAllParameters_SetsFieldsCorrectly() {
-        SeatMapRequest request = new SeatMapRequest("offer789", "{\"id\":\"offer789\",\"data\":{\"flights\":[]}}");
+        SeatMapRequest request = new SeatMapRequest("SABRE", "{\"id\":\"offer789\",\"data\":{\"flights\":[]}}");
         
-        assertEquals("offer789", request.getFlightOfferId());
+        assertEquals("SABRE", request.getSource());
         assertEquals("{\"id\":\"offer789\",\"data\":{\"flights\":[]}}", request.getFlightOfferData());
     }
     
@@ -106,7 +106,7 @@ class SeatMapRequestTest {
     void defaultConstructor_CreatesEmptyObject() {
         SeatMapRequest request = new SeatMapRequest();
         
-        assertNull(request.getFlightOfferId());
+        assertNull(request.getSource());
         assertNull(request.getFlightOfferData());
     }
     

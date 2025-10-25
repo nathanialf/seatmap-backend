@@ -78,14 +78,13 @@ A serverless REST API built on AWS that aggregates flight seat availability data
 ### 🔄 **In Progress**
 
 #### **API Layer (Phase 2)**
-- 🔄 **Additional Endpoints**: User profile, bookmarks management
+- ✅ **User Profile Management**: View and update profile endpoints
+- ✅ **Bookmarks Management**: Complete CRUD API for flight bookmarks
 
 ### 📅 **Planned Features**
 - Google OAuth 2.0 and Apple Sign In
 - Stripe subscription management ($5/month)
-- Flight bookmarks (50 max per user)
 - Advanced monitoring and alerting
-- Sabre API integration
 
 ## Infrastructure Architecture
 
@@ -314,6 +313,86 @@ Content-Type: application/json
 }
 ```
 
+#### Get User Profile
+```http
+GET /auth/profile
+Authorization: Bearer <jwt-token>
+```
+
+**Response (Success):**
+```json
+{
+  "userId": "45852541-1ca9-48c4-aab2-8669d772a2d2",
+  "email": "nathanial@defnf.com",
+  "firstName": "Nathanial",
+  "lastName": "Fine",
+  "authProvider": "EMAIL",
+  "oauthId": null,
+  "profilePicture": null,
+  "createdAt": 1761416568.884190800,
+  "updatedAt": 1761416577.363132500,
+  "status": "ACTIVE",
+  "emailVerified": true,
+  "fullName": "Nathanial Fine"
+}
+```
+
+#### Update User Profile
+```http
+PUT /auth/profile
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+```
+
+**Supports partial updates - send any combination of these fields:**
+
+**Update first name only:**
+```json
+{
+  "firstName": "Nathan"
+}
+```
+
+**Update multiple fields:**
+```json
+{
+  "firstName": "Nathan",
+  "lastName": "Smith",
+  "profilePicture": "https://example.com/avatar.jpg"
+}
+```
+
+**Update profile picture only:**
+```json
+{
+  "profilePicture": "https://example.com/new-photo.png"
+}
+```
+
+**Response (Success):**
+```json
+{
+  "userId": "45852541-1ca9-48c4-aab2-8669d772a2d2",
+  "email": "nathanial@defnf.com",
+  "firstName": "Nathan",
+  "lastName": "Smith",
+  "authProvider": "EMAIL",
+  "oauthId": null,
+  "profilePicture": "https://example.com/avatar.jpg",
+  "createdAt": 1761416568.884190800,
+  "updatedAt": 1761416577.363132500,
+  "status": "ACTIVE",
+  "emailVerified": true,
+  "fullName": "Nathan Smith"
+}
+```
+
+**Field Validation:**
+- `firstName`: Max 50 characters
+- `lastName`: Max 50 characters  
+- `profilePicture`: URL string (no length limit)
+- Guest tokens are rejected - requires user JWT token
+
 #### Get Seat Map
 ```http
 POST /seat-map
@@ -376,8 +455,105 @@ Content-Type: application/json
 }
 ```
 
+### Bookmarks API
+
+#### Create Bookmark
+```http
+POST /bookmarks
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "title": "NYC to LAX - Dec 15",
+  "source": "AMADEUS",
+  "flightOfferData": "{\"id\":\"amadeus_123\",\"source\":\"GDS\",\"type\":\"flight-offer\",\"itineraries\":[{\"duration\":\"PT6H5M\",\"segments\":[{\"departure\":{\"iataCode\":\"JFK\",\"at\":\"2024-12-15T08:00:00\"},\"arrival\":{\"iataCode\":\"LAX\",\"at\":\"2024-12-15T11:05:00\"},\"carrierCode\":\"AA\",\"number\":\"123\"}]}],\"price\":{\"currency\":\"USD\",\"total\":\"299.00\"}}"
+}
+```
+
+**Response (Success):**
+```json
+{
+  "userId": "user-123",
+  "bookmarkId": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "NYC to LAX - Dec 15",
+  "source": "AMADEUS",
+  "flightOfferData": "{\"id\":\"amadeus_123\",...}",
+  "createdAt": 1703520000.000,
+  "updatedAt": 1703520000.000,
+  "expiresAt": 1706112000.000,
+  "isExpired": false
+}
+```
+
+#### List User Bookmarks
+```http
+GET /bookmarks
+Authorization: Bearer <jwt-token>
+```
+
+**Response (Success):**
+```json
+{
+  "bookmarks": [
+    {
+      "userId": "user-123",
+      "bookmarkId": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "NYC to LAX - Dec 15",
+      "source": "AMADEUS",
+      "flightOfferData": "{\"id\":\"amadeus_123\",...}",
+      "createdAt": 1703520000.000,
+      "updatedAt": 1703520000.000,
+      "expiresAt": 1706112000.000,
+      "isExpired": false
+    }
+  ],
+  "total": 1,
+  "maxAllowed": 50
+}
+```
+
+#### Get Specific Bookmark
+```http
+GET /bookmarks/{bookmarkId}
+Authorization: Bearer <jwt-token>
+```
+
+**Response (Success):**
+```json
+{
+  "userId": "user-123",
+  "bookmarkId": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "NYC to LAX - Dec 15",
+  "source": "AMADEUS",
+  "flightOfferData": "{\"id\":\"amadeus_123\",...}",
+  "createdAt": 1703520000.000,
+  "updatedAt": 1703520000.000,
+  "expiresAt": 1706112000.000,
+  "isExpired": false
+}
+```
+
+#### Delete Bookmark
+```http
+DELETE /bookmarks/{bookmarkId}
+Authorization: Bearer <jwt-token>
+```
+
+**Response (Success):**
+```json
+{
+  "message": "Bookmark deleted successfully"
+}
+```
+
+**Key Features:**
+- **50 bookmark limit** per user with validation
+- **TTL expiration** (30 days default) with automatic cleanup
+- **Source tracking** (AMADEUS/SABRE) for proper seat map routing
+- **Complete flight data storage** for seamless seat map integration
+- **User isolation** - users can only access their own bookmarks
+
 ### Planned Endpoints
-- `POST /bookmarks` - Save flight bookmark
 - `POST /subscriptions/subscribe` - Create Stripe subscription
 
 ## Security Features

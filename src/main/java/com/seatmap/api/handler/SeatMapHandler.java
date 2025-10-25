@@ -112,7 +112,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
             // Create successful response
             SeatMapResponse response = SeatMapResponse.success(
                 seatMapData,
-                request.getFlightOfferId()
+                request.getSource()
             );
             
             // Only record seatmap request for guest users if we actually got valid seat map data
@@ -144,18 +144,18 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
     
     private JsonNode getSeatMapBySource(SeatMapRequest request) throws SeatmapException {
         try {
-            // Parse the flight offer data to determine the source
-            JsonNode flightOfferData = objectMapper.readTree(request.getFlightOfferData());
-            String dataSource = flightOfferData.path("dataSource").asText("AMADEUS");
+            String source = request.getSource();
             
-            logger.info("Routing seat map request to {} based on flight data source", dataSource);
+            logger.info("Routing seat map request to {} based on explicit source", source);
             
-            if ("SABRE".equals(dataSource)) {
-                // Extract flight details for Sabre API
+            if ("SABRE".equals(source)) {
+                // Parse the flight offer data for Sabre API
+                JsonNode flightOfferData = objectMapper.readTree(request.getFlightOfferData());
                 return getSeatMapFromSabre(flightOfferData);
-            } else {
-                // Default to Amadeus (handles both "AMADEUS" and missing source)
+            } else if ("AMADEUS".equals(source)) {
                 return amadeusService.getSeatMapFromOfferData(request.getFlightOfferData());
+            } else {
+                throw new SeatmapException("Unsupported flight data source: " + source);
             }
             
         } catch (Exception e) {

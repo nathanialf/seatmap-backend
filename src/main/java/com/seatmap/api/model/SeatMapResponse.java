@@ -6,7 +6,7 @@ public class SeatMapResponse {
     private boolean success;
     private String message;
     private JsonNode data;
-    private String flightOfferId;
+    private String source;
     
     public SeatMapResponse() {}
     
@@ -15,10 +15,10 @@ public class SeatMapResponse {
         this.message = message;
     }
     
-    public static SeatMapResponse success(JsonNode data, String flightOfferId) {
+    public static SeatMapResponse success(JsonNode data, String source) {
         SeatMapResponse response = new SeatMapResponse(true, "Seat map retrieved successfully");
         response.setData(data);
-        response.setFlightOfferId(flightOfferId);
+        response.setSource(source);
         return response;
     }
     
@@ -50,11 +50,11 @@ public class SeatMapResponse {
         this.data = data;
     }
     
-    public String getFlightOfferId() {
-        return flightOfferId;
+    public String getSource() {
+        return source;
     }
     
-    public void setFlightOfferId(String flightOfferId) {
-        this.flightOfferId = flightOfferId;
+    public void setSource(String source) {
+        this.source = source;
     }
 }

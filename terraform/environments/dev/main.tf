@@ -134,6 +134,28 @@ resource "aws_lambda_function" "flight_offers" {
   tags = local.common_tags
 }
 
+# Lambda Function for Bookmarks
+resource "aws_lambda_function" "bookmarks" {
+  filename         = local.lambda_jar_path
+  function_name    = "seatmap-bookmarks-${local.environment}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "com.seatmap.auth.handler.BookmarkHandler::handleRequest"
+  runtime         = "java17"
+  memory_size     = 512
+  timeout         = 30
+  
+  source_code_hash = filebase64sha256(local.lambda_jar_path)
+  
+  environment {
+    variables = {
+      ENVIRONMENT = local.environment
+      JWT_SECRET  = var.jwt_secret
+    }
+  }
+
+  tags = local.common_tags
+}
+
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
   name = "seatmap-lambda-role-${local.environment}"
@@ -189,7 +211,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.subscriptions.arn,
           "${aws_dynamodb_table.subscriptions.arn}/index/*",
           aws_dynamodb_table.guest_access.arn,
-          "${aws_dynamodb_table.guest_access.arn}/index/*"
+          "${aws_dynamodb_table.guest_access.arn}/index/*",
+          aws_dynamodb_table.bookmarks.arn,
+          "${aws_dynamodb_table.bookmarks.arn}/index/*"
         ]
       },
       {
@@ -348,6 +372,35 @@ resource "aws_dynamodb_table" "guest_access" {
   tags = merge(local.common_tags, {
     Name        = "Guest Access History Table"
     Description = "Store guest access history for IP-based rate limiting"
+  })
+}
+
+# DynamoDB Table for Bookmarks
+resource "aws_dynamodb_table" "bookmarks" {
+  name           = "seatmap-bookmarks-${local.environment}"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "userId"
+  range_key      = "bookmarkId"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "bookmarkId"
+    type = "S"
+  }
+
+  # TTL for automatic bookmark expiration (departureDate + 1 day)
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "Bookmarks Table"
+    Description = "Store user flight bookmarks with complete flight offer data"
   })
 }
 
@@ -662,6 +715,104 @@ resource "aws_lambda_permission" "flight_offers_api_gateway" {
   source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
 }
 
+# Bookmarks API Gateway Resource
+resource "aws_api_gateway_resource" "bookmarks" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
+  path_part   = "bookmarks"
+}
+
+# Bookmarks Resource (for individual bookmark operations)
+resource "aws_api_gateway_resource" "bookmark_id" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.bookmarks.id
+  path_part   = "{id}"
+}
+
+# Bookmarks Methods
+resource "aws_api_gateway_method" "bookmarks_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.bookmarks.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+resource "aws_api_gateway_method" "bookmarks_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.bookmarks.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+resource "aws_api_gateway_method" "bookmark_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.bookmark_id.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+resource "aws_api_gateway_method" "bookmark_delete" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.bookmark_id.id
+  http_method   = "DELETE"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Bookmarks Integrations
+resource "aws_api_gateway_integration" "bookmarks_get_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.bookmarks.id
+  http_method = aws_api_gateway_method.bookmarks_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.bookmarks.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "bookmarks_post_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.bookmarks.id
+  http_method = aws_api_gateway_method.bookmarks_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.bookmarks.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "bookmark_get_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.bookmark_id.id
+  http_method = aws_api_gateway_method.bookmark_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.bookmarks.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "bookmark_delete_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.bookmark_id.id
+  http_method = aws_api_gateway_method.bookmark_delete.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.bookmarks.invoke_arn
+}
+
+# Lambda Permission for Bookmarks API Gateway
+resource "aws_lambda_permission" "bookmarks_api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.bookmarks.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
+}
+
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "main" {
   depends_on = [
@@ -672,7 +823,11 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_integration.auth_register_integration,
     aws_api_gateway_integration.auth_verify_integration,
     aws_api_gateway_integration.auth_resend_verification_integration,
-    aws_api_gateway_integration.flight_offers_integration
+    aws_api_gateway_integration.flight_offers_integration,
+    aws_api_gateway_integration.bookmarks_get_integration,
+    aws_api_gateway_integration.bookmarks_post_integration,
+    aws_api_gateway_integration.bookmark_get_integration,
+    aws_api_gateway_integration.bookmark_delete_integration
   ]
 
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
@@ -707,6 +862,16 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_resource.flight_offers.id,
       aws_api_gateway_method.flight_offers_post.id,
       aws_api_gateway_integration.flight_offers_integration.id,
+      aws_api_gateway_resource.bookmarks.id,
+      aws_api_gateway_resource.bookmark_id.id,
+      aws_api_gateway_method.bookmarks_get.id,
+      aws_api_gateway_method.bookmarks_post.id,
+      aws_api_gateway_method.bookmark_get.id,
+      aws_api_gateway_method.bookmark_delete.id,
+      aws_api_gateway_integration.bookmarks_get_integration.id,
+      aws_api_gateway_integration.bookmarks_post_integration.id,
+      aws_api_gateway_integration.bookmark_get_integration.id,
+      aws_api_gateway_integration.bookmark_delete_integration.id,
     ]))
   }
 
