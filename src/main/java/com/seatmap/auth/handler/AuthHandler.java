@@ -91,6 +91,8 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
                 }
             } else if ("DELETE".equals(httpMethod) && "/auth/logout".equals(path)) {
                 return handleLogout(event);
+            } else if ("GET".equals(httpMethod) && "/auth/verify".equals(path)) {
+                return handleVerifyEmail(event);
             }
             
             return createErrorResponse(405, "Method not allowed");
