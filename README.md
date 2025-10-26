@@ -334,7 +334,6 @@ Authorization: Bearer <jwt-token>
   "lastName": "Fine",
   "authProvider": "EMAIL",
   "oauthId": null,
-  "profilePicture": null,
   "createdAt": 1761416568.884190800,
   "updatedAt": 1761416577.363132500,
   "status": "ACTIVE",
@@ -359,19 +358,18 @@ Content-Type: application/json
 }
 ```
 
-**Update multiple fields:**
+**Update last name only:**
 ```json
 {
-  "firstName": "Nathan",
-  "lastName": "Smith",
-  "profilePicture": "https://example.com/avatar.jpg"
+  "lastName": "Smith"
 }
 ```
 
-**Update profile picture only:**
+**Update both fields:**
 ```json
 {
-  "profilePicture": "https://example.com/new-photo.png"
+  "firstName": "Nathan",
+  "lastName": "Smith"
 }
 ```
 
@@ -384,7 +382,6 @@ Content-Type: application/json
   "lastName": "Smith",
   "authProvider": "EMAIL",
   "oauthId": null,
-  "profilePicture": "https://example.com/avatar.jpg",
   "createdAt": 1761416568.884190800,
   "updatedAt": 1761416577.363132500,
   "status": "ACTIVE",
@@ -396,7 +393,6 @@ Content-Type: application/json
 **Field Validation:**
 - `firstName`: Max 50 characters
 - `lastName`: Max 50 characters  
-- `profilePicture`: URL string (no length limit)
 - Guest tokens are rejected - requires user JWT token
 
 #### Get Seat Map

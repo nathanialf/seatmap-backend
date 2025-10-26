@@ -16,7 +16,6 @@ public class User {
     private String lastName;
     private AuthProvider authProvider;
     private String oauthId;
-    private String profilePicture;
     private Instant createdAt;
     private Instant updatedAt;
     private UserStatus status;
@@ -64,8 +63,6 @@ public class User {
     public String getOauthId() { return oauthId; }
     public void setOauthId(String oauthId) { this.oauthId = oauthId; }
 
-    public String getProfilePicture() { return profilePicture; }
-    public void setProfilePicture(String profilePicture) { this.profilePicture = profilePicture; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

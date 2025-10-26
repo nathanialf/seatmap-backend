@@ -9,7 +9,6 @@ public class AuthResponse {
     private String firstName;
     private String lastName;
     private User.AuthProvider authProvider;
-    private String profilePicture;
     private boolean isNewUser;
     private int expiresIn;
     private GuestLimits guestLimits;
@@ -26,7 +25,6 @@ public class AuthResponse {
         this.firstName = user.getFirstName();
         this.lastName = user.getLastName();
         this.authProvider = user.getAuthProvider();
-        this.profilePicture = user.getProfilePicture();
         this.expiresIn = expiresIn;
         this.isNewUser = false;
     }
@@ -59,8 +57,6 @@ public class AuthResponse {
     public User.AuthProvider getAuthProvider() { return authProvider; }
     public void setAuthProvider(User.AuthProvider authProvider) { this.authProvider = authProvider; }
 
-    public String getProfilePicture() { return profilePicture; }
-    public void setProfilePicture(String profilePicture) { this.profilePicture = profilePicture; }
 
     public boolean isNewUser() { return isNewUser; }
     public void setNewUser(boolean newUser) { isNewUser = newUser; }

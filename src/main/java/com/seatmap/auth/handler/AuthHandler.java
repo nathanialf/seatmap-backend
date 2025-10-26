@@ -343,9 +343,6 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
         if (request.getLastName() != null) {
             user.setLastName(request.getLastName());
         }
-        if (request.getProfilePicture() != null) {
-            user.setProfilePicture(request.getProfilePicture());
-        }
         
         // Save updated user
         userRepository.saveUser(user);

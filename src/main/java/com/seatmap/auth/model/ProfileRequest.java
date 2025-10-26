@@ -9,8 +9,6 @@ public class ProfileRequest {
     
     @Size(max = 50, message = "Last name must be 50 characters or less")
     private String lastName;
-    
-    private String profilePicture;
 
     public ProfileRequest() {}
 
@@ -30,11 +28,4 @@ public class ProfileRequest {
         this.lastName = lastName;
     }
 
-    public String getProfilePicture() {
-        return profilePicture;
-    }
-
-    public void setProfilePicture(String profilePicture) {
-        this.profilePicture = profilePicture;
-    }
 }

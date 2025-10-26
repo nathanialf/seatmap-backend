@@ -145,7 +145,6 @@ class AuthHandlerProfileTest {
         ProfileRequest profileRequest = new ProfileRequest();
         profileRequest.setFirstName("Jane");
         profileRequest.setLastName("Smith");
-        profileRequest.setProfilePicture("https://example.com/photo.jpg");
         request.setBody(objectMapper.writeValueAsString(profileRequest));
         
         // Create mock user
@@ -164,7 +163,6 @@ class AuthHandlerProfileTest {
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("Jane"));
         assertTrue(response.getBody().contains("Smith"));
-        assertTrue(response.getBody().contains("https://example.com/photo.jpg"));
         
         verify(mockAuthService).validateToken("valid-user-token");
         verify(mockUserRepository).saveUser(any(User.class));
@@ -172,7 +170,6 @@ class AuthHandlerProfileTest {
         // Verify user was updated
         assertEquals("Jane", mockUser.getFirstName());
         assertEquals("Smith", mockUser.getLastName());
-        assertEquals("https://example.com/photo.jpg", mockUser.getProfilePicture());
     }
     
     @Test
@@ -197,7 +194,6 @@ class AuthHandlerProfileTest {
         mockUser.setEmail("user@example.com");
         mockUser.setFirstName("John");
         mockUser.setLastName("Doe");
-        mockUser.setProfilePicture("https://old-photo.jpg");
         
         // Mock auth service to return user
         when(mockAuthService.validateToken("valid-user-token")).thenReturn(mockUser);
@@ -212,7 +208,6 @@ class AuthHandlerProfileTest {
         // Verify only first name was updated
         assertEquals("Jane", mockUser.getFirstName());
         assertEquals("Doe", mockUser.getLastName()); // Should remain unchanged
-        assertEquals("https://old-photo.jpg", mockUser.getProfilePicture()); // Should remain unchanged
     }
     
     @Test
