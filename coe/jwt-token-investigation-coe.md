@@ -74,19 +74,23 @@ private String createToken(Map<String, Object> claims, String subject) {
 **Environment:** No timezone overrides or custom time configurations
 **Deployment:** Standard AWS Lambda with no time-related modifications
 
-### Critical Discovery - Intermittent System-Wide JWT Issue
-**UPDATED FINDINGS:** User reports experiencing similar timestamp issues with guest tokens previously. This indicates the problem is **system-wide and intermittent**, not isolated to user authentication.
+### Critical Discovery - Potential JVM Clock Drift Issue
+**HYPOTHESIS:** Research indicates this may be a JVM clock drift issue where JVMs maintain internal clocks based on CPU ticks that can drift from system time.
 
 **Current Evidence:**
-- **Working tokens:** Guest tokens from Oct 26, 2025 with correct timestamps (1761451719)
-- **Failing tokens:** User token with 2024 timestamps (1729993995)
+- **Working tokens:** Fresh cold starts with correct 2025 timestamps 
+- **Failing tokens:** Container reuse with timestamps from JVM initialization time (2024)
 - **Pattern:** Both user and guest token generation affected intermittently
 
-### Key Technical Questions (Updated)
-1. **What causes `Instant.now()` to intermittently return 2024 timestamps instead of current time?**
-2. **Is this related to Lambda cold starts, JVM state, or runtime environment issues?**
-3. **What triggers the timestamp generation to work correctly vs incorrectly?**
-4. **How long has this been occurring in production?**
+### Potential Root Cause - JVM Clock Drift
+**Theory:** JVMs may maintain internal clocks based on CPU ticks since VM startup, causing `Instant.now()` to return timestamps from when the JVM was first started rather than current system time.
+
+**AWS Lambda Context:**
+- Lambda container reuse could preserve JVM state with drifted clock
+- Cold starts initialize fresh JVM with correct time
+- Reused containers may maintain old timestamp reference
+
+**Updated Solution Research:** JVM flag `-XX:+UseGetTimeOfDay` does not exist in Java 17 (was HP-UX specific). Modern approach requires using `java.time.Clock` API instead of direct `Instant.now()` calls for proper time management.
 
 ## Critical Actions Required (Updated)
 - [x] **IMMEDIATE:** Check CloudWatch logs for the exact time the problematic token was generated

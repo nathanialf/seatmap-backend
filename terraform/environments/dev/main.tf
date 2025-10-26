@@ -100,6 +100,7 @@ resource "aws_lambda_function" "auth" {
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
       BASE_URL           = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
+      _JAVA_OPTIONS      = "-XX:+UseGetTimeOfDay"
     }
   }
 
