@@ -58,11 +58,11 @@ public class SabreService {
         }
     }
     
-    public JsonNode searchFlightSchedules(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SeatmapException {
+    public JsonNode searchFlightSchedules(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
         try {
             ensureValidSession();
             
-            SOAPMessage soapRequest = createFlightSchedulesRequest(origin, destination, departureDate, flightNumber, maxResults);
+            SOAPMessage soapRequest = createFlightSchedulesRequest(origin, destination, departureDate, travelClass, flightNumber, maxResults);
             SOAPMessage soapResponse = sendSoapRequest(soapRequest);
             
             return parseFlightSchedulesResponse(soapResponse);
@@ -136,7 +136,7 @@ public class SabreService {
         return soapMessage;
     }
     
-    private SOAPMessage createFlightSchedulesRequest(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SOAPException {
+    private SOAPMessage createFlightSchedulesRequest(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SOAPException {
         MessageFactory messageFactory = MessageFactory.newInstance();
         SOAPMessage soapMessage = messageFactory.createMessage();
         SOAPPart soapPart = soapMessage.getSOAPPart();

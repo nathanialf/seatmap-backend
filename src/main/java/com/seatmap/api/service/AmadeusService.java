@@ -47,8 +47,8 @@ public class AmadeusService {
         try {
             ensureValidToken();
             
-            // Step 1: Search for flight offers using Flight Offers Search API
-            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, flightNumber, 10);
+            // Step 1: Search for flight offers using Flight Offers Search API (any travel class)
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, null, flightNumber, 10);
             
             if (flightOffers == null || !flightOffers.has("data") || flightOffers.get("data").size() == 0) {
                 throw new SeatmapException("No flight offers found for the specified criteria");
@@ -64,10 +64,10 @@ public class AmadeusService {
         }
     }
     
-    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SeatmapException {
+    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
         try {
             ensureValidToken();
-            return searchFlightOffersInternal(origin, destination, departureDate, flightNumber, maxResults);
+            return searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
             throw new SeatmapException("Network error calling Amadeus API", e);
@@ -88,15 +88,25 @@ public class AmadeusService {
         }
     }
     
-    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SeatmapException, IOException, InterruptedException {
+    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException, IOException, InterruptedException {
         int max = maxResults != null ? maxResults : 10;
-        String url = String.format("https://%s/v2/shopping/flight-offers?originLocationCode=%s&destinationLocationCode=%s&departureDate=%s&adults=1&max=%d",
+        
+        // Build base URL - only include travelClass if specified (minimum cabin quality)
+        StringBuilder urlBuilder = new StringBuilder();
+        urlBuilder.append(String.format("https://%s/v2/shopping/flight-offers?originLocationCode=%s&destinationLocationCode=%s&departureDate=%s&adults=1&max=%d",
             endpoint,
             URLEncoder.encode(origin, StandardCharsets.UTF_8),
             URLEncoder.encode(destination, StandardCharsets.UTF_8),
             URLEncoder.encode(departureDate, StandardCharsets.UTF_8),
             max
-        );
+        ));
+        
+        // Add travelClass parameter only if specified (searches minimum quality or higher)
+        if (travelClass != null && !travelClass.trim().isEmpty()) {
+            urlBuilder.append("&travelClass=").append(URLEncoder.encode(travelClass, StandardCharsets.UTF_8));
+        }
+        
+        String url = urlBuilder.toString();
         
         // Add flight number filter if specified
         if (flightNumber != null && !flightNumber.trim().isEmpty()) {

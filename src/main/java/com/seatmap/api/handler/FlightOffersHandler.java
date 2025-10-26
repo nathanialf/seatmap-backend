@@ -91,6 +91,7 @@ public class FlightOffersHandler implements RequestHandler<APIGatewayProxyReques
                 request.getOrigin(),
                 request.getDestination(), 
                 request.getDepartureDate(),
+                request.getTravelClass(),
                 request.getFlightNumber(),
                 request.getMaxResults()
             );
@@ -103,13 +104,13 @@ public class FlightOffersHandler implements RequestHandler<APIGatewayProxyReques
         }
     }
     
-    private JsonNode searchFlightOffersFromAllSources(String origin, String destination, String departureDate, String flightNumber, Integer maxResults) throws SeatmapException {
+    private JsonNode searchFlightOffersFromAllSources(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
         logger.info("Searching flight offers from Amadeus and Sabre sources");
         
         // Search both sources concurrently
         CompletableFuture<JsonNode> amadeusFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return amadeusService.searchFlightOffers(origin, destination, departureDate, flightNumber, maxResults);
+                return amadeusService.searchFlightOffers(origin, destination, departureDate, travelClass, flightNumber, maxResults);
             } catch (Exception e) {
                 logger.error("Error calling Amadeus API", e);
                 return objectMapper.createObjectNode().set("data", objectMapper.createArrayNode());
@@ -118,7 +119,7 @@ public class FlightOffersHandler implements RequestHandler<APIGatewayProxyReques
         
         CompletableFuture<JsonNode> sabreFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return sabreService.searchFlightSchedules(origin, destination, departureDate, flightNumber, maxResults);
+                return sabreService.searchFlightSchedules(origin, destination, departureDate, travelClass, flightNumber, maxResults);
             } catch (Exception e) {
                 logger.error("Error calling Sabre API", e);
                 return objectMapper.createObjectNode().set("data", objectMapper.createArrayNode());

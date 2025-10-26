@@ -77,6 +77,7 @@ class FlightOffersHandlerIntegrationTest {
                 "\"origin\":\"LAX\"," +
                 "\"destination\":\"JFK\"," +
                 "\"departureDate\":\"2024-12-01\"," +
+                "\"travelClass\":\"ECONOMY\"," +
                 "\"flightNumber\":\"AA123\"," +
                 "\"maxResults\":5" +
                 "}";
@@ -131,9 +132,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockAmadeusResponse());
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockSabreResponse());
 
         // When
@@ -144,8 +145,8 @@ class FlightOffersHandlerIntegrationTest {
         assertTrue(response.getBody().contains("\"data\""));
         assertTrue(response.getBody().contains("\"meta\""));
         verify(mockJwtService).validateToken("valid-token");
-        verify(mockAmadeusService).searchFlightOffers("LAX", "JFK", "2024-12-01", "AA123", 5);
-        verify(mockSabreService).searchFlightSchedules("LAX", "JFK", "2024-12-01", "AA123", 5);
+        verify(mockAmadeusService).searchFlightOffers("LAX", "JFK", "2024-12-01", "ECONOMY", "AA123", 5);
+        verify(mockSabreService).searchFlightSchedules("LAX", "JFK", "2024-12-01", "ECONOMY", "AA123", 5);
     }
 
     @Test
@@ -288,9 +289,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenThrow(new RuntimeException("Amadeus API error"));
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockSabreResponse());
 
         // When
@@ -311,9 +312,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockAmadeusResponse());
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenThrow(new RuntimeException("Sabre API error"));
 
         // When
@@ -334,9 +335,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenThrow(new RuntimeException("Amadeus API error"));
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenThrow(new RuntimeException("Sabre API error"));
 
         // When
@@ -356,9 +357,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockAmadeusResponse());
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockSabreResponse());
 
         // When
@@ -399,9 +400,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(objectMapper.readTree(duplicateFlightJson));
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(objectMapper.readTree(duplicateFlightJson));
 
         // When
@@ -432,9 +433,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(limitedRequestBody);
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockAmadeusResponse());
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockSabreResponse());
 
         // When
@@ -450,8 +451,8 @@ class FlightOffersHandlerIntegrationTest {
         assertTrue(count <= 1, "Expected count to be 1 or less, but was " + count);
         
         // Verify that maxResults=1 was passed to services
-        verify(mockAmadeusService).searchFlightOffers("LAX", "JFK", "2024-12-01", null, 1);
-        verify(mockSabreService).searchFlightSchedules("LAX", "JFK", "2024-12-01", null, 1);
+        verify(mockAmadeusService).searchFlightOffers("LAX", "JFK", "2024-12-01", null, null, 1);
+        verify(mockSabreService).searchFlightSchedules("LAX", "JFK", "2024-12-01", null, null, 1);
     }
 
     @Test
@@ -467,9 +468,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(minimalRequestBody);
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), isNull(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), isNull(), any(Integer.class)))
                 .thenReturn(createMockAmadeusResponse());
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), isNull(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), isNull(), any(Integer.class)))
                 .thenReturn(createMockSabreResponse());
 
         // When
@@ -477,8 +478,8 @@ class FlightOffersHandlerIntegrationTest {
 
         // Then
         assertEquals(200, response.getStatusCode());
-        verify(mockAmadeusService).searchFlightOffers("LAX", "JFK", "2024-12-01", null, 10);
-        verify(mockSabreService).searchFlightSchedules("LAX", "JFK", "2024-12-01", null, 10);
+        verify(mockAmadeusService).searchFlightOffers("LAX", "JFK", "2024-12-01", null, null, 10);
+        verify(mockSabreService).searchFlightSchedules("LAX", "JFK", "2024-12-01", null, null, 10);
     }
 
     @Test
@@ -489,9 +490,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenThrow(new RuntimeException("Unexpected error"));
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenThrow(new RuntimeException("Unexpected error"));
 
         // When
@@ -528,9 +529,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockAmadeusResponse());
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createMockSabreResponse());
 
         // Create a spy of the real ObjectMapper that fails on writeValueAsString for specific objects
@@ -574,9 +575,9 @@ class FlightOffersHandlerIntegrationTest {
         request.setBody(createValidRequestBody());
 
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
-        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockAmadeusService.searchFlightOffers(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(objectMapper.readTree(incompleteFlightJson));
-        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyInt()))
+        when(mockSabreService.searchFlightSchedules(anyString(), anyString(), anyString(), anyString(), anyString(), any(Integer.class)))
                 .thenReturn(createEmptyResponse());
 
         // When

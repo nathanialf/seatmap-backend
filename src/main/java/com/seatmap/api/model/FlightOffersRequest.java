@@ -16,16 +16,20 @@ public class FlightOffersRequest {
     @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Departure date must be in YYYY-MM-DD format")
     private String departureDate;
     
+    @Pattern(regexp = "^(ECONOMY|PREMIUM_ECONOMY|BUSINESS|FIRST)$", message = "Travel class must be ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST")
+    private String travelClass; // Optional - minimum cabin quality, searches all classes if not specified
+    
     private String flightNumber; // Optional for filtering specific flights
     private Integer maxResults = 10; // Optional, defaults to 10
     
     // Constructors
     public FlightOffersRequest() {}
     
-    public FlightOffersRequest(String origin, String destination, String departureDate) {
+    public FlightOffersRequest(String origin, String destination, String departureDate, String travelClass) {
         this.origin = origin;
         this.destination = destination;
         this.departureDate = departureDate;
+        this.travelClass = travelClass;
     }
     
     // Getters and setters
@@ -51,6 +55,14 @@ public class FlightOffersRequest {
     
     public void setDepartureDate(String departureDate) {
         this.departureDate = departureDate;
+    }
+    
+    public String getTravelClass() {
+        return travelClass;
+    }
+    
+    public void setTravelClass(String travelClass) {
+        this.travelClass = travelClass;
     }
     
     public String getFlightNumber() {

@@ -444,17 +444,27 @@ Content-Type: application/json
 
 #### Search Flights (Implemented)
 ```http
-POST /flights/search
+POST /flight-offers
 Authorization: Bearer <jwt-token>
 Content-Type: application/json
 
 {
   "origin": "LAX",
   "destination": "JFK", 
-  "departureDate": "2024-12-01",
-  "flightNumber": "AA123",
-  "maxResults": 10
+  "departureDate": "2025-10-27",
+  "travelClass": "PREMIUM_ECONOMY",
+  "flightNumber": "UA",
+  "maxResults": 5
 }
+```
+
+**Field Descriptions:**
+- `origin` (required): 3-letter airport code
+- `destination` (required): 3-letter airport code  
+- `departureDate` (required): Date in YYYY-MM-DD format
+- `travelClass` (optional): Minimum cabin quality - ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST. If not specified, searches all travel classes
+- `flightNumber` (optional): Airline code for filtering (e.g., "UA", "AA")
+- `maxResults` (optional): Number of results (default: 10)
 ```
 
 ### Bookmarks API
