@@ -203,7 +203,7 @@ class GuestAccessRepositoryIntegrationTest {
         record.put("ipAddress", AttributeValue.builder().s(ipAddress).build());
         record.put("seatmapRequestsUsed", AttributeValue.builder().n(String.valueOf(seatmapRequestsUsed)).build());
         record.put("firstAccess", AttributeValue.builder().n(String.valueOf(Instant.now().getEpochSecond())).build());
-        record.put("expiresAt", AttributeValue.builder().n(String.valueOf(Instant.now().plusSeconds(6 * 30 * 24 * 60 * 60).getEpochSecond())).build());
+        record.put("expiresAt", AttributeValue.builder().n(String.valueOf(Instant.now().plusSeconds(30 * 24 * 60 * 60).getEpochSecond())).build());
         
         if (seatmapRequestsUsed > 0) {
             record.put("lastSeatmapRequest", AttributeValue.builder().n(String.valueOf(Instant.now().getEpochSecond())).build());

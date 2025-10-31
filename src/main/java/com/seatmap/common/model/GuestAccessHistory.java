@@ -5,7 +5,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * Tracks guest access history by IP address to enforce seatmap request limiting
- * Allows 2 seatmap requests per 6 months per IP
+ * Allows 2 seatmap requests per 30 days per IP
  */
 public class GuestAccessHistory {
     private String ipAddress;              // Primary key
@@ -17,8 +17,8 @@ public class GuestAccessHistory {
     public GuestAccessHistory() {
         this.seatmapRequestsUsed = 0;
         this.firstAccess = Instant.now();
-        // Expire after 6 months (TTL for cleanup)
-        this.expiresAt = Instant.now().plusSeconds(6 * 30 * 24 * 60 * 60);
+        // Expire after 30 days (TTL for cleanup)
+        this.expiresAt = Instant.now().plusSeconds(30 * 24 * 60 * 60);
     }
     
     public GuestAccessHistory(String ipAddress) {
@@ -27,7 +27,7 @@ public class GuestAccessHistory {
     }
     
     /**
-     * Check if this IP has exceeded the seatmap request limit (2 per 6 months)
+     * Check if this IP has exceeded the seatmap request limit (2 per 30 days)
      */
     public boolean hasExceededSeatmapLimit() {
         return seatmapRequestsUsed >= 2;
@@ -48,8 +48,8 @@ public class GuestAccessHistory {
         this.seatmapRequestsUsed++;
         this.lastSeatmapRequest = Instant.now();
         
-        // Extend TTL on activity (6 months)
-        this.expiresAt = Instant.now().plusSeconds(6 * 30 * 24 * 60 * 60);
+        // Extend TTL on activity (30 days)
+        this.expiresAt = Instant.now().plusSeconds(30 * 24 * 60 * 60);
     }
     
     /**

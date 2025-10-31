@@ -28,10 +28,10 @@ class GuestAccessHistoryTest {
         assertNull(guestAccess.getLastSeatmapRequest());
         assertNotNull(guestAccess.getExpiresAt());
         
-        // Should expire 6 months from now
-        Instant expectedExpiry = Instant.now().plusSeconds(6 * 30 * 24 * 60 * 60);
+        // Should expire 30 days from now
+        Instant expectedExpiry = Instant.now().plusSeconds(30 * 24 * 60 * 60);
         long timeDiff = Math.abs(guestAccess.getExpiresAt().getEpochSecond() - expectedExpiry.getEpochSecond());
-        assertTrue(timeDiff < 60, "Should expire approximately 6 months from now");
+        assertTrue(timeDiff < 60, "Should expire approximately 30 days from now");
     }
     
     @Test
@@ -200,11 +200,11 @@ class GuestAccessHistoryTest {
     @Test
     void expirationTimeCalculation() {
         Instant creationTime = guestAccess.getExpiresAt();
-        Instant expectedExpiry = Instant.now().plusSeconds(6 * 30 * 24 * 60 * 60); // 6 months
+        Instant expectedExpiry = Instant.now().plusSeconds(30 * 24 * 60 * 60); // 30 days
         
         // Should be within a few seconds of expected expiry (accounting for test execution time)
         long timeDifference = Math.abs(creationTime.getEpochSecond() - expectedExpiry.getEpochSecond());
-        assertTrue(timeDifference < 60, "Expiration time should be approximately 6 months from now");
+        assertTrue(timeDifference < 60, "Expiration time should be approximately 30 days from now");
     }
     
     @Test
@@ -218,9 +218,9 @@ class GuestAccessHistoryTest {
         // Expiration should be extended on activity
         assertTrue(guestAccess.getExpiresAt().isAfter(originalExpiry));
         
-        // Should still be approximately 6 months from now
-        Instant expectedExpiry = Instant.now().plusSeconds(6 * 30 * 24 * 60 * 60);
+        // Should still be approximately 30 days from now
+        Instant expectedExpiry = Instant.now().plusSeconds(30 * 24 * 60 * 60);
         long timeDiff = Math.abs(guestAccess.getExpiresAt().getEpochSecond() - expectedExpiry.getEpochSecond());
-        assertTrue(timeDiff < 60, "Expiration should be reset to 6 months from now");
+        assertTrue(timeDiff < 60, "Expiration should be reset to 30 days from now");
     }
 }
