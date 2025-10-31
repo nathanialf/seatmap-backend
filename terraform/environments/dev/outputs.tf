@@ -106,6 +106,26 @@ output "guest_access_table_arn" {
   value       = aws_dynamodb_table.guest_access.arn
 }
 
+output "bookmarks_table_name" {
+  description = "Name of the bookmarks DynamoDB table"
+  value       = aws_dynamodb_table.bookmarks.name
+}
+
+output "bookmarks_table_arn" {
+  description = "ARN of the bookmarks DynamoDB table"
+  value       = aws_dynamodb_table.bookmarks.arn
+}
+
+output "account_tiers_table_name" {
+  description = "Name of the account tiers DynamoDB table"
+  value       = aws_dynamodb_table.account_tiers.name
+}
+
+output "account_tiers_table_arn" {
+  description = "ARN of the account tiers DynamoDB table"
+  value       = aws_dynamodb_table.account_tiers.arn
+}
+
 # IAM Outputs
 output "lambda_role_arn" {
   description = "ARN of the Lambda execution role"

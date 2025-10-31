@@ -191,7 +191,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.subscriptions.arn,
           "${aws_dynamodb_table.subscriptions.arn}/index/*",
           aws_dynamodb_table.guest_access.arn,
-          "${aws_dynamodb_table.guest_access.arn}/index/*"
+          "${aws_dynamodb_table.guest_access.arn}/index/*",
+          aws_dynamodb_table.bookmarks.arn,
+          "${aws_dynamodb_table.bookmarks.arn}/index/*",
+          aws_dynamodb_table.account_tiers.arn,
+          "${aws_dynamodb_table.account_tiers.arn}/index/*"
         ]
       }
     ]
@@ -350,6 +354,84 @@ resource "aws_dynamodb_table" "guest_access" {
   tags = merge(local.common_tags, {
     Name        = "Guest Access History Table"
     Description = "Store guest access history for IP-based rate limiting"
+  })
+}
+
+# DynamoDB Table for Bookmarks
+resource "aws_dynamodb_table" "bookmarks" {
+  name           = "seatmap-bookmarks-${local.environment}"
+  billing_mode   = "PROVISIONED"
+  hash_key       = "userId"
+  range_key      = "bookmarkId"
+  read_capacity  = 5
+  write_capacity = 5
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "bookmarkId"
+    type = "S"
+  }
+
+  # TTL for automatic bookmark expiration (departureDate + 1 day)
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "Bookmarks Table"
+    Description = "Store user flight bookmarks with complete flight offer data"
+  })
+}
+
+# Account Tiers Table
+resource "aws_dynamodb_table" "account_tiers" {
+  name           = "${local.project_name}-account-tiers-${local.environment}"
+  billing_mode   = "PROVISIONED"
+  hash_key       = "tierId"
+  read_capacity  = 5
+  write_capacity = 5
+
+  attribute {
+    name = "tierId"
+    type = "S"
+  }
+
+  attribute {
+    name = "tierName"
+    type = "S"
+  }
+
+  attribute {
+    name = "region"
+    type = "S"
+  }
+
+  # GSI for tier name lookup
+  global_secondary_index {
+    name            = "tier-name-index"
+    hash_key        = "tierName"
+    projection_type = "ALL"
+    read_capacity   = 5
+    write_capacity  = 5
+  }
+
+  # GSI for region-based tier lookup
+  global_secondary_index {
+    name            = "region-index"
+    hash_key        = "region"
+    projection_type = "ALL"
+    read_capacity   = 5
+    write_capacity  = 5
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "Account Tiers Table"
+    Description = "Store tier definitions, pricing, and limits by region"
   })
 }
 

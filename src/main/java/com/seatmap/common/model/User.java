@@ -19,6 +19,7 @@ public class User {
     private Instant createdAt;
     private Instant updatedAt;
     private UserStatus status;
+    private AccountTier accountTier;
     
     // Email verification fields
     private Boolean emailVerified = false;  // Visible in JSON responses
@@ -35,8 +36,13 @@ public class User {
         ACTIVE, SUSPENDED
     }
 
+    public enum AccountTier {
+        FREE, PRO, BUSINESS
+    }
+
     public User() {
         this.status = UserStatus.ACTIVE;
+        this.accountTier = AccountTier.FREE;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }
@@ -81,6 +87,9 @@ public class User {
 
     public Instant getVerificationExpiresAt() { return verificationExpiresAt; }
     public void setVerificationExpiresAt(Instant verificationExpiresAt) { this.verificationExpiresAt = verificationExpiresAt; }
+
+    public AccountTier getAccountTier() { return accountTier != null ? accountTier : AccountTier.FREE; }
+    public void setAccountTier(AccountTier accountTier) { this.accountTier = accountTier; }
 
     @JsonProperty("fullName")
     public String getFullName() {

@@ -37,6 +37,8 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Comprehensive email verification system with 1-hour token expiration
   - JWT token generation and validation (24-hour expiration)
   - Session management with automatic cleanup
+  - Account tier system (FREE, PRO, BUSINESS) with usage limits
+  - Business tier upgrade restriction (no downgrades allowed)
   - Real-world tested with personal email verification
 - ✅ **Guest Access**: IP-based rate limiting
   - 2 seat map views per IP before registration required

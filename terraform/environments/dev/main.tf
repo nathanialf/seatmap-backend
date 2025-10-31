@@ -100,7 +100,6 @@ resource "aws_lambda_function" "auth" {
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
       BASE_URL           = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
-      _JAVA_OPTIONS      = "-XX:+UseGetTimeOfDay"
     }
   }
 
@@ -214,7 +213,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.guest_access.arn,
           "${aws_dynamodb_table.guest_access.arn}/index/*",
           aws_dynamodb_table.bookmarks.arn,
-          "${aws_dynamodb_table.bookmarks.arn}/index/*"
+          "${aws_dynamodb_table.bookmarks.arn}/index/*",
+          aws_dynamodb_table.account_tiers.arn,
+          "${aws_dynamodb_table.account_tiers.arn}/index/*"
         ]
       },
       {
@@ -402,6 +403,47 @@ resource "aws_dynamodb_table" "bookmarks" {
   tags = merge(local.common_tags, {
     Name        = "Bookmarks Table"
     Description = "Store user flight bookmarks with complete flight offer data"
+  })
+}
+
+# Account Tiers Table
+resource "aws_dynamodb_table" "account_tiers" {
+  name           = "${local.project_name}-account-tiers-${local.environment}"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "tierId"
+
+  attribute {
+    name = "tierId"
+    type = "S"
+  }
+
+  attribute {
+    name = "tierName"
+    type = "S"
+  }
+
+  attribute {
+    name = "region"
+    type = "S"
+  }
+
+  # GSI for tier name lookup
+  global_secondary_index {
+    name            = "tier-name-index"
+    hash_key        = "tierName"
+    projection_type = "ALL"
+  }
+
+  # GSI for region-based tier lookup
+  global_secondary_index {
+    name            = "region-index"
+    hash_key        = "region"
+    projection_type = "ALL"
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "Account Tiers Table"
+    Description = "Store tier definitions, pricing, and limits by region"
   })
 }
 
