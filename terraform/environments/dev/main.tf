@@ -443,7 +443,7 @@ resource "aws_dynamodb_table" "account_tiers" {
 
   tags = merge(local.common_tags, {
     Name        = "Account Tiers Table"
-    Description = "Store tier definitions, pricing, and limits by region"
+    Description = "Store tier definitions pricing and limits by region"
   })
 }
 
