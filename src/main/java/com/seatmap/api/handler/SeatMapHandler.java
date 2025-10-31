@@ -12,8 +12,10 @@ import com.seatmap.api.model.SeatMapRequest;
 import com.seatmap.api.model.SeatMapResponse;
 import com.seatmap.api.service.AmadeusService;
 import com.seatmap.api.service.SabreService;
+import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.service.JwtService;
+import com.seatmap.common.model.Bookmark;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
@@ -24,6 +26,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
@@ -35,6 +38,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
     private final SabreService sabreService;
     private final JwtService jwtService;
     private final GuestAccessRepository guestAccessRepository;
+    private final BookmarkRepository bookmarkRepository;
     
     public SeatMapHandler() {
         this.objectMapper = new ObjectMapper();
@@ -43,18 +47,32 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         this.sabreService = new SabreService();
         this.jwtService = new JwtService();
         
-        // Initialize guest access repository with explicit HTTP client to avoid conflicts
+        // Initialize repositories with explicit HTTP client to avoid conflicts
         DynamoDbClient dynamoDbClient = DynamoDbClient.builder()
             .httpClient(UrlConnectionHttpClient.builder().build())
             .build();
+        
+        // Get environment for table names
+        String environment = System.getenv("ENVIRONMENT");
+        if (environment == null) environment = "dev";
+        
         this.guestAccessRepository = new GuestAccessRepository(dynamoDbClient);
+        this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, "seatmap-bookmarks-" + environment);
     }
     
     @Override
     public APIGatewayProxyResponseEvent handleRequest(APIGatewayProxyRequestEvent event, Context context) {
-        logger.info("Processing seat map request");
+        logger.info("Processing seat map request: {} {}", event.getHttpMethod(), event.getPath());
         
         try {
+            // Check if this is a bookmark seatmap request
+            String path = event.getPath();
+            if ("GET".equals(event.getHttpMethod()) && path != null && path.matches("/seat-map/bookmark/[^/]+")) {
+                String bookmarkId = path.substring("/seat-map/bookmark/".length());
+                return handleSeatMapByBookmark(event, bookmarkId);
+            }
+            
+            // Handle regular seatmap request (POST /seat-map)
             // Validate JWT token
             String authHeader = event.getHeaders().get("Authorization");
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -109,10 +127,13 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
             // Route seat map request based on flight source
             JsonNode seatMapData = getSeatMapBySource(request);
             
+            // Extract source from flight offer data for response
+            String dataSource = extractDataSourceFromFlightOffer(request.getFlightOfferData());
+            
             // Create successful response
             SeatMapResponse response = SeatMapResponse.success(
                 seatMapData,
-                request.getSource()
+                dataSource
             );
             
             // Only record seatmap request for guest users if we actually got valid seat map data
@@ -144,18 +165,18 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
     
     private JsonNode getSeatMapBySource(SeatMapRequest request) throws SeatmapException {
         try {
-            String source = request.getSource();
+            // Parse flight offer data to extract dataSource
+            JsonNode flightOfferData = objectMapper.readTree(request.getFlightOfferData());
+            String dataSource = flightOfferData.path("dataSource").asText();
             
-            logger.info("Routing seat map request to {} based on explicit source", source);
+            logger.info("Routing seat map request to {} based on dataSource from flight offer", dataSource);
             
-            if ("SABRE".equals(source)) {
-                // Parse the flight offer data for Sabre API
-                JsonNode flightOfferData = objectMapper.readTree(request.getFlightOfferData());
+            if ("SABRE".equals(dataSource)) {
                 return getSeatMapFromSabre(flightOfferData);
-            } else if ("AMADEUS".equals(source)) {
+            } else if ("AMADEUS".equals(dataSource)) {
                 return amadeusService.getSeatMapFromOfferData(request.getFlightOfferData());
             } else {
-                throw new SeatmapException("Unsupported flight data source: " + source);
+                throw new SeatmapException("Unsupported flight data source: " + dataSource);
             }
             
         } catch (Exception e) {
@@ -202,6 +223,95 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         } catch (Exception e) {
             logger.error("Error extracting flight details for Sabre seat map request", e);
             throw new SeatmapException("Failed to process Sabre seat map request", e);
+        }
+    }
+    
+    private APIGatewayProxyResponseEvent handleSeatMapByBookmark(APIGatewayProxyRequestEvent event, String bookmarkId) throws SeatmapException {
+        logger.info("Processing seatmap request for bookmark ID: {}", bookmarkId);
+        
+        // Validate JWT token
+        String authHeader = event.getHeaders().get("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return createErrorResponse(401, "Authorization token required");
+        }
+        
+        String token = authHeader.substring(7);
+        Claims claims;
+        try {
+            claims = jwtService.validateToken(token);
+        } catch (com.seatmap.common.exception.SeatmapException e) {
+            return createErrorResponse(401, "Invalid or expired token");
+        }
+        
+        // Extract user ID from token (bookmarks require authenticated users, not guests)
+        String userId;
+        try {
+            // Check if this is a guest token
+            if (jwtService.isGuestToken(token)) {
+                return createErrorResponse(401, "Valid user authentication required for bookmark access");
+            }
+            userId = claims.getSubject();
+        } catch (Exception e) {
+            logger.error("Error extracting user ID from token", e);
+            return createErrorResponse(401, "Valid user authentication required for bookmark access");
+        }
+        
+        // Get the bookmark
+        Optional<Bookmark> bookmarkOpt;
+        try {
+            bookmarkOpt = bookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId);
+        } catch (com.seatmap.common.exception.SeatmapException e) {
+            logger.error("Error retrieving bookmark", e);
+            return createErrorResponse(500, "Error retrieving bookmark");
+        }
+        
+        if (bookmarkOpt.isEmpty()) {
+            return createErrorResponse(404, "Bookmark not found");
+        }
+        
+        Bookmark bookmark = bookmarkOpt.get();
+        if (bookmark.isExpired()) {
+            return createErrorResponse(410, "Bookmark has expired");
+        }
+        
+        // Create a SeatMapRequest from the bookmark's flight offer data
+        SeatMapRequest seatMapRequest = new SeatMapRequest(bookmark.getFlightOfferData());
+        
+        // Get seatmap data using existing logic
+        JsonNode seatMapData = getSeatMapBySource(seatMapRequest);
+        
+        // Extract source from flight offer data for response
+        String dataSource = extractDataSourceFromFlightOffer(bookmark.getFlightOfferData());
+        
+        // Create successful response
+        SeatMapResponse response = SeatMapResponse.success(seatMapData, dataSource);
+        
+        return createSuccessResponse(response);
+    }
+    
+    private String extractUserIdFromToken(String token) {
+        try {
+            Claims claims = jwtService.validateToken(token);
+            
+            // Check if this is a guest token
+            if (jwtService.isGuestToken(token)) {
+                return null; // Guest tokens not allowed for bookmark access
+            }
+            
+            return claims.getSubject();
+        } catch (Exception e) {
+            logger.error("Error extracting user ID from token", e);
+            return null;
+        }
+    }
+    
+    private String extractDataSourceFromFlightOffer(String flightOfferData) {
+        try {
+            JsonNode flightOffer = objectMapper.readTree(flightOfferData);
+            return flightOffer.path("dataSource").asText("AMADEUS"); // Default to AMADEUS if not found
+        } catch (Exception e) {
+            logger.warn("Error extracting dataSource from flight offer, defaulting to AMADEUS", e);
+            return "AMADEUS";
         }
     }
     

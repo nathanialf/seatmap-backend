@@ -11,16 +11,12 @@ public class CreateBookmarkRequest {
     
     @NotBlank(message = "Flight offer data is required")
     private String flightOfferData;
-    
-    @NotBlank(message = "Source is required")
-    private String source;
 
     public CreateBookmarkRequest() {}
 
-    public CreateBookmarkRequest(String title, String flightOfferData, String source) {
+    public CreateBookmarkRequest(String title, String flightOfferData) {
         this.title = title;
         this.flightOfferData = flightOfferData;
-        this.source = source;
     }
 
     public String getTitle() {
@@ -37,13 +33,5 @@ public class CreateBookmarkRequest {
 
     public void setFlightOfferData(String flightOfferData) {
         this.flightOfferData = flightOfferData;
-    }
-
-    public String getSource() {
-        return source;
-    }
-
-    public void setSource(String source) {
-        this.source = source;
     }
 }

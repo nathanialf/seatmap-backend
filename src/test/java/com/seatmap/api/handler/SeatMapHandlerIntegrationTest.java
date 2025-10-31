@@ -8,8 +8,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatmap.api.exception.SeatmapException;
 import com.seatmap.api.service.AmadeusService;
 import com.seatmap.api.service.SabreService;
+import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.service.JwtService;
+import com.seatmap.common.model.Bookmark;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,8 +20,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -53,6 +57,9 @@ class SeatMapHandlerIntegrationTest {
     private GuestAccessRepository mockGuestAccessRepository;
     
     @Mock
+    private BookmarkRepository mockBookmarkRepository;
+    
+    @Mock
     private Context mockContext;
     
     @Mock
@@ -71,6 +78,7 @@ class SeatMapHandlerIntegrationTest {
             injectMock("sabreService", mockSabreService);
             injectMock("jwtService", mockJwtService);
             injectMock("guestAccessRepository", mockGuestAccessRepository);
+            injectMock("bookmarkRepository", mockBookmarkRepository);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }
@@ -255,7 +263,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String sabreFlightData = createSabreFlightOfferData();
-        request.setBody(createSeatMapRequestBody("SABRE", sabreFlightData));
+        request.setBody(createSeatMapRequestBody(sabreFlightData));
         
         setupValidUserToken();
         JsonNode mockSabreResponse = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\",\"source\":\"sabre\"}]}");
@@ -279,7 +287,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String amadeusFlightData = createAmadeusFlightOfferData();
-        request.setBody(createSeatMapRequestBody("AMADEUS", amadeusFlightData));
+        request.setBody(createSeatMapRequestBody(amadeusFlightData));
         
         setupValidUserToken();
         setupValidAmadeusResponse();
@@ -301,7 +309,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String flightDataWithoutSource = "{\"id\":\"offer123\",\"type\":\"flight-offer\"}";
-        request.setBody(createSeatMapRequestBody("AMADEUS", flightDataWithoutSource));
+        request.setBody(createSeatMapRequestBody(flightDataWithoutSource));
         
         setupValidUserToken();
         setupValidAmadeusResponse();
@@ -323,7 +331,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String invalidFlightData = "invalid-json-data";
-        request.setBody(createSeatMapRequestBody("AMADEUS", invalidFlightData));
+        request.setBody(createSeatMapRequestBody(invalidFlightData));
         
         setupValidUserToken();
         setupValidAmadeusResponse();
@@ -344,7 +352,7 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         String sabreFlightData = createSabreFlightOfferData();
-        request.setBody(createSeatMapRequestBody("SABRE", sabreFlightData));
+        request.setBody(createSeatMapRequestBody(sabreFlightData));
         
         setupValidUserToken();
         
@@ -545,7 +553,7 @@ class SeatMapHandlerIntegrationTest {
     private APIGatewayProxyRequestEvent createBasicRequest() {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         String flightOfferData = createAmadeusFlightOfferData();
-        request.setBody(createSeatMapRequestBody("AMADEUS", flightOfferData));
+        request.setBody(createSeatMapRequestBody(flightOfferData));
         return request;
     }
     
@@ -558,9 +566,9 @@ class SeatMapHandlerIntegrationTest {
         return request;
     }
     
-    private String createSeatMapRequestBody(String source, String flightOfferData) {
-        return String.format("{\"source\":\"%s\",\"flightOfferData\":\"%s\"}", 
-            source, flightOfferData.replace("\"", "\\\""));
+    private String createSeatMapRequestBody(String flightOfferData) {
+        return String.format("{\"flightOfferData\":\"%s\"}", 
+            flightOfferData.replace("\"", "\\\""));
     }
     
     private String createAmadeusFlightOfferData() {
@@ -588,5 +596,210 @@ class SeatMapHandlerIntegrationTest {
     private void setupValidAmadeusResponse() throws Exception {
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
         when(mockAmadeusService.getSeatMapFromOfferData(anyString())).thenReturn(mockSeatMapData);
+    }
+    
+    // ========== BOOKMARK SEATMAP TESTS ==========
+    
+    @Test
+    @DisplayName("Should successfully get seatmap by bookmark ID")
+    void getSeatMapByBookmark_ValidBookmark_ReturnsSeatMap() throws Exception {
+        // Given
+        String bookmarkId = "bookmark-123";
+        String userId = "user-456";
+        String flightOfferData = createAmadeusFlightOfferData();
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(Map.of("Authorization", "Bearer user-token"));
+        
+        Bookmark bookmark = createTestBookmark(userId, bookmarkId, flightOfferData);
+        
+        // Setup mocks
+        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
+        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
+        when(mockClaims.getSubject()).thenReturn(userId);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+                .thenReturn(Optional.of(bookmark));
+        setupValidAmadeusResponse();
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(200, response.getStatusCode());
+        assertTrue(response.getBody().contains("\"success\":true"));
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+        verify(mockAmadeusService).getSeatMapFromOfferData(flightOfferData);
+    }
+    
+    @Test
+    @DisplayName("Should return 404 when bookmark not found")
+    void getSeatMapByBookmark_BookmarkNotFound_Returns404() throws Exception {
+        // Given
+        String bookmarkId = "nonexistent-bookmark";
+        String userId = "user-456";
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(Map.of("Authorization", "Bearer user-token"));
+        
+        // Setup mocks
+        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
+        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
+        when(mockClaims.getSubject()).thenReturn(userId);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+                .thenReturn(Optional.empty());
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(404, response.getStatusCode());
+        assertTrue(response.getBody().contains("Bookmark not found"));
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+    }
+    
+    @Test
+    @DisplayName("Should return 410 when bookmark is expired")
+    void getSeatMapByBookmark_ExpiredBookmark_Returns410() throws Exception {
+        // Given
+        String bookmarkId = "expired-bookmark";
+        String userId = "user-456";
+        String flightOfferData = createAmadeusFlightOfferData();
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(Map.of("Authorization", "Bearer user-token"));
+        
+        Bookmark expiredBookmark = createTestBookmark(userId, bookmarkId, flightOfferData);
+        expiredBookmark.setExpiresAt(Instant.now().minusSeconds(3600)); // Expired 1 hour ago
+        
+        // Setup mocks
+        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
+        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
+        when(mockClaims.getSubject()).thenReturn(userId);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+                .thenReturn(Optional.of(expiredBookmark));
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(410, response.getStatusCode());
+        assertTrue(response.getBody().contains("Bookmark has expired"));
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+    }
+    
+    @Test
+    @DisplayName("Should return 401 when guest token is used for bookmark access")
+    void getSeatMapByBookmark_GuestToken_Returns401() throws Exception {
+        // Given
+        String bookmarkId = "bookmark-123";
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(Map.of("Authorization", "Bearer guest-token"));
+        
+        // Setup mocks
+        when(mockJwtService.validateToken("guest-token")).thenReturn(mockClaims);
+        when(mockJwtService.isGuestToken("guest-token")).thenReturn(true);
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(401, response.getStatusCode());
+        assertTrue(response.getBody().contains("Valid user authentication required"));
+        verify(mockJwtService).validateToken("guest-token");
+        verify(mockJwtService).isGuestToken("guest-token");
+    }
+    
+    @Test
+    @DisplayName("Should return 401 when no authorization header is provided")
+    void getSeatMapByBookmark_NoAuthHeader_Returns401() throws Exception {
+        // Given
+        String bookmarkId = "bookmark-123";
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(new HashMap<>()); // No auth header
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(401, response.getStatusCode());
+        assertTrue(response.getBody().contains("Authorization token required"));
+    }
+    
+    @Test
+    @DisplayName("Should handle Sabre flight offers in bookmark seatmap")
+    void getSeatMapByBookmark_SabreFlightOffer_CallsSabreService() throws Exception {
+        // Given
+        String bookmarkId = "sabre-bookmark";
+        String userId = "user-456";
+        String sabreFlightOfferData = createSabreFlightOfferData();
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(Map.of("Authorization", "Bearer user-token"));
+        
+        Bookmark bookmark = createTestBookmark(userId, bookmarkId, sabreFlightOfferData);
+        
+        // Setup mocks
+        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
+        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
+        when(mockClaims.getSubject()).thenReturn(userId);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+                .thenReturn(Optional.of(bookmark));
+        
+        JsonNode mockSabreResponse = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\",\"source\":\"sabre\"}]}");
+        when(mockSabreService.getSeatMapFromFlight("AA", "123", "2024-12-01", "LAX", "JFK"))
+                .thenReturn(mockSabreResponse);
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(200, response.getStatusCode());
+        assertTrue(response.getBody().contains("\"success\":true"));
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+        verify(mockSabreService).getSeatMapFromFlight("AA", "123", "2024-12-01", "LAX", "JFK");
+    }
+    
+    @Test
+    @DisplayName("Should return 401 when JWT token is invalid")
+    void getSeatMapByBookmark_InvalidToken_Returns401() throws Exception {
+        // Given
+        String bookmarkId = "bookmark-123";
+        
+        APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
+        request.setHttpMethod("GET");
+        request.setPath("/seat-map/bookmark/" + bookmarkId);
+        request.setHeaders(Map.of("Authorization", "Bearer invalid-token"));
+        
+        // Setup mocks
+        when(mockJwtService.validateToken("invalid-token"))
+                .thenThrow(new com.seatmap.common.exception.SeatmapException("TOKEN_INVALID", "Invalid token"));
+        
+        // When
+        APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
+        
+        // Then
+        assertEquals(401, response.getStatusCode());
+        assertTrue(response.getBody().contains("Invalid or expired token"));
+        verify(mockJwtService).validateToken("invalid-token");
+    }
+    
+    private Bookmark createTestBookmark(String userId, String bookmarkId, String flightOfferData) {
+        Bookmark bookmark = new Bookmark(userId, bookmarkId, "Test Flight", flightOfferData);
+        bookmark.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60)); // 30 days from now
+        return bookmark;
     }
 }

@@ -522,6 +522,40 @@ resource "aws_api_gateway_integration_response" "seat_map_integration_response" 
   depends_on = [aws_api_gateway_integration.seat_map_integration]
 }
 
+# API Gateway Resource for bookmark under seat-map
+resource "aws_api_gateway_resource" "seat_map_bookmark" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.seat_map.id
+  path_part   = "bookmark"
+}
+
+# API Gateway Resource for bookmarkId parameter under seat-map/bookmark
+resource "aws_api_gateway_resource" "seat_map_bookmark_id" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.seat_map_bookmark.id
+  path_part   = "{bookmarkId}"
+}
+
+# API Gateway Method for seat-map/bookmark/{bookmarkId} GET
+resource "aws_api_gateway_method" "seat_map_bookmark_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.seat_map_bookmark_id.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# API Gateway Integration for seat-map/bookmark/{bookmarkId}
+resource "aws_api_gateway_integration" "seat_map_bookmark_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.seat_map_bookmark_id.id
+  http_method = aws_api_gateway_method.seat_map_bookmark_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.seat_map.invoke_arn
+}
+
 # Auth API Gateway Resources
 resource "aws_api_gateway_resource" "auth" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
@@ -861,6 +895,7 @@ resource "aws_api_gateway_deployment" "main" {
   depends_on = [
     aws_api_gateway_integration.seat_map_integration,
     aws_api_gateway_integration_response.seat_map_integration_response,
+    aws_api_gateway_integration.seat_map_bookmark_integration,
     aws_api_gateway_integration.auth_guest_integration,
     aws_api_gateway_integration.auth_login_integration,
     aws_api_gateway_integration.auth_register_integration,
@@ -915,6 +950,10 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_integration.bookmarks_post_integration.id,
       aws_api_gateway_integration.bookmark_get_integration.id,
       aws_api_gateway_integration.bookmark_delete_integration.id,
+      aws_api_gateway_resource.seat_map_bookmark.id,
+      aws_api_gateway_resource.seat_map_bookmark_id.id,
+      aws_api_gateway_method.seat_map_bookmark_get.id,
+      aws_api_gateway_integration.seat_map_bookmark_integration.id,
     ]))
   }
 

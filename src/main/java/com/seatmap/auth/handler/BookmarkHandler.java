@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.auth.model.CreateBookmarkRequest;
@@ -161,7 +162,7 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         
         // Create new bookmark
         String bookmarkId = UUID.randomUUID().toString();
-        Bookmark bookmark = new Bookmark(userId, bookmarkId, request.getTitle(), request.getFlightOfferData(), request.getSource());
+        Bookmark bookmark = new Bookmark(userId, bookmarkId, request.getTitle(), request.getFlightOfferData());
         
         // Set expiration based on flight departure date (extract from flight offer if possible)
         // For now, set a default expiration of 30 days

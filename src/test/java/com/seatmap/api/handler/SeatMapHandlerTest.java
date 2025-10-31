@@ -66,7 +66,7 @@ class SeatMapHandlerTest {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer valid-token"));
         String flightOfferData = "{\"id\":\"offer123\",\"type\":\"flight-offer\",\"source\":\"GDS\",\"itineraries\":[{\"segments\":[{\"departure\":{\"iataCode\":\"LAX\"},\"arrival\":{\"iataCode\":\"JFK\"},\"carrierCode\":\"AA\",\"number\":\"123\"}]}]}";
-        request.setBody("{\"flightOfferId\":\"offer123\",\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
+        request.setBody("{\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
         
         // Mock JWT validation
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
@@ -143,7 +143,7 @@ class SeatMapHandlerTest {
     void handleRequest_WithValidationErrors_ReturnsBadRequest() throws Exception {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer valid-token"));
-        request.setBody("{\"flightOfferId\":\"\",\"flightOfferData\":\"\"}"); // Missing required fields
+        request.setBody("{\"flightOfferData\":\"\"}"); // Missing required fields
         
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
@@ -159,7 +159,7 @@ class SeatMapHandlerTest {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer valid-token"));
         String flightOfferData = "{\"id\":\"offer123\",\"type\":\"flight-offer\"}";
-        request.setBody("{\"flightOfferId\":\"offer123\",\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
+        request.setBody("{\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
         
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);

@@ -338,7 +338,7 @@ class SeatMapHandlerGuestLimitTest {
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHeaders(Map.of("Authorization", "Bearer guest-token"));
         String flightOfferData = "{\"id\":\"offer123\",\"type\":\"flight-offer\",\"source\":\"GDS\",\"itineraries\":[{\"segments\":[{\"departure\":{\"iataCode\":\"LAX\"},\"arrival\":{\"iataCode\":\"JFK\"},\"carrierCode\":\"AA\",\"number\":\"123\"}]}]}";
-        request.setBody("{\"source\":\"AMADEUS\",\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
+        request.setBody("{\"flightOfferData\":\"" + flightOfferData.replace("\"", "\\\"") + "\"}");
         return request;
     }
     

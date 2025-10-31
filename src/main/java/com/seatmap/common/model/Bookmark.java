@@ -21,21 +21,17 @@ public class Bookmark {
     @NotBlank(message = "Flight offer data is required")
     private String flightOfferData;
     
-    @NotBlank(message = "Source is required")
-    private String source;
-    
     private Instant createdAt;
     private Instant updatedAt;
     private Instant expiresAt;
 
     public Bookmark() {}
 
-    public Bookmark(String userId, String bookmarkId, String title, String flightOfferData, String source) {
+    public Bookmark(String userId, String bookmarkId, String title, String flightOfferData) {
         this.userId = userId;
         this.bookmarkId = bookmarkId;
         this.title = title;
         this.flightOfferData = flightOfferData;
-        this.source = source;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
     }
@@ -72,13 +68,6 @@ public class Bookmark {
         this.flightOfferData = flightOfferData;
     }
 
-    public String getSource() {
-        return source;
-    }
-
-    public void setSource(String source) {
-        this.source = source;
-    }
 
     public Instant getCreatedAt() {
         return createdAt;

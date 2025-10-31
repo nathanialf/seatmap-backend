@@ -94,7 +94,7 @@ class BookmarkHandlerTest {
         
         String flightOfferData = objectMapper.writeValueAsString(flightOfferMap);
         
-        Bookmark bookmark = new Bookmark(testUserId, testBookmarkId, "Test Flight", flightOfferData, "AMADEUS");
+        Bookmark bookmark = new Bookmark(testUserId, testBookmarkId, "Test Flight", flightOfferData);
         bookmark.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60)); // 30 days
         return bookmark;
     }
@@ -159,9 +159,9 @@ class BookmarkHandlerTest {
         request.setTitle("My Test Flight");
         Map<String, Object> flightData = new HashMap<>();
         flightData.put("flight", "AA123");
+        flightData.put("dataSource", "AMADEUS");
         String flightOfferDataString = objectMapper.writeValueAsString(flightData);
         request.setFlightOfferData(flightOfferDataString);
-        request.setSource("AMADEUS");
         
         String requestBody = objectMapper.writeValueAsString(request);
         APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks", "valid-token", requestBody);
@@ -187,8 +187,7 @@ class BookmarkHandlerTest {
         // Arrange
         CreateBookmarkRequest request = new CreateBookmarkRequest();
         request.setTitle("My Test Flight");
-        request.setFlightOfferData("{}");
-        request.setSource("SABRE");
+        request.setFlightOfferData("{\"dataSource\":\"SABRE\"}");
         
         String requestBody = objectMapper.writeValueAsString(request);
         APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks", "valid-token", requestBody);
