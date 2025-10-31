@@ -93,18 +93,9 @@ public class UserUsageLimitsService {
     }
     
     /**
-     * Record a seatmap request and validate limit
+     * Record a seatmap request (called after successful request)
      */
     public void recordSeatmapRequest(User user) throws SeatmapException {
-        if (!canMakeSeatmapRequest(user)) {
-            int tierLimit = getTierSeatmapLimit(user.getAccountTier());
-            int currentCount = usageRepository.getCurrentMonthSeatmapCount(user.getUserId());
-            
-            throw SeatmapException.forbidden(
-                getSeatmapLimitErrorMessage(user.getAccountTier(), tierLimit, currentCount)
-            );
-        }
-        
         usageRepository.recordSeatmapRequest(user.getUserId());
         logger.info("Recorded seatmap request for user: {} tier: {}", 
             user.getUserId(), user.getAccountTier());

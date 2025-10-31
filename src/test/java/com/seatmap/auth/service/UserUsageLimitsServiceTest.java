@@ -259,36 +259,28 @@ class UserUsageLimitsServiceTest {
     
     @Test
     void recordSeatmapRequest_ProUser_WithinLimit_ShouldSucceed() throws SeatmapException {
-        // Arrange
-        setupMockTierDefinitions();
+        // Arrange - minimal setup, no tier definitions needed for recording
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canMakeSeatmapRequest(testUserId, 500)).thenReturn(true);
         doNothing().when(mockUsageRepository).recordSeatmapRequest(testUserId);
         
-        // Act & Assert
+        // Act & Assert - recordSeatmapRequest should just record usage, no limit checking
         assertDoesNotThrow(() -> service.recordSeatmapRequest(proUser));
-        verify(mockUsageRepository).canMakeSeatmapRequest(testUserId, 500);
         verify(mockUsageRepository).recordSeatmapRequest(testUserId);
     }
     
     @Test
-    void recordSeatmapRequest_FreeUser_ExceedsLimit_ShouldThrowException() throws SeatmapException {
-        // Arrange
-        setupMockTierDefinitions();
+    void recordSeatmapRequest_AnyUser_ShouldRecordUsage() throws SeatmapException {
+        // Arrange - minimal setup, no tier definitions needed for recording
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User freeUser = createTestUser(AccountTier.FREE);
-        when(mockUsageRepository.canMakeSeatmapRequest(testUserId, 10)).thenReturn(false);
-        when(mockUsageRepository.getCurrentMonthSeatmapCount(testUserId)).thenReturn(10);
+        doNothing().when(mockUsageRepository).recordSeatmapRequest(testUserId);
         
-        // Act & Assert
-        SeatmapException exception = assertThrows(SeatmapException.class, 
-            () -> service.recordSeatmapRequest(freeUser));
+        // Act & Assert - recordSeatmapRequest should always succeed when called after successful seat map
+        assertDoesNotThrow(() -> service.recordSeatmapRequest(freeUser));
         
-        assertTrue(exception.getMessage().contains("Monthly seat map limit reached (10/10)"));
-        assertTrue(exception.getMessage().contains("FREE tier"));
-        verify(mockUsageRepository).canMakeSeatmapRequest(testUserId, 10);
-        verify(mockUsageRepository, never()).recordSeatmapRequest(anyString());
+        // Verify usage was recorded
+        verify(mockUsageRepository).recordSeatmapRequest(testUserId);
     }
     
     @Test
