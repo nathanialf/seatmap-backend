@@ -254,9 +254,10 @@ Seat map access varies by user type:
 - **Reset**: Automatic cleanup after 30 days
 
 ### Registered Users
-- **Limits**: Varies by user tier
-- **Features**: Bookmark access, enhanced limits
-- **Tracking**: Per-user rather than IP-based
+- **Limits**: Monthly quotas based on account tier (FREE, PRO, BUSINESS)
+- **Features**: Tier-based bookmark access, enhanced limits
+- **Tracking**: Per-user monthly usage counters
+- **Reset**: Monthly limits reset on the 1st of each month
 
 ---
 

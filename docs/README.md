@@ -19,6 +19,8 @@ This documentation is organized into focused sections for easy navigation and ma
 | **[User Profile API](./api/user-profile.md)** | User profile management |
 | **[Error Handling](./api/error-handling.md)** | Standard error responses and codes |
 | **[Testing Guide](./api/testing-guide.md)** | Complete testing workflows and examples |
+| **[Development Setup](./development-setup.md)** | Local development environment configuration |
+| **[CI/CD Configuration](./ci-configuration.md)** | Jenkins pipeline and AWS configuration |
 
 ### 🚀 Quick Start
 

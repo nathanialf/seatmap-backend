@@ -249,9 +249,9 @@ curl -X POST {BASE_URL}/auth/login \
 - **Limitations**: IP-based rate limiting, restricted features
 
 ### User Tokens  
-- **Scope**: Full API access based on user tier
+- **Scope**: Full API access based on user tier (FREE, PRO, BUSINESS)
 - **Duration**: 24 hours
-- **Features**: Bookmarks, enhanced rate limits, priority access
+- **Features**: Tier-based bookmarks, enhanced rate limits, priority access
 
 ### Token Headers
 All authenticated requests (except auth endpoints):
@@ -259,6 +259,26 @@ All authenticated requests (except auth endpoints):
 X-API-Key: your_api_key
 Authorization: Bearer your_jwt_token
 ```
+
+---
+
+## User Account Tiers
+
+After successful login or email verification, users are assigned to account tiers with different usage limits:
+
+### Tier-Based Access
+- **FREE Tier**: Basic access with limited monthly quotas
+- **PRO Tier**: Enhanced access with increased monthly limits
+- **BUSINESS Tier**: Premium access with unlimited usage (one-time purchase, cannot be downgraded)
+
+### Usage Tracking
+- Monthly limits reset on the 1st of each month
+- Usage counters are tracked per user per month
+- Exceeded limits return 403 Forbidden responses with upgrade suggestions
+- Current tier limits and usage can be retrieved via the user profile endpoint
+
+### Error Responses for Tier Limits
+When users exceed their tier limits, they receive descriptive error messages suggesting appropriate upgrades.
 
 ---
 

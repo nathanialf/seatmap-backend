@@ -12,10 +12,12 @@ import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.auth.service.AuthService;
 import com.seatmap.email.service.EmailService;
 import com.seatmap.auth.service.JwtService;
 import com.seatmap.auth.service.PasswordService;
+import com.seatmap.auth.service.UserUsageLimitsService;
 import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.common.model.Bookmark;
 import com.seatmap.common.model.User;
@@ -33,12 +35,12 @@ import java.util.*;
 public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     
     private static final Logger logger = LoggerFactory.getLogger(BookmarkHandler.class);
-    private static final int MAX_BOOKMARKS_PER_USER = 50;
     
     private final ObjectMapper objectMapper;
     private final Validator validator;
     private final BookmarkRepository bookmarkRepository;
     private final AuthService authService;
+    private final UserUsageLimitsService usageLimitsService;
     
     public BookmarkHandler() {
         this.objectMapper = new ObjectMapper();
@@ -71,6 +73,10 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         EmailService emailService = new EmailService();
         
         this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
+        
+        // Initialize UserUsageLimitsService for tier-based limits
+        UserUsageRepository userUsageRepository = new UserUsageRepository(dynamoDbClient);
+        this.usageLimitsService = new UserUsageLimitsService(userUsageRepository, dynamoDbClient);
     }
     
     @Override
@@ -120,18 +126,24 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         
         logger.info("Retrieved {} active bookmarks for user: {}", activeBookmarks.size(), userId);
         
+        // Get user for tier information
+        User user = authService.validateToken(extractTokenFromEvent(event));
+        int remainingBookmarks = usageLimitsService.getRemainingBookmarks(user);
+        
         return createSuccessResponse(Map.of(
             "bookmarks", activeBookmarks,
             "total", activeBookmarks.size(),
-            "maxAllowed", MAX_BOOKMARKS_PER_USER
+            "tier", user.getAccountTier(),
+            "remainingThisMonth", remainingBookmarks
         ));
     }
     
     private APIGatewayProxyResponseEvent handleCreateBookmark(APIGatewayProxyRequestEvent event) throws SeatmapException {
         logger.info("Processing create bookmark request");
         
-        String userId = extractUserIdFromToken(event);
-        if (userId == null) {
+        // Validate token and get user
+        User user = authService.validateToken(extractTokenFromEvent(event));
+        if (user == null) {
             return createErrorResponse(401, "Invalid or missing authentication token");
         }
         
@@ -154,15 +166,16 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
             return createErrorResponse(400, "Validation errors: " + errors.toString());
         }
         
-        // Check bookmark limit
-        int currentCount = bookmarkRepository.countBookmarksByUserId(userId);
-        if (currentCount >= MAX_BOOKMARKS_PER_USER) {
-            return createErrorResponse(400, "Maximum number of bookmarks reached (" + MAX_BOOKMARKS_PER_USER + ")");
+        // Check tier-based bookmark limit and record usage
+        try {
+            usageLimitsService.recordBookmarkCreation(user);
+        } catch (SeatmapException e) {
+            return createErrorResponse(e.getHttpStatus(), e.getMessage());
         }
         
         // Create new bookmark
         String bookmarkId = UUID.randomUUID().toString();
-        Bookmark bookmark = new Bookmark(userId, bookmarkId, request.getTitle(), request.getFlightOfferData());
+        Bookmark bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), request.getFlightOfferData());
         
         // Set expiration based on flight departure date (extract from flight offer if possible)
         // For now, set a default expiration of 30 days
@@ -170,7 +183,7 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         
         bookmarkRepository.saveBookmark(bookmark);
         
-        logger.info("Created bookmark {} for user: {}", bookmarkId, userId);
+        logger.info("Created bookmark {} for user: {} tier: {}", bookmarkId, user.getUserId(), user.getAccountTier());
         
         return createSuccessResponse(bookmark);
     }
@@ -216,13 +229,19 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         return createSuccessResponse(bookmark.get());
     }
     
-    private String extractUserIdFromToken(APIGatewayProxyRequestEvent event) {
+    private String extractTokenFromEvent(APIGatewayProxyRequestEvent event) {
         String authHeader = event.getHeaders().get("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return null;
         }
-        
-        String token = authHeader.substring(7);
+        return authHeader.substring(7);
+    }
+    
+    private String extractUserIdFromToken(APIGatewayProxyRequestEvent event) {
+        String token = extractTokenFromEvent(event);
+        if (token == null) {
+            return null;
+        }
         
         try {
             // Validate token and get user (guest tokens not allowed for bookmarks)

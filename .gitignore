@@ -33,6 +33,9 @@ Thumbs.db
 hlds/
 Igal Past Projects/
 
+# Deployment scripts (contain infrastructure details)
+scripts/setup-tiers.sh
+
 # Logs
 logs/
 *.log

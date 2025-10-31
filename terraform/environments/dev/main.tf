@@ -215,7 +215,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.bookmarks.arn,
           "${aws_dynamodb_table.bookmarks.arn}/index/*",
           aws_dynamodb_table.account_tiers.arn,
-          "${aws_dynamodb_table.account_tiers.arn}/index/*"
+          "${aws_dynamodb_table.account_tiers.arn}/index/*",
+          aws_dynamodb_table.user_usage.arn,
+          "${aws_dynamodb_table.user_usage.arn}/index/*"
         ]
       },
       {
@@ -444,6 +446,35 @@ resource "aws_dynamodb_table" "account_tiers" {
   tags = merge(local.common_tags, {
     Name        = "Account Tiers Table"
     Description = "Store tier definitions pricing and limits by region"
+  })
+}
+
+# User Usage Table - Monthly usage tracking for tier-based limits
+resource "aws_dynamodb_table" "user_usage" {
+  name           = "${local.project_name}-user-usage-${local.environment}"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "userId"
+  range_key      = "monthYear"
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "monthYear"
+    type = "S"
+  }
+
+  # TTL configuration for automatic cleanup after 13 months
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "User Usage Table"
+    Description = "Store monthly usage tracking for tier-based limits with TTL"
   })
 }
 

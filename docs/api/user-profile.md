@@ -51,6 +51,8 @@ Authorization: Bearer your_user_jwt_token
 - `createdAt`: Account creation timestamp
 - `updatedAt`: Last profile update timestamp
 
+**Note**: Current month usage statistics and remaining quotas can be retrieved via separate usage endpoints (check individual API documentation for usage tracking details).
+
 **Example cURL**:
 ```bash
 curl -X GET {BASE_URL}/profile \
@@ -125,24 +127,25 @@ User accounts have different access levels that affect API usage:
 
 ### FREE Tier
 - **Flight Search**: Full access
-- **Seat Maps**: Limited access
-- **Bookmarks**: Basic limits
-- **Rate Limits**: Standard rates
+- **Seat Maps**: Monthly quota limits
+- **Bookmarks**: Not available
+- **Rate Limits**: Basic monthly quotas
 
 ### PRO Tier
 - **Flight Search**: Full access
-- **Seat Maps**: Enhanced access  
-- **Bookmarks**: Increased limits
-- **Rate Limits**: Higher rates
-- **Priority Support**: Faster response times
+- **Seat Maps**: Enhanced monthly limits  
+- **Bookmarks**: Monthly quota available
+- **Rate Limits**: Increased monthly quotas
+- **Priority Support**: Enhanced support access
 
 ### BUSINESS Tier
 - **Flight Search**: Full access
-- **Seat Maps**: Maximum access
-- **Bookmarks**: Highest limits
-- **Rate Limits**: Premium rates
+- **Seat Maps**: Unlimited access
+- **Bookmarks**: Unlimited
+- **Rate Limits**: No monthly quotas
 - **Priority Support**: Dedicated support
 - **Advanced Features**: Beta access to new features
+- **Permanent Upgrade**: Cannot be downgraded (one-time purchase)
 
 ---
 

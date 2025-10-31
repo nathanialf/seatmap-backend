@@ -192,13 +192,16 @@ curl -X GET {BASE_URL}/seat-map/bookmark/{bookmarkId} \
 Bookmark operations are subject to user tier limits:
 
 ### Bookmark Limits
-- **Storage**: Varies by user tier
-- **Creation**: Rate limited per timeframe
+- **Creation**: Monthly limits based on user account tier (FREE, PRO, BUSINESS)
+- **Storage**: Tier-based monthly quotas with automatic cleanup
 - **Access**: Unlimited retrieval for owned bookmarks
+- **FREE Tier**: Bookmark creation not available
+- **Upgrade**: Higher tiers provide increased or unlimited bookmark access
 
 ### Automatic Management
 - **Expiration**: Bookmarks auto-expire after flight departure
-- **Cleanup**: System automatically removes expired entries
+- **Cleanup**: System automatically removes expired entries  
+- **Monthly Reset**: Usage limits reset on the 1st of each month
 - **Storage Optimization**: Prevents unlimited accumulation
 
 ---
@@ -237,11 +240,19 @@ Bookmark operations are subject to user tier limits:
 }
 ```
 
-**409 Conflict** (Bookmark limits exceeded):
+**403 Forbidden** (Tier limits exceeded):
 ```json
 {
   "success": false,
-  "message": "Bookmark limit reached for your account tier"
+  "message": "Monthly bookmark limit reached for your account tier. Upgrade for higher limits."
+}
+```
+
+**403 Forbidden** (FREE tier bookmark creation):
+```json
+{
+  "success": false,
+  "message": "Bookmark creation is not available for FREE tier. Upgrade to access bookmark functionality."
 }
 ```
 
