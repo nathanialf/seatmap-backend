@@ -29,6 +29,14 @@ Content-Type: application/json
 **Parameters**:
 - `flightOfferData` (required): JSON string of complete flight offer object exactly as received from flight search
 
+**⚠️ CRITICAL**: The `flightOfferData` must include the COMPLETE flight offer object with ALL fields intact, including:
+- `travelerPricings` array (MANDATORY for Amadeus API)
+- All pricing details and fare segments  
+- Complete itinerary and segment data
+- All metadata fields
+
+Omitting ANY field from the original flight offer will cause the seat map request to fail with a 400 error.
+
 **Response**:
 ```json
 {

@@ -269,6 +269,109 @@ private static final int TOKEN_EXPIRATION_SECONDS = 1 * 60 * 60; // 1 hour inste
 **P0 - Critical Production Issue** - System-wide intermittent JWT timestamp generation failure affecting all authentication flows. Potential for widespread user impact and indicates serious runtime environment issues.
 
 ---
+
+## Recent JWT Signature Validation Failure (October 31, 2025)
+
+### New Incident Details
+**Date:** October 31, 2025  
+**Time:** ~07:58 UTC  
+**Issue:** JWT signature validation failure during API testing  
+**Error:** "Invalid JWT signature: JWT signature does not match locally computed signature"
+
+### Failed Token Analysis
+**Token**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzQ1NmRlZiIsImVtYWlsIjoidGVzdEBleGFtcGxlLmNvbSIsInRva2VuX3R5cGUiOiJ1c2VyIiwiaWF0IjoxNzYxODk0NzIzLCJleHAiOjE3NjE5ODExMjN9.RP8eVhNhYvMi4zIUY64gULxNfj1xWCJ1T4jWC9FpZGo`
+
+**Decoded Payload**:
+```json
+{
+  "sub": "user_456def",
+  "email": "test@example.com", 
+  "token_type": "user",
+  "iat": 1761894723,  // Oct 31, 2025 06:52:03 UTC - CORRECT TIMESTAMP
+  "exp": 1761981123   // Nov 1, 2025 07:12:03 UTC - CORRECT TIMESTAMP
+}
+```
+
+**Timing Analysis**:
+- **Issued**: Oct 31, 2025 06:52:03 UTC (CORRECT - current date)
+- **Expires**: Nov 1, 2025 07:12:03 UTC (CORRECT - 24 hours later)
+- **Current**: Oct 31, 2025 07:58:43 UTC (within validity period)
+- **Duration**: 24 hours (86,400 seconds) - CORRECT
+- **Remaining**: ~23.2 hours (should be valid)
+
+### Key Differences from Previous Incident
+1. **Correct Timestamps**: Unlike the October 26 incident, this token has proper 2025 timestamps
+2. **Proper Duration**: 24-hour lifespan as expected (not 1-hour)
+3. **Different Failure Mode**: Signature validation failure, not expiration
+4. **Timing**: Token was valid and working earlier, then suddenly failed signature validation
+
+### Environment Configuration Analysis
+**Current JWT_SECRET across all Lambda functions**:
+- **seatmap-seat-map-dev**: `"p+JoYjxAoE+4NkTzi8rjFni+UnHSmitO382Gp1MnCTg="`
+- **seatmap-auth-dev**: `"p+JoYjxAoE+4NkTzi8rjFni+UnHSmitO382Gp1MnCTg="`  
+- **seatmap-bookmarks-dev**: `"p+JoYjxAoE+4NkTzi8rjFni+UnHSmitO382Gp1MnCTg="`
+
+**Finding**: All Lambda functions have identical JWT_SECRET, ruling out configuration inconsistency.
+
+### Root Cause Analysis - JWT Secret Rotation
+**Most Likely Scenario**:
+1. Token was issued by auth Lambda with `JWT_SECRET_VERSION_A`
+2. Terraform deployment occurred that changed `JWT_SECRET` to `JWT_SECRET_VERSION_B`
+3. Token validation attempted with new secret → signature mismatch → failure
+
+**JWT Signature Process**:
+- **Creation**: `HMACSHA256(base64(header) + "." + base64(payload), JWT_SECRET_OLD)`
+- **Validation**: `HMACSHA256(base64(header) + "." + base64(payload), JWT_SECRET_NEW)`
+- **Result**: Signatures don't match → "Invalid JWT signature" error
+
+### CloudWatch Evidence
+**Log Entry**: 
+```
+[main] WARN com.seatmap.auth.service.JwtService - Invalid JWT signature: JWT signature does not match locally computed signature. JWT validity cannot be asserted and should not be trusted.
+```
+
+**Source**: `/aws/lambda/seatmap-seat-map-dev` at timestamp `1761897496373`
+
+### JWT Implementation Code Analysis
+**Token Creation** (`JwtService.java:55-66`):
+```java
+return Jwts.builder()
+        .setClaims(claims)
+        .setSubject(subject)
+        .setIssuedAt(Date.from(now))
+        .setExpiration(Date.from(expiration))
+        .signWith(secretKey, SignatureAlgorithm.HS256)  // Uses current JWT_SECRET
+        .compact();
+```
+
+**Token Validation** (`JwtService.java:68-74`):
+```java
+return Jwts.parserBuilder()
+        .setSigningKey(secretKey)  // Uses current JWT_SECRET
+        .build()
+        .parseClaimsJws(token)     // Validates signature against current secret
+        .getBody();
+```
+
+### Updated Root Cause Assessment
+**Primary Issue**: JWT secret rotation without token invalidation strategy
+
+**Contributing Factors**:
+1. No token versioning or secret rotation strategy
+2. Outstanding tokens become invalid immediately after secret change
+3. No graceful transition period for secret rotation
+4. Terraform deployments can change secrets without notification
+
+### Immediate Resolution
+**Required Action**: Issue fresh token with current JWT_SECRET
+
+**Long-term Recommendations**:
+1. Implement JWT secret versioning with gradual rotation
+2. Add secret rotation detection and alerts
+3. Consider shorter token lifespans during active development
+4. Implement token refresh patterns for production use
+
+---
 **Investigation Status:** **OPEN - CRITICAL**  
-**Next Steps:** System clock and JWT generation audit  
+**Next Steps:** System clock and JWT generation audit, plus JWT secret rotation strategy  
 **Escalation:** Development team immediate review required  
