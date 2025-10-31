@@ -284,6 +284,10 @@ class AuthHandlerIpExtractionTest {
     
     @Test
     void extractClientIp_DirectAccess_UsingReflection() throws Exception {
+        // This test calls extractClientIp directly via reflection, not createGuestSession
+        // So we need to reset the mock to avoid unnecessary stubbing warnings
+        reset(mockAuthService);
+        
         // Test the private extractClientIp method directly using reflection
         Method extractMethod = AuthHandler.class.getDeclaredMethod("extractClientIp", APIGatewayProxyRequestEvent.class);
         extractMethod.setAccessible(true);

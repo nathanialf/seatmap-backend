@@ -36,29 +36,41 @@ public class UserUsageLimitsService {
         this.tierTableName = "seatmap-account-tiers-" + getEnvironment();
     }
     
+    public UserUsageLimitsService(DynamoDbClient dynamoDbClient, String environment) {
+        this.usageRepository = new UserUsageRepository(dynamoDbClient);
+        this.dynamoDbClient = dynamoDbClient;
+        this.tierTableName = "seatmap-account-tiers-" + environment;
+    }
+    
     /**
      * Check if user can create a bookmark
      */
-    public boolean canCreateBookmark(User user) {
+    public boolean canCreateBookmark(User user) throws SeatmapException {
         try {
             int tierLimit = getTierBookmarkLimit(user.getAccountTier());
             return usageRepository.canCreateBookmark(user.getUserId(), tierLimit);
+        } catch (SeatmapException e) {
+            // Re-throw tier definition exceptions (fail-closed behavior)
+            throw e;
         } catch (Exception e) {
             logger.error("Error checking bookmark limit for user: {}", user.getUserId(), e);
-            return false; // Fail closed for safety
+            return false; // Fail closed for other errors
         }
     }
     
     /**
      * Check if user can make a seatmap request
      */
-    public boolean canMakeSeatmapRequest(User user) {
+    public boolean canMakeSeatmapRequest(User user) throws SeatmapException {
         try {
             int tierLimit = getTierSeatmapLimit(user.getAccountTier());
             return usageRepository.canMakeSeatmapRequest(user.getUserId(), tierLimit);
+        } catch (SeatmapException e) {
+            // Re-throw tier definition exceptions (fail-closed behavior)
+            throw e;
         } catch (Exception e) {
             logger.error("Error checking seatmap limit for user: {}", user.getUserId(), e);
-            return false; // Fail closed for safety
+            return false; // Fail closed for other errors
         }
     }
     
@@ -101,7 +113,7 @@ public class UserUsageLimitsService {
     /**
      * Get remaining bookmarks for user's current tier
      */
-    public int getRemainingBookmarks(User user) {
+    public int getRemainingBookmarks(User user) throws SeatmapException {
         int tierLimit = getTierBookmarkLimit(user.getAccountTier());
         return usageRepository.getRemainingBookmarks(user.getUserId(), tierLimit);
     }
@@ -109,9 +121,18 @@ public class UserUsageLimitsService {
     /**
      * Get remaining seatmap requests for user's current tier  
      */
-    public int getRemainingSeatmapRequests(User user) {
+    public int getRemainingSeatmapRequests(User user) throws SeatmapException {
         int tierLimit = getTierSeatmapLimit(user.getAccountTier());
-        return usageRepository.getRemainingBookmarks(user.getUserId(), tierLimit);
+        return usageRepository.getRemainingSeatmapRequests(user.getUserId(), tierLimit);
+    }
+    
+    /**
+     * Get seatmap limit error message for user
+     */
+    public String getSeatmapLimitMessage(User user) throws SeatmapException {
+        int tierLimit = getTierSeatmapLimit(user.getAccountTier());
+        int currentCount = usageRepository.getCurrentMonthSeatmapCount(user.getUserId());
+        return getSeatmapLimitErrorMessage(user.getAccountTier(), tierLimit, currentCount);
     }
     
     /**
@@ -128,35 +149,50 @@ public class UserUsageLimitsService {
     }
     
     /**
-     * Get bookmark limit for a tier (deny all if tier definitions unavailable)
+     * Get bookmark limit for a tier (fail-closed if tier definitions unavailable)
      */
-    private int getTierBookmarkLimit(AccountTier tier) {
+    private int getTierBookmarkLimit(AccountTier tier) throws SeatmapException {
         TierDefinition tierDef = getTierDefinition(tier);
-        return tierDef != null ? tierDef.getMaxBookmarks() : 0; // Deny all bookmarks if tier definition missing
+        return tierDef.getMaxBookmarks();
     }
     
     /**
-     * Get seatmap limit for a tier (deny all if tier definitions unavailable)
+     * Get seatmap limit for a tier (fail-closed if tier definitions unavailable)
      */
-    private int getTierSeatmapLimit(AccountTier tier) {
+    private int getTierSeatmapLimit(AccountTier tier) throws SeatmapException {
         TierDefinition tierDef = getTierDefinition(tier);
-        return tierDef != null ? tierDef.getMaxSeatmapCalls() : 0; // Deny all seatmap calls if tier definition missing
+        return tierDef.getMaxSeatmapCalls();
     }
     
     /**
      * Get tier definition from cache, loading if necessary
+     * Implements fail-closed behavior when tier definitions are unavailable
      */
-    private TierDefinition getTierDefinition(AccountTier tier) {
+    private TierDefinition getTierDefinition(AccountTier tier) throws SeatmapException {
         if (!tierDefinitionsLoaded) {
             synchronized (this) {
                 if (!tierDefinitionsLoaded) {
                     loadTierDefinitions();
                     tierDefinitionsLoaded = true;
+                    
+                    // Fail-closed: if no tier definitions loaded, service is unavailable
+                    if (tierDefinitionsCache.isEmpty()) {
+                        throw SeatmapException.serviceUnavailable(
+                            "Tier definitions are currently unavailable. Please try again later."
+                        );
+                    }
                 }
             }
         }
         
-        return tierDefinitionsCache.get(tier);
+        TierDefinition tierDef = tierDefinitionsCache.get(tier);
+        if (tierDef == null) {
+            throw SeatmapException.serviceUnavailable(
+                "Tier definition for " + tier + " is not available. Please try again later."
+            );
+        }
+        
+        return tierDef;
     }
     
     /**
@@ -225,19 +261,39 @@ public class UserUsageLimitsService {
      */
     private String getBookmarkLimitErrorMessage(AccountTier tier, int limit, int currentCount) {
         if (limit == 0) {
-            return String.format("Bookmark creation is not available for %s tier. Upgrade to PRO (50 bookmarks/month) or BUSINESS (unlimited) for bookmark access.", tier);
+            if (tier == AccountTier.FREE) {
+                return String.format("Bookmark creation is not available for %s tier. Upgrade to PRO (10 bookmarks/month) or BUSINESS (unlimited) for bookmark access.", tier);
+            } else {
+                return String.format("Bookmark creation is not available for %s tier. Contact support for assistance.", tier);
+            }
         }
         
-        return String.format("Monthly bookmark limit reached (%d/%d) for %s tier. Upgrade to BUSINESS for unlimited bookmarks.", 
-            currentCount, limit, tier);
+        if (tier == AccountTier.FREE) {
+            return String.format("Monthly bookmark limit reached (%d/%d) for %s tier. Upgrade to PRO (10 bookmarks/month) or BUSINESS (unlimited) for more bookmarks.", 
+                currentCount, limit, tier);
+        } else if (tier == AccountTier.PRO) {
+            return String.format("Monthly bookmark limit reached (%d/%d) for %s tier. Upgrade to BUSINESS for unlimited bookmarks.", 
+                currentCount, limit, tier);
+        } else {
+            return String.format("Monthly bookmark limit reached (%d/%d) for %s tier. Contact support for assistance.", 
+                currentCount, limit, tier);
+        }
     }
     
     /**
      * Get user-friendly error message for seatmap limit exceeded
      */
     private String getSeatmapLimitErrorMessage(AccountTier tier, int limit, int currentCount) {
-        return String.format("Monthly seat map limit reached (%d/%d) for %s tier. Upgrade for higher limits.", 
-            currentCount, limit, tier);
+        if (tier == AccountTier.FREE) {
+            return String.format("Monthly seat map limit reached (%d/%d) for %s tier. Upgrade to PRO (50 seatmap calls/month) or BUSINESS (unlimited) for more access.", 
+                currentCount, limit, tier);
+        } else if (tier == AccountTier.PRO) {
+            return String.format("Monthly seat map limit reached (%d/%d) for %s tier. Upgrade to BUSINESS for unlimited seat map access.", 
+                currentCount, limit, tier);
+        } else {
+            return String.format("Monthly seat map limit reached (%d/%d) for %s tier. Contact support for assistance.", 
+                currentCount, limit, tier);
+        }
     }
     
     /**

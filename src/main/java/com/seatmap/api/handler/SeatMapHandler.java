@@ -6,7 +6,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.seatmap.api.exception.SeatmapException;
+import com.seatmap.api.exception.SeatmapApiException;
 import io.jsonwebtoken.Claims;
 import com.seatmap.api.model.SeatMapRequest;
 import com.seatmap.api.model.SeatMapResponse;
@@ -14,8 +14,15 @@ import com.seatmap.api.service.AmadeusService;
 import com.seatmap.api.service.SabreService;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
+import com.seatmap.auth.repository.SessionRepository;
+import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.auth.service.AuthService;
+import com.seatmap.email.service.EmailService;
 import com.seatmap.auth.service.JwtService;
+import com.seatmap.auth.service.PasswordService;
+import com.seatmap.auth.service.UserUsageLimitsService;
 import com.seatmap.common.model.Bookmark;
+import com.seatmap.common.model.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
@@ -37,6 +44,8 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
     private final AmadeusService amadeusService;
     private final SabreService sabreService;
     private final JwtService jwtService;
+    private final AuthService authService;
+    private final UserUsageLimitsService userUsageLimitsService;
     private final GuestAccessRepository guestAccessRepository;
     private final BookmarkRepository bookmarkRepository;
     
@@ -56,8 +65,23 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         String environment = System.getenv("ENVIRONMENT");
         if (environment == null) environment = "dev";
         
+        // Initialize repositories with table names
+        String usersTable = "seatmap-users-" + environment;
+        String sessionsTable = "seatmap-sessions-" + environment;
+        String guestAccessTable = "seatmap-guest-access-" + environment;
+        String bookmarksTable = "seatmap-bookmarks-" + environment;
+        
         this.guestAccessRepository = new GuestAccessRepository(dynamoDbClient);
-        this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, "seatmap-bookmarks-" + environment);
+        this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, bookmarksTable);
+        
+        // Initialize AuthService with all dependencies for token validation
+        UserRepository userRepository = new UserRepository(dynamoDbClient, usersTable);
+        SessionRepository sessionRepository = new SessionRepository(dynamoDbClient, sessionsTable);
+        PasswordService passwordService = new PasswordService();
+        EmailService emailService = new EmailService();
+        
+        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
+        this.userUsageLimitsService = new UserUsageLimitsService(dynamoDbClient, environment);
     }
     
     @Override
@@ -87,22 +111,37 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 return createErrorResponse(401, "Invalid or expired token");
             }
             
-            // For guest users, check IP-based seatmap limits
+            // Check seatmap limits based on user type
             String clientIp = extractClientIp(event);
+            User authenticatedUser = null;
+            
             try {
                 if (jwtService.isGuestToken(token)) {
-                    // Check if this IP can make seatmap requests
+                    // For guest users, check IP-based seatmap limits
                     if (!guestAccessRepository.canMakeSeatmapRequest(clientIp)) {
                         String denialMessage = guestAccessRepository.getSeatmapDenialMessage(clientIp);
                         logger.warn("Seatmap request denied for guest IP {}: {}", clientIp, denialMessage);
                         return createErrorResponse(403, denialMessage);
                     }
+                } else {
+                    // For authenticated users, check tier-based seatmap limits
+                    authenticatedUser = authService.validateToken(token);
+                    if (!userUsageLimitsService.canMakeSeatmapRequest(authenticatedUser)) {
+                        try {
+                            String denialMessage = userUsageLimitsService.getSeatmapLimitMessage(authenticatedUser);
+                            logger.warn("Seatmap request denied for user {}: {}", authenticatedUser.getUserId(), denialMessage);
+                            return createErrorResponse(403, denialMessage);
+                        } catch (com.seatmap.common.exception.SeatmapException e) {
+                            logger.error("Error getting seatmap limit message for user {}: {}", authenticatedUser.getUserId(), e.getMessage());
+                            return createErrorResponse(e.getHttpStatus(), e.getMessage());
+                        }
+                    }
                 }
             } catch (com.seatmap.common.exception.SeatmapException e) {
-                return createErrorResponse(401, "Error validating token");
+                return createErrorResponse(403, e.getMessage());
             } catch (Exception e) {
-                logger.error("Error checking guest access limits for IP: {}", clientIp, e);
-                return createErrorResponse(401, "Error validating token");
+                logger.error("Error checking seatmap access limits: {}", e.getMessage(), e);
+                return createErrorResponse(401, "Error validating access limits");
             }
             
             // Parse request body
@@ -136,25 +175,30 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
                 dataSource
             );
             
-            // Only record seatmap request for guest users if we actually got valid seat map data
+            // Record seatmap request only if we actually got valid seat map data
             try {
-                if (jwtService.isGuestToken(token)) {
-                    // Check if we got valid seat map data (not just an error response)
-                    if (seatMapData != null && seatMapData.has("data") && seatMapData.get("data").isArray() && seatMapData.get("data").size() > 0) {
+                // Check if we got valid seat map data (not just an error response)
+                if (seatMapData != null && seatMapData.has("data") && seatMapData.get("data").isArray() && seatMapData.get("data").size() > 0) {
+                    if (jwtService.isGuestToken(token)) {
+                        // Record for guest users
                         guestAccessRepository.recordSeatmapRequest(clientIp);
                         logger.info("Recorded seatmap request for guest IP: {} after successful seat map retrieval", clientIp);
-                    } else {
-                        logger.info("Skipping seatmap request recording for guest IP: {} - no valid seat map data returned", clientIp);
+                    } else if (authenticatedUser != null) {
+                        // Record for authenticated users
+                        userUsageLimitsService.recordSeatmapRequest(authenticatedUser);
+                        logger.info("Recorded seatmap request for user: {} after successful seat map retrieval", authenticatedUser.getUserId());
                     }
+                } else {
+                    logger.info("Skipping seatmap request recording - no valid seat map data returned");
                 }
             } catch (Exception e) {
-                logger.warn("Failed to record seatmap request for IP {}: {}", clientIp, e.getMessage());
+                logger.warn("Failed to record seatmap request: {}", e.getMessage());
                 // Don't fail the request if recording fails
             }
             
             return createSuccessResponse(response);
             
-        } catch (SeatmapException e) {
+        } catch (SeatmapApiException e) {
             logger.error("Seatmap service error", e);
             return createErrorResponse(500, e.getMessage());
         } catch (Exception e) {
@@ -163,7 +207,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         }
     }
     
-    private JsonNode getSeatMapBySource(SeatMapRequest request) throws SeatmapException {
+    private JsonNode getSeatMapBySource(SeatMapRequest request) throws SeatmapApiException {
         try {
             // Parse flight offer data to extract dataSource
             JsonNode flightOfferData = objectMapper.readTree(request.getFlightOfferData());
@@ -176,7 +220,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
             } else if ("AMADEUS".equals(dataSource)) {
                 return amadeusService.getSeatMapFromOfferData(request.getFlightOfferData());
             } else {
-                throw new SeatmapException("Unsupported flight data source: " + dataSource);
+                throw new SeatmapApiException("Unsupported flight data source: " + dataSource);
             }
             
         } catch (Exception e) {
@@ -186,7 +230,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         }
     }
     
-    private JsonNode getSeatMapFromSabre(JsonNode flightOfferData) throws SeatmapException {
+    private JsonNode getSeatMapFromSabre(JsonNode flightOfferData) throws SeatmapApiException {
         // Extract flight details from the flight offer data
         String carrierCode = "";
         String flightNumber = "";
@@ -213,7 +257,7 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
             }
             
             if (carrierCode.isEmpty() || flightNumber.isEmpty() || origin.isEmpty() || destination.isEmpty()) {
-                throw new SeatmapException("Missing required flight details for Sabre seat map request");
+                throw new SeatmapApiException("Missing required flight details for Sabre seat map request");
             }
             
             logger.info("Calling Sabre seat map API for flight {}{}  from {} to {} on {}", carrierCode, flightNumber, origin, destination, departureDate);
@@ -222,11 +266,11 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
             
         } catch (Exception e) {
             logger.error("Error extracting flight details for Sabre seat map request", e);
-            throw new SeatmapException("Failed to process Sabre seat map request", e);
+            throw new SeatmapApiException("Failed to process Sabre seat map request", e);
         }
     }
     
-    private APIGatewayProxyResponseEvent handleSeatMapByBookmark(APIGatewayProxyRequestEvent event, String bookmarkId) throws SeatmapException {
+    private APIGatewayProxyResponseEvent handleSeatMapByBookmark(APIGatewayProxyRequestEvent event, String bookmarkId) throws SeatmapApiException {
         logger.info("Processing seatmap request for bookmark ID: {}", bookmarkId);
         
         // Validate JWT token
@@ -245,15 +289,31 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         
         // Extract user ID from token (bookmarks require authenticated users, not guests)
         String userId;
+        User authenticatedUser;
         try {
             // Check if this is a guest token
             if (jwtService.isGuestToken(token)) {
                 return createErrorResponse(401, "Valid user authentication required for bookmark access");
             }
             userId = claims.getSubject();
+            
+            // Get user details and check tier limits for seatmap access
+            authenticatedUser = authService.validateToken(token);
+            if (!userUsageLimitsService.canMakeSeatmapRequest(authenticatedUser)) {
+                try {
+                    String denialMessage = userUsageLimitsService.getSeatmapLimitMessage(authenticatedUser);
+                    logger.warn("Bookmark seatmap request denied for user {}: {}", authenticatedUser.getUserId(), denialMessage);
+                    return createErrorResponse(403, denialMessage);
+                } catch (com.seatmap.common.exception.SeatmapException e) {
+                    logger.error("Error getting seatmap limit message for user {}: {}", authenticatedUser.getUserId(), e.getMessage());
+                    return createErrorResponse(e.getHttpStatus(), e.getMessage());
+                }
+            }
+        } catch (com.seatmap.common.exception.SeatmapException e) {
+            return createErrorResponse(403, e.getMessage());
         } catch (Exception e) {
-            logger.error("Error extracting user ID from token", e);
-            return createErrorResponse(401, "Valid user authentication required for bookmark access");
+            logger.error("Error extracting user ID from token or checking limits", e);
+            return createErrorResponse(401, "Error validating user access");
         }
         
         // Get the bookmark
@@ -285,6 +345,19 @@ public class SeatMapHandler implements RequestHandler<APIGatewayProxyRequestEven
         
         // Create successful response
         SeatMapResponse response = SeatMapResponse.success(seatMapData, dataSource);
+        
+        // Record seatmap request only if we actually got valid seat map data
+        try {
+            if (seatMapData != null && seatMapData.has("data") && seatMapData.get("data").isArray() && seatMapData.get("data").size() > 0) {
+                userUsageLimitsService.recordSeatmapRequest(authenticatedUser);
+                logger.info("Recorded bookmark seatmap request for user: {} after successful seat map retrieval", authenticatedUser.getUserId());
+            } else {
+                logger.info("Skipping bookmark seatmap request recording - no valid seat map data returned");
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to record bookmark seatmap request: {}", e.getMessage());
+            // Don't fail the request if recording fails
+        }
         
         return createSuccessResponse(response);
     }

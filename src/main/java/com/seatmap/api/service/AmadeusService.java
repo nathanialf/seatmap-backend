@@ -2,7 +2,7 @@ package com.seatmap.api.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.seatmap.api.exception.SeatmapException;
+import com.seatmap.api.exception.SeatmapApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,7 +43,7 @@ public class AmadeusService {
         this.objectMapper = new ObjectMapper();
     }
     
-    public JsonNode getSeatMap(String flightNumber, String departureDate, String origin, String destination) throws SeatmapException {
+    public JsonNode getSeatMap(String flightNumber, String departureDate, String origin, String destination) throws SeatmapApiException {
         try {
             ensureValidToken();
             
@@ -51,7 +51,7 @@ public class AmadeusService {
             JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, null, flightNumber, 10);
             
             if (flightOffers == null || !flightOffers.has("data") || flightOffers.get("data").size() == 0) {
-                throw new SeatmapException("No flight offers found for the specified criteria");
+                throw new SeatmapApiException("No flight offers found for the specified criteria");
             }
             
             // Step 2: Get seat map using the first flight offer
@@ -60,21 +60,21 @@ public class AmadeusService {
             
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
-            throw new SeatmapException("Network error calling Amadeus API", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
         }
     }
     
-    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
+    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
         try {
             ensureValidToken();
             return searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
-            throw new SeatmapException("Network error calling Amadeus API", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
         }
     }
     
-    public JsonNode getSeatMapFromOfferData(String flightOfferData) throws SeatmapException {
+    public JsonNode getSeatMapFromOfferData(String flightOfferData) throws SeatmapApiException {
         try {
             ensureValidToken();
             
@@ -84,11 +84,11 @@ public class AmadeusService {
             
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
-            throw new SeatmapException("Network error calling Amadeus API", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
         }
     }
     
-    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException, IOException, InterruptedException {
+    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException, IOException, InterruptedException {
         int max = maxResults != null ? maxResults : 10;
         
         // Build base URL - only include travelClass if specified (minimum cabin quality)
@@ -134,11 +134,11 @@ public class AmadeusService {
             return result;
         } else {
             logger.error("Flight offers search error: {} - {}", response.statusCode(), response.body());
-            throw new SeatmapException("Failed to search flight offers: " + response.statusCode());
+            throw new SeatmapApiException("Failed to search flight offers: " + response.statusCode());
         }
     }
     
-    private JsonNode getSeatMapFromOffer(JsonNode flightOffer) throws SeatmapException, IOException, InterruptedException {
+    private JsonNode getSeatMapFromOffer(JsonNode flightOffer) throws SeatmapApiException, IOException, InterruptedException {
         String url = "https://" + endpoint + "/v1/shopping/seatmaps";
         
         // Create request body with flight offer
@@ -164,17 +164,17 @@ public class AmadeusService {
             return result;
         } else {
             logger.error("Seat map API error: {} - {}", response.statusCode(), response.body());
-            throw new SeatmapException("Failed to retrieve seat map: " + response.statusCode());
+            throw new SeatmapApiException("Failed to retrieve seat map: " + response.statusCode());
         }
     }
     
-    private void ensureValidToken() throws SeatmapException {
+    private void ensureValidToken() throws SeatmapApiException {
         if (accessToken == null || System.currentTimeMillis() >= tokenExpiresAt) {
             refreshAccessToken();
         }
     }
     
-    private void refreshAccessToken() throws SeatmapException {
+    private void refreshAccessToken() throws SeatmapApiException {
         try {
             String credentials = Base64.getEncoder().encodeToString((apiKey + ":" + apiSecret).getBytes());
             String requestBody = "grant_type=client_credentials";
@@ -197,12 +197,12 @@ public class AmadeusService {
                 logger.info("Successfully refreshed Amadeus access token");
             } else {
                 logger.error("Failed to get Amadeus access token: {} - {}", response.statusCode(), response.body());
-                throw new SeatmapException("Failed to authenticate with Amadeus API");
+                throw new SeatmapApiException("Failed to authenticate with Amadeus API");
             }
             
         } catch (IOException | InterruptedException e) {
             logger.error("Error refreshing Amadeus access token", e);
-            throw new SeatmapException("Network error during authentication", e);
+            throw new SeatmapApiException("Network error during authentication", e);
         }
     }
 }

@@ -65,4 +65,8 @@ public class SeatmapException extends Exception {
     public static SeatmapException externalApiError(String message) {
         return new SeatmapException("EXTERNAL_API_ERROR", message, 502);
     }
+
+    public static SeatmapException serviceUnavailable(String message) {
+        return new SeatmapException("SERVICE_UNAVAILABLE", message, 503);
+    }
 }

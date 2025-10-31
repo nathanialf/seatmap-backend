@@ -128,14 +128,20 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         
         // Get user for tier information
         User user = authService.validateToken(extractTokenFromEvent(event));
-        int remainingBookmarks = usageLimitsService.getRemainingBookmarks(user);
         
-        return createSuccessResponse(Map.of(
-            "bookmarks", activeBookmarks,
-            "total", activeBookmarks.size(),
-            "tier", user.getAccountTier(),
-            "remainingThisMonth", remainingBookmarks
-        ));
+        try {
+            int remainingBookmarks = usageLimitsService.getRemainingBookmarks(user);
+            
+            return createSuccessResponse(Map.of(
+                "bookmarks", activeBookmarks,
+                "total", activeBookmarks.size(),
+                "tier", user.getAccountTier(),
+                "remainingThisMonth", remainingBookmarks
+            ));
+        } catch (SeatmapException e) {
+            logger.error("Error getting remaining bookmarks for user: {}", user.getUserId(), e);
+            return createErrorResponse(e.getHttpStatus(), e.getMessage());
+        }
     }
     
     private APIGatewayProxyResponseEvent handleCreateBookmark(APIGatewayProxyRequestEvent event) throws SeatmapException {

@@ -234,6 +234,26 @@ Unexpected server-side errors or external service failures.
 
 ---
 
+### 503 Service Unavailable
+Temporary service unavailability due to system maintenance or configuration issues.
+
+**Common Causes**:
+- System configuration temporarily unavailable
+- Scheduled maintenance periods
+- Tier definition service temporarily unavailable
+
+**Example Response**:
+```json
+{
+  "success": false,
+  "message": "Tier definitions are currently unavailable. Please try again later."
+}
+```
+
+**Recommended Action**: Retry the request after a short delay. If the issue persists, the service may be under maintenance.
+
+---
+
 ## Field Validation Errors
 
 ### Flight Search Validation
@@ -275,6 +295,7 @@ Unexpected server-side errors or external service failures.
 - **401 Errors**: Do not retry, fix authentication
 - **429 Errors**: Implement exponential backoff
 - **500 Errors**: Retry with backoff, but limit attempts
+- **503 Errors**: Retry with backoff, service may be temporarily unavailable
 - **Network Errors**: Retry with reasonable timeouts
 
 ### Example Error Handling (JavaScript)
@@ -295,6 +316,10 @@ async function handleApiResponse(response) {
       case 500:
         // Show generic error message
         showError("Service temporarily unavailable");
+        break;
+      case 503:
+        // Service unavailable, suggest retry
+        showError("Service temporarily unavailable. Please try again in a moment.");
         break;
       default:
         // Show specific error message

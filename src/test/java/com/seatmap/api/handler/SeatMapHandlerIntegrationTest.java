@@ -5,13 +5,17 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.seatmap.api.exception.SeatmapException;
+import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.api.service.AmadeusService;
 import com.seatmap.api.service.SabreService;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
+import com.seatmap.auth.service.AuthService;
 import com.seatmap.auth.service.JwtService;
+import com.seatmap.auth.service.UserUsageLimitsService;
 import com.seatmap.common.model.Bookmark;
+import com.seatmap.common.model.User;
+import com.seatmap.common.model.User.AccountTier;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -60,6 +64,12 @@ class SeatMapHandlerIntegrationTest {
     private BookmarkRepository mockBookmarkRepository;
     
     @Mock
+    private AuthService mockAuthService;
+    
+    @Mock
+    private UserUsageLimitsService mockUserUsageLimitsService;
+    
+    @Mock
     private Context mockContext;
     
     @Mock
@@ -79,15 +89,26 @@ class SeatMapHandlerIntegrationTest {
             injectMock("jwtService", mockJwtService);
             injectMock("guestAccessRepository", mockGuestAccessRepository);
             injectMock("bookmarkRepository", mockBookmarkRepository);
+            injectMock("authService", mockAuthService);
+            injectMock("userUsageLimitsService", mockUserUsageLimitsService);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }
+        
     }
     
     private void injectMock(String fieldName, Object mock) throws Exception {
         var field = SeatMapHandler.class.getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(handler, mock);
+    }
+    
+    private User createTestUser(String userId, AccountTier tier) {
+        User user = new User();
+        user.setUserId(userId);
+        user.setAccountTier(tier);
+        user.setEmail("test@example.com");
+        return user;
     }
 
     // ========== IP EXTRACTION COMPREHENSIVE TESTS ==========
@@ -356,16 +377,20 @@ class SeatMapHandlerIntegrationTest {
         
         setupValidUserToken();
         
-        // Mock Sabre service to throw error
+        // Mock Sabre service to throw error (using correct exception type)
         when(mockSabreService.getSeatMapFromFlight(anyString(), anyString(), anyString(), anyString(), anyString()))
-            .thenThrow(new SeatmapException("Sabre API unavailable"));
+            .thenThrow(new com.seatmap.api.exception.SeatmapApiException("Sabre API unavailable"));
+            
+        // Mock Amadeus service to also fail (since Sabre failure triggers Amadeus fallback)
+        when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
+            .thenThrow(new com.seatmap.api.exception.SeatmapApiException("Amadeus API also unavailable"));
         
         // When
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         // Then
         assertEquals(500, response.getStatusCode());
-        assertTrue(response.getBody().contains("Sabre API unavailable"));
+        assertTrue(response.getBody().contains("Amadeus API also unavailable")); // Final error message comes from Amadeus fallback
     }
 
     // ========== GUEST ACCESS RECORDING TESTS ==========
@@ -507,7 +532,7 @@ class SeatMapHandlerIntegrationTest {
         
         // Then
         assertEquals(401, response.getStatusCode());
-        assertTrue(response.getBody().contains("Error validating token"));
+        assertTrue(response.getBody().contains("Error validating access limits"));
     }
     
     @Test
@@ -586,6 +611,11 @@ class SeatMapHandlerIntegrationTest {
     private void setupValidUserToken() throws Exception {
         when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
+        
+        // Mock user authentication and tier limits
+        User testUser = createTestUser("test-user-id", AccountTier.PRO);
+        when(mockAuthService.validateToken("user-token")).thenReturn(testUser);
+        when(mockUserUsageLimitsService.canMakeSeatmapRequest(testUser)).thenReturn(true);
     }
     
     private void setupValidGuestToken() throws Exception {
@@ -605,7 +635,7 @@ class SeatMapHandlerIntegrationTest {
     void getSeatMapByBookmark_ValidBookmark_ReturnsSeatMap() throws Exception {
         // Given
         String bookmarkId = "bookmark-123";
-        String userId = "user-456";
+        String userId = "test-user-id";
         String flightOfferData = createAmadeusFlightOfferData();
         
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
@@ -616,10 +646,10 @@ class SeatMapHandlerIntegrationTest {
         Bookmark bookmark = createTestBookmark(userId, bookmarkId, flightOfferData);
         
         // Setup mocks
-        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
-        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
-        when(mockClaims.getSubject()).thenReturn(userId);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+        setupValidUserToken();
+        when(mockClaims.getSubject()).thenReturn("test-user-id"); // Needed for bookmark handling
+        doNothing().when(mockUserUsageLimitsService).recordSeatmapRequest(any(User.class)); // For successful seat map calls
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId("test-user-id", bookmarkId))
                 .thenReturn(Optional.of(bookmark));
         setupValidAmadeusResponse();
         
@@ -629,7 +659,7 @@ class SeatMapHandlerIntegrationTest {
         // Then
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("\"success\":true"));
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId("test-user-id", bookmarkId);
         verify(mockAmadeusService).getSeatMapFromOfferData(flightOfferData);
     }
     
@@ -638,7 +668,7 @@ class SeatMapHandlerIntegrationTest {
     void getSeatMapByBookmark_BookmarkNotFound_Returns404() throws Exception {
         // Given
         String bookmarkId = "nonexistent-bookmark";
-        String userId = "user-456";
+        String userId = "test-user-id";
         
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
         request.setHttpMethod("GET");
@@ -646,10 +676,9 @@ class SeatMapHandlerIntegrationTest {
         request.setHeaders(Map.of("Authorization", "Bearer user-token"));
         
         // Setup mocks
-        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
-        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
-        when(mockClaims.getSubject()).thenReturn(userId);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+        setupValidUserToken();
+        when(mockClaims.getSubject()).thenReturn("test-user-id"); // Needed for bookmark handling
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId("test-user-id", bookmarkId))
                 .thenReturn(Optional.empty());
         
         // When
@@ -658,7 +687,7 @@ class SeatMapHandlerIntegrationTest {
         // Then
         assertEquals(404, response.getStatusCode());
         assertTrue(response.getBody().contains("Bookmark not found"));
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId("test-user-id", bookmarkId);
     }
     
     @Test
@@ -666,7 +695,7 @@ class SeatMapHandlerIntegrationTest {
     void getSeatMapByBookmark_ExpiredBookmark_Returns410() throws Exception {
         // Given
         String bookmarkId = "expired-bookmark";
-        String userId = "user-456";
+        String userId = "test-user-id";
         String flightOfferData = createAmadeusFlightOfferData();
         
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
@@ -678,10 +707,9 @@ class SeatMapHandlerIntegrationTest {
         expiredBookmark.setExpiresAt(Instant.now().minusSeconds(3600)); // Expired 1 hour ago
         
         // Setup mocks
-        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
-        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
-        when(mockClaims.getSubject()).thenReturn(userId);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+        setupValidUserToken();
+        when(mockClaims.getSubject()).thenReturn("test-user-id"); // Needed for bookmark handling
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId("test-user-id", bookmarkId))
                 .thenReturn(Optional.of(expiredBookmark));
         
         // When
@@ -690,7 +718,7 @@ class SeatMapHandlerIntegrationTest {
         // Then
         assertEquals(410, response.getStatusCode());
         assertTrue(response.getBody().contains("Bookmark has expired"));
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId("test-user-id", bookmarkId);
     }
     
     @Test
@@ -742,7 +770,7 @@ class SeatMapHandlerIntegrationTest {
     void getSeatMapByBookmark_SabreFlightOffer_CallsSabreService() throws Exception {
         // Given
         String bookmarkId = "sabre-bookmark";
-        String userId = "user-456";
+        String userId = "test-user-id";
         String sabreFlightOfferData = createSabreFlightOfferData();
         
         APIGatewayProxyRequestEvent request = new APIGatewayProxyRequestEvent();
@@ -753,10 +781,10 @@ class SeatMapHandlerIntegrationTest {
         Bookmark bookmark = createTestBookmark(userId, bookmarkId, sabreFlightOfferData);
         
         // Setup mocks
-        when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
-        when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
-        when(mockClaims.getSubject()).thenReturn(userId);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId))
+        setupValidUserToken();
+        when(mockClaims.getSubject()).thenReturn("test-user-id"); // Needed for bookmark handling
+        doNothing().when(mockUserUsageLimitsService).recordSeatmapRequest(any(User.class)); // For successful seat map calls
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId("test-user-id", bookmarkId))
                 .thenReturn(Optional.of(bookmark));
         
         JsonNode mockSabreResponse = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\",\"source\":\"sabre\"}]}");
@@ -769,7 +797,7 @@ class SeatMapHandlerIntegrationTest {
         // Then
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("\"success\":true"));
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(userId, bookmarkId);
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId("test-user-id", bookmarkId);
         verify(mockSabreService).getSeatMapFromFlight("AA", "123", "2024-12-01", "LAX", "JFK");
     }
     

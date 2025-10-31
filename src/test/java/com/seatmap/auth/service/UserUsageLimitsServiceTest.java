@@ -78,7 +78,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canCreateBookmark_FreeUser_WithinLimit_ShouldReturnFalse() {
+    void canCreateBookmark_FreeUser_WithinLimit_ShouldReturnFalse() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -94,7 +94,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canCreateBookmark_ProUser_WithinLimit_ShouldReturnTrue() {
+    void canCreateBookmark_ProUser_WithinLimit_ShouldReturnTrue() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -110,7 +110,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canCreateBookmark_ProUser_ExceedsLimit_ShouldReturnFalse() {
+    void canCreateBookmark_ProUser_ExceedsLimit_ShouldReturnFalse() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -126,7 +126,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canCreateBookmark_BusinessUser_ShouldReturnTrue() {
+    void canCreateBookmark_BusinessUser_ShouldReturnTrue() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -142,7 +142,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canCreateBookmark_ExceptionThrown_ShouldReturnFalse() {
+    void canCreateBookmark_ExceptionThrown_ShouldReturnFalse() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -158,7 +158,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canMakeSeatmapRequest_FreeUser_WithinLimit_ShouldReturnTrue() {
+    void canMakeSeatmapRequest_FreeUser_WithinLimit_ShouldReturnTrue() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -174,7 +174,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canMakeSeatmapRequest_ProUser_WithinLimit_ShouldReturnTrue() {
+    void canMakeSeatmapRequest_ProUser_WithinLimit_ShouldReturnTrue() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -190,7 +190,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void canMakeSeatmapRequest_BusinessUser_ShouldReturnTrue() {
+    void canMakeSeatmapRequest_BusinessUser_ShouldReturnTrue() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -292,7 +292,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void getRemainingBookmarks_ProUser_ShouldReturnCorrectCount() {
+    void getRemainingBookmarks_ProUser_ShouldReturnCorrectCount() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -308,7 +308,7 @@ class UserUsageLimitsServiceTest {
     }
     
     @Test
-    void getRemainingBookmarks_BusinessUser_ShouldReturnMaxValue() {
+    void getRemainingBookmarks_BusinessUser_ShouldReturnMaxValue() throws SeatmapException {
         // Arrange
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
@@ -381,13 +381,12 @@ class UserUsageLimitsServiceTest {
         // Act - Service should initialize but deny all requests
         UserUsageLimitsService failingService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 0)).thenReturn(false);
         
-        boolean result = failingService.canCreateBookmark(proUser);
-        
-        // Assert - Should deny all requests (limit = 0)
-        assertFalse(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 0); // Should get 0 limit (deny all)
+        // Assert - Should throw exception due to tier definitions not loading
+        // The service fails at getTierDefinition() before reaching repository calls
+        assertThrows(SeatmapException.class, () -> {
+            failingService.canCreateBookmark(proUser);
+        });
     }
     
     @Test
@@ -399,12 +398,11 @@ class UserUsageLimitsServiceTest {
         // Act - Service should initialize but deny all requests when no tier definitions found
         UserUsageLimitsService emptyService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User businessUser = createTestUser(AccountTier.BUSINESS);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 0)).thenReturn(false);
         
-        boolean result = emptyService.canCreateBookmark(businessUser);
-        
-        // Assert - Should deny all requests even for BUSINESS tier
-        assertFalse(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 0); // Should get 0 limit (deny all)
+        // Assert - Should throw exception due to empty tier definitions
+        // The service fails at getTierDefinition() before reaching repository calls
+        assertThrows(SeatmapException.class, () -> {
+            emptyService.canCreateBookmark(businessUser);
+        });
     }
 }

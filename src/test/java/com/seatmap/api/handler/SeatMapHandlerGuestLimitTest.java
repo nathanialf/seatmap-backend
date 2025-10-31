@@ -7,7 +7,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatmap.api.service.AmadeusService;
 import com.seatmap.auth.repository.GuestAccessRepository;
+import com.seatmap.auth.service.AuthService;
 import com.seatmap.auth.service.JwtService;
+import com.seatmap.auth.service.UserUsageLimitsService;
+import com.seatmap.common.model.User;
+import com.seatmap.common.model.User.AccountTier;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +41,12 @@ class SeatMapHandlerGuestLimitTest {
     private GuestAccessRepository mockGuestAccessRepository;
     
     @Mock
+    private AuthService mockAuthService;
+    
+    @Mock
+    private UserUsageLimitsService mockUserUsageLimitsService;
+    
+    @Mock
     private Context mockContext;
     
     @Mock
@@ -57,20 +67,29 @@ class SeatMapHandlerGuestLimitTest {
         
         // Use reflection to inject mocks
         try {
-            var amadeusField = SeatMapHandler.class.getDeclaredField("amadeusService");
-            amadeusField.setAccessible(true);
-            amadeusField.set(handler, mockAmadeusService);
-            
-            var jwtField = SeatMapHandler.class.getDeclaredField("jwtService");
-            jwtField.setAccessible(true);
-            jwtField.set(handler, mockJwtService);
-            
-            var guestAccessField = SeatMapHandler.class.getDeclaredField("guestAccessRepository");
-            guestAccessField.setAccessible(true);
-            guestAccessField.set(handler, mockGuestAccessRepository);
+            injectMock("amadeusService", mockAmadeusService);
+            injectMock("jwtService", mockJwtService);
+            injectMock("guestAccessRepository", mockGuestAccessRepository);
+            injectMock("authService", mockAuthService);
+            injectMock("userUsageLimitsService", mockUserUsageLimitsService);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }
+        
+    }
+    
+    private void injectMock(String fieldName, Object mock) throws Exception {
+        var field = SeatMapHandler.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(handler, mock);
+    }
+    
+    private User createTestUser(String userId, AccountTier tier) {
+        User user = new User();
+        user.setUserId(userId);
+        user.setAccountTier(tier);
+        user.setEmail("test@example.com");
+        return user;
     }
     
     @Test
@@ -232,6 +251,11 @@ class SeatMapHandlerGuestLimitTest {
         when(mockJwtService.validateToken("user-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("user-token")).thenReturn(false);
         
+        // Mock user authentication and tier limits
+        User testUser = createTestUser("test-user-id", AccountTier.PRO);
+        when(mockAuthService.validateToken("user-token")).thenReturn(testUser);
+        when(mockUserUsageLimitsService.canMakeSeatmapRequest(testUser)).thenReturn(true);
+        
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
         when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
@@ -263,7 +287,7 @@ class SeatMapHandlerGuestLimitTest {
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(401, response.getStatusCode());
-        assertTrue(response.getBody().contains("Error validating token"));
+        assertTrue(response.getBody().contains("Error validating access limits"));
         
         verifyNoInteractions(mockAmadeusService);
         verify(mockGuestAccessRepository, never()).recordSeatmapRequest(anyString());

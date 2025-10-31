@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.seatmap.api.exception.SeatmapException;
+import com.seatmap.api.exception.SeatmapApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +58,7 @@ public class SabreService {
         }
     }
     
-    public JsonNode searchFlightSchedules(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
+    public JsonNode searchFlightSchedules(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
         try {
             ensureValidSession();
             
@@ -69,11 +69,11 @@ public class SabreService {
             
         } catch (Exception e) {
             logger.error("Error calling Sabre Flight Schedules API", e);
-            throw new SeatmapException("Network error calling Sabre API", e);
+            throw new SeatmapApiException("Network error calling Sabre API", e);
         }
     }
     
-    public JsonNode getSeatMapFromFlight(String carrierCode, String flightNumber, String departureDate, String origin, String destination) throws SeatmapException {
+    public JsonNode getSeatMapFromFlight(String carrierCode, String flightNumber, String departureDate, String origin, String destination) throws SeatmapApiException {
         try {
             ensureValidSession();
             
@@ -84,17 +84,17 @@ public class SabreService {
             
         } catch (Exception e) {
             logger.error("Error calling Sabre Seat Map API", e);
-            throw new SeatmapException("Network error calling Sabre Seat Map API", e);
+            throw new SeatmapApiException("Network error calling Sabre Seat Map API", e);
         }
     }
     
-    private void ensureValidSession() throws SeatmapException {
+    private void ensureValidSession() throws SeatmapApiException {
         if (sessionToken == null || System.currentTimeMillis() >= tokenExpiresAt) {
             authenticateSession();
         }
     }
     
-    private void authenticateSession() throws SeatmapException {
+    private void authenticateSession() throws SeatmapApiException {
         try {
             SOAPMessage authRequest = createAuthenticationRequest();
             SOAPMessage authResponse = sendSoapRequest(authRequest);
@@ -105,7 +105,7 @@ public class SabreService {
             
         } catch (Exception e) {
             logger.error("Failed to authenticate with Sabre API", e);
-            throw new SeatmapException("Authentication failed with Sabre API", e);
+            throw new SeatmapApiException("Authentication failed with Sabre API", e);
         }
     }
     
@@ -235,12 +235,12 @@ public class SabreService {
         }
     }
     
-    private void parseAuthenticationResponse(SOAPMessage response) throws SOAPException, SeatmapException {
+    private void parseAuthenticationResponse(SOAPMessage response) throws SOAPException, SeatmapApiException {
         SOAPBody body = response.getSOAPBody();
         
         if (body.hasFault()) {
             SOAPFault fault = body.getFault();
-            throw new SeatmapException("Sabre authentication failed: " + fault.getFaultString());
+            throw new SeatmapApiException("Sabre authentication failed: " + fault.getFaultString());
         }
         
         // Extract session token from response
@@ -257,16 +257,16 @@ public class SabreService {
         }
         
         if (sessionToken == null) {
-            throw new SeatmapException("Failed to extract session token from Sabre authentication response");
+            throw new SeatmapApiException("Failed to extract session token from Sabre authentication response");
         }
     }
     
-    private JsonNode parseFlightSchedulesResponse(SOAPMessage response) throws SOAPException, SeatmapException {
+    private JsonNode parseFlightSchedulesResponse(SOAPMessage response) throws SOAPException, SeatmapApiException {
         SOAPBody body = response.getSOAPBody();
         
         if (body.hasFault()) {
             SOAPFault fault = body.getFault();
-            throw new SeatmapException("Sabre flight schedules error: " + fault.getFaultString());
+            throw new SeatmapApiException("Sabre flight schedules error: " + fault.getFaultString());
         }
         
         // Convert SOAP response to JSON format compatible with our existing structure
@@ -293,12 +293,12 @@ public class SabreService {
         return result;
     }
     
-    private JsonNode parseSeatMapResponse(SOAPMessage response) throws SOAPException, SeatmapException {
+    private JsonNode parseSeatMapResponse(SOAPMessage response) throws SOAPException, SeatmapApiException {
         SOAPBody body = response.getSOAPBody();
         
         if (body.hasFault()) {
             SOAPFault fault = body.getFault();
-            throw new SeatmapException("Sabre seat map error: " + fault.getFaultString());
+            throw new SeatmapApiException("Sabre seat map error: " + fault.getFaultString());
         }
         
         // Convert SOAP response to JSON format compatible with Amadeus structure

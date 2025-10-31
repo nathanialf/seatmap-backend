@@ -5,9 +5,13 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.seatmap.api.exception.SeatmapException;
+import com.seatmap.api.exception.SeatmapApiException;
 import com.seatmap.api.service.AmadeusService;
+import com.seatmap.auth.service.AuthService;
 import com.seatmap.auth.service.JwtService;
+import com.seatmap.auth.service.UserUsageLimitsService;
+import com.seatmap.common.model.User;
+import com.seatmap.common.model.User.AccountTier;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +38,12 @@ class SeatMapHandlerTest {
     private JwtService mockJwtService;
     
     @Mock
+    private AuthService mockAuthService;
+    
+    @Mock
+    private UserUsageLimitsService mockUserUsageLimitsService;
+    
+    @Mock
     private Context mockContext;
     
     @Mock
@@ -48,16 +58,28 @@ class SeatMapHandlerTest {
         
         // Use reflection to inject mocks
         try {
-            var amadeusField = SeatMapHandler.class.getDeclaredField("amadeusService");
-            amadeusField.setAccessible(true);
-            amadeusField.set(handler, mockAmadeusService);
-            
-            var jwtField = SeatMapHandler.class.getDeclaredField("jwtService");
-            jwtField.setAccessible(true);
-            jwtField.set(handler, mockJwtService);
+            injectMock("amadeusService", mockAmadeusService);
+            injectMock("jwtService", mockJwtService);
+            injectMock("authService", mockAuthService);
+            injectMock("userUsageLimitsService", mockUserUsageLimitsService);
         } catch (Exception e) {
             throw new RuntimeException("Failed to inject mocks", e);
         }
+        
+    }
+    
+    private void injectMock(String fieldName, Object mock) throws Exception {
+        var field = SeatMapHandler.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(handler, mock);
+    }
+    
+    private User createTestUser(String userId, AccountTier tier) {
+        User user = new User();
+        user.setUserId(userId);
+        user.setAccountTier(tier);
+        user.setEmail("test@example.com");
+        return user;
     }
     
     @Test
@@ -71,6 +93,11 @@ class SeatMapHandlerTest {
         // Mock JWT validation
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
+        
+        // Mock user authentication and tier limits
+        User testUser = createTestUser("test-user-id", AccountTier.PRO);
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockUserUsageLimitsService.canMakeSeatmapRequest(testUser)).thenReturn(true);
         
         // Mock Amadeus response
         JsonNode mockSeatMapData = objectMapper.readTree("{\"data\":[{\"seat\":\"1A\"}]}");
@@ -133,6 +160,11 @@ class SeatMapHandlerTest {
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
         
+        // Mock user authentication and tier limits
+        User testUser = createTestUser("test-user-id", AccountTier.PRO);
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockUserUsageLimitsService.canMakeSeatmapRequest(testUser)).thenReturn(true);
+        
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(400, response.getStatusCode());
@@ -147,6 +179,11 @@ class SeatMapHandlerTest {
         
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
+        
+        // Mock user authentication and tier limits
+        User testUser = createTestUser("test-user-id", AccountTier.PRO);
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockUserUsageLimitsService.canMakeSeatmapRequest(testUser)).thenReturn(true);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
@@ -163,8 +200,14 @@ class SeatMapHandlerTest {
         
         when(mockJwtService.validateToken("valid-token")).thenReturn(mockClaims);
         when(mockJwtService.isGuestToken("valid-token")).thenReturn(false);
+        
+        // Mock user authentication and tier limits
+        User testUser = createTestUser("test-user-id", AccountTier.PRO);
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockUserUsageLimitsService.canMakeSeatmapRequest(testUser)).thenReturn(true);
+        
         when(mockAmadeusService.getSeatMapFromOfferData(anyString()))
-            .thenThrow(new SeatmapException("Amadeus API error"));
+            .thenThrow(new SeatmapApiException("Amadeus API error"));
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
