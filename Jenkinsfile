@@ -151,11 +151,21 @@ pipeline {
                     echo "Building and testing application for ${params.ENVIRONMENT}..."
                     
                     # Run tests and build
-                    gradle clean test
+                    gradle clean test jacocoTestReport
                     gradle buildLambda
                     
                     # JAR will be referenced directly from build/libs by terraform
                 """
+            }
+            post {
+                always {
+                    // Publish JUnit test results
+                    publishTestResults testResultsPattern: 'build/test-results/test/*.xml'
+                    
+                    // Publish test coverage reports
+                    publishCoverage adapters: [jacocoAdapter('build/reports/jacoco/test/jacocoTestReport.xml')], 
+                                  sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+                }
             }
         }
         
