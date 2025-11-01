@@ -44,13 +44,6 @@ class AmadeusServiceTest {
         }
     }
     
-    @Test
-    void constructor_WithMissingEnvironmentVariables_ThrowsException() {
-        // This test can't easily mock missing env vars in newer Mockito
-        // Environment variables are controlled by build.gradle test configuration
-        // Skip this test as it requires system-level env manipulation
-        org.junit.jupiter.api.Assumptions.assumeTrue(false, "Skipped - requires env var manipulation not supported in current Mockito");
-    }
     
     @Test
     void getSeatMap_WithValidParameters_ReturnsJsonNode() throws Exception {

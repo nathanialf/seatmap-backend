@@ -96,9 +96,12 @@ class JwtServiceTest {
     
     @Test
     @DisplayName("Should refresh token successfully")
-    void shouldRefreshTokenSuccessfully() throws SeatmapException {
+    void shouldRefreshTokenSuccessfully() throws SeatmapException, InterruptedException {
         User user = createTestUser();
         String originalToken = jwtService.generateToken(user);
+        
+        // Add a small delay to ensure different timestamps
+        Thread.sleep(1000);
         
         String refreshedToken = jwtService.refreshToken(originalToken);
         
@@ -117,8 +120,11 @@ class JwtServiceTest {
     
     @Test
     @DisplayName("Should refresh guest token successfully")
-    void shouldRefreshGuestTokenSuccessfully() throws SeatmapException {
+    void shouldRefreshGuestTokenSuccessfully() throws SeatmapException, InterruptedException {
         String originalToken = jwtService.generateGuestToken("guest_123", 1);
+        
+        // Add a small delay to ensure different timestamps
+        Thread.sleep(1000);
         
         String refreshedToken = jwtService.refreshToken(originalToken);
         
