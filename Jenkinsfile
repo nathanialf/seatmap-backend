@@ -162,15 +162,8 @@ pipeline {
                     // Publish JUnit test results
                     junit 'build/test-results/test/*.xml'
                     
-                    // Publish test coverage HTML report
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'build/reports/jacoco/test/html',
-                        reportFiles: 'index.html',
-                        reportName: 'Coverage Report'
-                    ])
+                    // Archive coverage reports as build artifacts
+                    archiveArtifacts artifacts: 'build/reports/jacoco/test/**/*', allowEmptyArchive: true
                 }
             }
         }
