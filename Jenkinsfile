@@ -160,11 +160,17 @@ pipeline {
             post {
                 always {
                     // Publish JUnit test results
-                    publishTestResults testResultsPattern: 'build/test-results/test/*.xml'
+                    junit 'build/test-results/test/*.xml'
                     
-                    // Publish test coverage reports
-                    publishCoverage adapters: [jacocoAdapter('build/reports/jacoco/test/jacocoTestReport.xml')], 
-                                  sourceFileResolver: sourceFiles('STORE_LAST_BUILD')
+                    // Publish test coverage HTML report
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'build/reports/jacoco/test/html',
+                        reportFiles: 'index.html',
+                        reportName: 'Coverage Report'
+                    ])
                 }
             }
         }
