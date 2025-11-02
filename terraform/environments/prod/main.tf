@@ -217,11 +217,23 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.bookmarks.arn,
           "${aws_dynamodb_table.bookmarks.arn}/index/*",
           aws_dynamodb_table.account_tiers.arn,
-          "${aws_dynamodb_table.account_tiers.arn}/index/*"
+          "${aws_dynamodb_table.account_tiers.arn}/index/*",
+          aws_dynamodb_table.user_usage.arn,
+          "${aws_dynamodb_table.user_usage.arn}/index/*"
         ]
       }
     ]
   })
+}
+
+# SES Email Identity for sender
+resource "aws_ses_email_identity" "sender" {
+  email = "myseatmapapp@gmail.com"
+}
+
+# SES Email Identity for testing recipient (needed in sandbox mode)
+resource "aws_ses_email_identity" "test_recipient" {
+  email = "nathanial@defnf.com"
 }
 
 # DynamoDB Tables with higher capacity for production
@@ -457,6 +469,37 @@ resource "aws_dynamodb_table" "account_tiers" {
   })
 }
 
+# User Usage Table - Monthly usage tracking for tier-based limits
+resource "aws_dynamodb_table" "user_usage" {
+  name           = "${local.project_name}-user-usage-${local.environment}"
+  billing_mode   = "PROVISIONED"
+  hash_key       = "userId"
+  range_key      = "monthYear"
+  read_capacity  = 10
+  write_capacity = 10
+
+  attribute {
+    name = "userId"
+    type = "S"
+  }
+
+  attribute {
+    name = "monthYear"
+    type = "S"
+  }
+
+  # TTL configuration for automatic cleanup after 13 months
+  ttl {
+    attribute_name = "expiresAt"
+    enabled        = true
+  }
+
+  tags = merge(local.common_tags, {
+    Name        = "User Usage Table"
+    Description = "Store monthly usage tracking for tier-based limits with TTL"
+  })
+}
+
 # API Gateway
 resource "aws_api_gateway_rest_api" "seatmap_api" {
   name        = "seatmap-api-${local.environment}"
@@ -594,6 +637,20 @@ resource "aws_api_gateway_resource" "auth_register" {
   path_part   = "register"
 }
 
+# Auth Verify Resource
+resource "aws_api_gateway_resource" "auth_verify" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "verify"
+}
+
+# Auth Resend Verification Resource
+resource "aws_api_gateway_resource" "auth_resend_verification" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.auth.id
+  path_part   = "resend-verification"
+}
+
 # Auth Profile Resource
 resource "aws_api_gateway_resource" "auth_profile" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
@@ -623,6 +680,24 @@ resource "aws_api_gateway_method" "auth_login_post" {
 resource "aws_api_gateway_method" "auth_register_post" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
   resource_id   = aws_api_gateway_resource.auth_register.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Auth Verify Method (GET)
+resource "aws_api_gateway_method" "auth_verify_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_verify.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = false  # No API key needed for email verification links
+}
+
+# Auth Resend Verification Method (POST)
+resource "aws_api_gateway_method" "auth_resend_verification_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.auth_resend_verification.id
   http_method   = "POST"
   authorization = "NONE"
   api_key_required = true
@@ -673,6 +748,28 @@ resource "aws_api_gateway_integration" "auth_register_integration" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
   resource_id = aws_api_gateway_resource.auth_register.id
   http_method = aws_api_gateway_method.auth_register_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Verify Integration
+resource "aws_api_gateway_integration" "auth_verify_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_verify.id
+  http_method = aws_api_gateway_method.auth_verify_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.auth.invoke_arn
+}
+
+# Auth Resend Verification Integration
+resource "aws_api_gateway_integration" "auth_resend_verification_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.auth_resend_verification.id
+  http_method = aws_api_gateway_method.auth_resend_verification_post.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
@@ -855,6 +952,10 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_integration.auth_guest_integration,
     aws_api_gateway_integration.auth_login_integration,
     aws_api_gateway_integration.auth_register_integration,
+    aws_api_gateway_integration.auth_verify_integration,
+    aws_api_gateway_integration.auth_resend_verification_integration,
+    aws_api_gateway_integration.auth_profile_get_integration,
+    aws_api_gateway_integration.auth_profile_put_integration,
     aws_api_gateway_integration.flight_offers_integration,
     aws_api_gateway_integration.bookmarks_get_integration,
     aws_api_gateway_integration.bookmarks_post_integration,
@@ -874,15 +975,21 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_resource.auth_guest.id,
       aws_api_gateway_resource.auth_login.id,
       aws_api_gateway_resource.auth_register.id,
+      aws_api_gateway_resource.auth_verify.id,
+      aws_api_gateway_resource.auth_resend_verification.id,
       aws_api_gateway_resource.auth_profile.id,
       aws_api_gateway_method.auth_guest_post.id,
       aws_api_gateway_method.auth_login_post.id,
       aws_api_gateway_method.auth_register_post.id,
+      aws_api_gateway_method.auth_verify_get.id,
+      aws_api_gateway_method.auth_resend_verification_post.id,
       aws_api_gateway_method.auth_profile_get.id,
       aws_api_gateway_method.auth_profile_put.id,
       aws_api_gateway_integration.auth_guest_integration.id,
       aws_api_gateway_integration.auth_login_integration.id,
       aws_api_gateway_integration.auth_register_integration.id,
+      aws_api_gateway_integration.auth_verify_integration.id,
+      aws_api_gateway_integration.auth_resend_verification_integration.id,
       aws_api_gateway_integration.auth_profile_get_integration.id,
       aws_api_gateway_integration.auth_profile_put_integration.id,
       aws_api_gateway_resource.flight_offers.id,

@@ -39,3 +39,6 @@ scripts/setup-tiers.sh
 # Logs
 logs/
 *.log
+
+# Private documentation and API resources
+docs-private/

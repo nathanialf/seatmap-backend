@@ -41,7 +41,7 @@ variable "sabre_password" {
 }
 
 variable "sabre_endpoint" {
-  description = "Sabre API endpoint"
+  description = "Sabre SOAP API endpoint"
   type        = string
   default     = "https://webservices.platform.sabre.com"
 }
