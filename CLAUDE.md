@@ -37,7 +37,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew buildLambda
 ```
 
-**Important**: Terraform expects the JAR file to be named `SEATMAP-Backend-1.0.0.jar` in `build/libs/`. For local Terraform testing, you may need to rename the generated JAR to match this expected filename.
+**Important**: Terraform expects the JAR file to be named `SEATMAP-Backend-1.0.0.jar` in `build/libs/`. 
+
+**For Terraform validation/testing:**
+- **Configuration-only changes**: Create dummy JAR with `mkdir -p build/libs && touch build/libs/SEATMAP-Backend-1.0.0.jar` to validate syntax
+- **Full deployment testing**: Build actual JAR first with `./gradlew buildLambda`, then run `terraform plan`
+- **Local testing**: You may need to rename the generated JAR to match the expected filename
 
 ### API Testing with curl
 **SECURITY & CONSISTENCY REQUIREMENT**: All API endpoints, credentials, and request bodies must be stored in temporary files and read from those files. This prevents credential exposure and ensures consistency against hallucinations.
@@ -110,9 +115,13 @@ rm -f /tmp/api_endpoint /tmp/jwt_token /tmp/request_body.json
 
 **Examples:**
 ```bash
-# AWS CLI commands
-aws s3 ls --profile seatmap-dev
-aws s3 ls --profile seatmap-prod
+# AWS CLI commands (MUST include --region for all operations)
+aws s3 ls --profile seatmap-dev --region us-west-1
+aws s3 ls --profile seatmap-prod --region us-west-1
+
+# CloudWatch logs access
+aws logs describe-log-groups --profile seatmap-dev --region us-west-1
+aws logs get-log-events --log-group-name "/aws/lambda/seatmap-flight-offers-dev" --profile seatmap-dev --region us-west-1
 
 # Terraform commands (use environment variables)
 export AWS_PROFILE=seatmap-dev
@@ -121,6 +130,8 @@ terraform plan
 export AWS_PROFILE=seatmap-prod
 terraform plan
 ```
+
+**IMPORTANT**: All AWS CLI commands MUST include `--region us-west-1` parameter. The AWS CLI will fail without explicit region specification.
 
 ### Deployment - JENKINS ONLY
 **CRITICAL**: All infrastructure changes must be done through Jenkins pipeline. Never apply Terraform directly via CLI.

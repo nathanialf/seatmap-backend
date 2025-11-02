@@ -29,7 +29,7 @@ variable "jwt_secret" {
 }
 
 variable "sabre_user_id" {
-  description = "Sabre API user ID for SOAP integration"
+  description = "Sabre API user ID for SOAP integration (format: V1:username:DEVCENTER:EXT - username portion will be extracted)"
   type        = string
   sensitive   = true
 }

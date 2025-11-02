@@ -282,6 +282,46 @@ When users exceed their tier limits, they receive descriptive error messages sug
 
 ---
 
+## Shell Escaping Troubleshooting
+
+When using cURL with passwords containing special characters, shell escaping can cause authentication failures.
+
+### Common Issues
+- **Exclamation marks** (`!`) get escaped by the shell
+- **Dollar signs** (`$`) trigger variable expansion
+- **Quotes** within JSON strings cause parsing errors
+
+### Solution: Use Heredoc Syntax
+To avoid shell escaping issues, use heredoc syntax for request bodies:
+
+```bash
+curl -X POST {BASE_URL}/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -d @- << 'EOF'
+{
+  "email": "user@example.com", 
+  "password": "SecurePass123!"
+}
+EOF
+```
+
+### Alternative: Store in Temporary Files
+```bash
+# Store request in temp file to avoid escaping
+echo '{"email": "user@example.com", "password": "SecurePass123!"}' > /tmp/login_request.json
+
+curl -X POST {BASE_URL}/auth/login \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -d @/tmp/login_request.json
+
+# Clean up
+rm /tmp/login_request.json
+```
+
+---
+
 ## Security Notes
 
 - **Email Verification Required**: Users cannot access API until email is verified
