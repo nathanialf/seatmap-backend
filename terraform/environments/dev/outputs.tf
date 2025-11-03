@@ -29,6 +29,21 @@ output "auth_lambda_invoke_arn" {
   value       = aws_lambda_function.auth.invoke_arn
 }
 
+output "tiers_lambda_function_name" {
+  description = "Name of the Tiers Lambda function"
+  value       = aws_lambda_function.tiers.function_name
+}
+
+output "tiers_lambda_function_arn" {
+  description = "ARN of the Tiers Lambda function"
+  value       = aws_lambda_function.tiers.arn
+}
+
+output "tiers_lambda_invoke_arn" {
+  description = "Invoke ARN of the Tiers Lambda function"
+  value       = aws_lambda_function.tiers.invoke_arn
+}
+
 # API Gateway Outputs
 output "api_gateway_id" {
   description = "ID of the API Gateway"
@@ -63,6 +78,11 @@ output "auth_login_endpoint" {
 output "auth_register_endpoint" {
   description = "Full URL for the registration authentication endpoint"
   value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/register"
+}
+
+output "tiers_endpoint" {
+  description = "Full URL for the tiers endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/tiers"
 }
 
 # DynamoDB Outputs

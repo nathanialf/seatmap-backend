@@ -156,6 +156,27 @@ resource "aws_lambda_function" "bookmarks" {
   tags = local.common_tags
 }
 
+# Lambda Function for Tiers
+resource "aws_lambda_function" "tiers" {
+  filename         = local.lambda_jar_path
+  function_name    = "seatmap-tiers-${local.environment}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "com.seatmap.api.handler.TierHandler::handleRequest"
+  runtime         = "java17"
+  memory_size     = 128
+  timeout         = 30
+  
+  source_code_hash = filebase64sha256(local.lambda_jar_path)
+  
+  environment {
+    variables = {
+      ENVIRONMENT = local.environment
+    }
+  }
+
+  tags = local.common_tags
+}
+
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_role" {
   name = "seatmap-lambda-role-${local.environment}"
@@ -933,6 +954,67 @@ resource "aws_api_gateway_integration" "bookmark_delete_integration" {
   uri                     = aws_lambda_function.bookmarks.invoke_arn
 }
 
+# Tiers API Gateway Resources
+resource "aws_api_gateway_resource" "tiers" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
+  path_part   = "tiers"
+}
+
+resource "aws_api_gateway_resource" "tier_name" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.tiers.id
+  path_part   = "{tierName}"
+}
+
+# Tiers Methods
+resource "aws_api_gateway_method" "tiers_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.tiers.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+resource "aws_api_gateway_method" "tier_name_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.tier_name.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Tiers Integrations
+resource "aws_api_gateway_integration" "tiers_get_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.tiers.id
+  http_method = aws_api_gateway_method.tiers_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.tiers.invoke_arn
+}
+
+resource "aws_api_gateway_integration" "tier_name_get_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.tier_name.id
+  http_method = aws_api_gateway_method.tier_name_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.tiers.invoke_arn
+}
+
+# Lambda Permission for Tiers API Gateway
+resource "aws_lambda_permission" "tiers_api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.tiers.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
+}
+
 # Lambda Permission for Bookmarks API Gateway
 resource "aws_lambda_permission" "bookmarks_api_gateway" {
   statement_id  = "AllowExecutionFromAPIGateway"
@@ -1005,6 +1087,12 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_integration.bookmarks_post_integration.id,
       aws_api_gateway_integration.bookmark_get_integration.id,
       aws_api_gateway_integration.bookmark_delete_integration.id,
+      aws_api_gateway_resource.tiers.id,
+      aws_api_gateway_resource.tier_name.id,
+      aws_api_gateway_method.tiers_get.id,
+      aws_api_gateway_method.tier_name_get.id,
+      aws_api_gateway_integration.tiers_get_integration.id,
+      aws_api_gateway_integration.tier_name_get_integration.id,
       aws_api_gateway_resource.seat_map_bookmark.id,
       aws_api_gateway_resource.seat_map_bookmark_id.id,
       aws_api_gateway_method.seat_map_bookmark_get.id,
