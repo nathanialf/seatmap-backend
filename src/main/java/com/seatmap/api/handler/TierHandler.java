@@ -41,7 +41,7 @@ public class TierHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
         if (environment == null) environment = "dev";
         
         // Initialize repository with table name
-        String tiersTable = "seatmap-tiers-" + environment;
+        String tiersTable = "seatmap-account-tiers-" + environment;
         this.tierRepository = new TierRepository(dynamoDbClient, tiersTable);
     }
     

@@ -57,12 +57,17 @@ public class TierRepository extends DynamoDbRepository<TierDefinition> {
             expressionAttributeValues.put(":region", AttributeValue.builder().s(region).build());
             expressionAttributeValues.put(":active", AttributeValue.builder().bool(true).build());
             
+            Map<String, String> expressionAttributeNames = new HashMap<>();
+            expressionAttributeNames.put("#region", "region");
+            expressionAttributeNames.put("#active", "active");
+            
             QueryRequest request = QueryRequest.builder()
                     .tableName(tableName)
                     .indexName("region-index")
-                    .keyConditionExpression("region = :region")
-                    .filterExpression("active = :active")
+                    .keyConditionExpression("#region = :region")
+                    .filterExpression("#active = :active")
                     .expressionAttributeValues(expressionAttributeValues)
+                    .expressionAttributeNames(expressionAttributeNames)
                     .build();
                     
             QueryResponse response = dynamoDbClient.query(request);
@@ -86,10 +91,14 @@ public class TierRepository extends DynamoDbRepository<TierDefinition> {
             Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
             expressionAttributeValues.put(":active", AttributeValue.builder().bool(true).build());
             
+            Map<String, String> expressionAttributeNames = new HashMap<>();
+            expressionAttributeNames.put("#active", "active");
+            
             ScanRequest request = ScanRequest.builder()
                     .tableName(tableName)
-                    .filterExpression("active = :active")
+                    .filterExpression("#active = :active")
                     .expressionAttributeValues(expressionAttributeValues)
+                    .expressionAttributeNames(expressionAttributeNames)
                     .build();
                     
             ScanResponse response = dynamoDbClient.scan(request);
