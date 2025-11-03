@@ -37,7 +37,7 @@ public class User {
     }
 
     public enum AccountTier {
-        FREE, PRO, BUSINESS
+        FREE, PRO, BUSINESS, DEV
     }
 
     public User() {

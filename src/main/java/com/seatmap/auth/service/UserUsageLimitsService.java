@@ -127,12 +127,25 @@ public class UserUsageLimitsService {
     }
     
     /**
-     * Validate tier transition (enforce business tier cannot downgrade)
+     * Validate tier transition (enforce tier restrictions based on tier definitions)
      */
     public void validateTierTransition(AccountTier fromTier, AccountTier toTier) throws SeatmapException {
-        if (fromTier == AccountTier.BUSINESS) {
+        TierDefinition fromTierDef = getTierDefinition(fromTier);
+        TierDefinition toTierDef = getTierDefinition(toTier);
+        
+        // Check if source tier can be changed (BUSINESS and DEV tiers cannot be changed)
+        if (!fromTierDef.getCanDowngrade() && (fromTier == AccountTier.BUSINESS || fromTier == AccountTier.DEV)) {
+            String tierType = fromTier == AccountTier.BUSINESS ? "Business" : "Developer";
+            String reason = fromTier == AccountTier.BUSINESS ? "(one-time purchase)" : "(restricted tier)";
             throw SeatmapException.forbidden(
-                "Business tier cannot be downgraded (one-time purchase). Contact support for assistance."
+                String.format("%s tier cannot be downgraded %s. Contact support for assistance.", tierType, reason)
+            );
+        }
+        
+        // Check if target tier is publicly accessible
+        if (!toTierDef.getPubliclyAccessible()) {
+            throw SeatmapException.forbidden(
+                "This tier is not publicly accessible. Contact support for assistance."
             );
         }
         
@@ -243,6 +256,7 @@ public class UserUsageLimitsService {
         if (item.containsKey("maxBookmarks")) tierDef.setMaxBookmarks(Integer.parseInt(item.get("maxBookmarks").n()));
         if (item.containsKey("maxSeatmapCalls")) tierDef.setMaxSeatmapCalls(Integer.parseInt(item.get("maxSeatmapCalls").n()));
         if (item.containsKey("canDowngrade")) tierDef.setCanDowngrade(item.get("canDowngrade").bool());
+        if (item.containsKey("publiclyAccessible")) tierDef.setPubliclyAccessible(item.get("publiclyAccessible").bool());
         
         return tierDef;
     }

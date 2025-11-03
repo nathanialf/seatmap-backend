@@ -249,7 +249,7 @@ curl -X POST {BASE_URL}/auth/login \
 - **Limitations**: IP-based rate limiting, restricted features
 
 ### User Tokens  
-- **Scope**: Full API access based on user tier (FREE, PRO, BUSINESS)
+- **Scope**: Full API access based on user tier (FREE, PRO, BUSINESS, DEV)
 - **Duration**: 24 hours
 - **Features**: Tier-based bookmarks, enhanced rate limits, priority access
 
@@ -270,6 +270,7 @@ After successful login or email verification, users are assigned to account tier
 - **FREE Tier**: Basic access with limited monthly quotas
 - **PRO Tier**: Enhanced access with increased monthly limits
 - **BUSINESS Tier**: Premium access with unlimited usage (one-time purchase, cannot be downgraded)
+- **DEV Tier**: Developer access with unlimited usage (restricted access, contact support)
 
 ### Usage Tracking
 - Monthly limits reset on the 1st of each month

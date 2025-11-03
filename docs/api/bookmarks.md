@@ -192,7 +192,7 @@ curl -X GET {BASE_URL}/seat-map/bookmark/{bookmarkId} \
 Bookmark operations are subject to user tier limits:
 
 ### Bookmark Limits
-- **Creation**: Monthly limits based on user account tier (FREE, PRO, BUSINESS)
+- **Creation**: Monthly limits based on user account tier (FREE, PRO, BUSINESS, DEV)
 - **Storage**: Tier-based monthly quotas with automatic cleanup
 - **Access**: Unlimited retrieval for owned bookmarks
 - **FREE Tier**: Bookmark creation not available

@@ -15,6 +15,7 @@ public class TierDefinition {
     private BigDecimal priceUsd;
     private String billingType; // "one_time", "monthly", "annual"
     private Boolean canDowngrade;
+    private Boolean publiclyAccessible; // false for dev-only tiers
     private String region;
     private Instant createdAt;
     private Instant updatedAt;
@@ -22,6 +23,7 @@ public class TierDefinition {
 
     public TierDefinition() {
         this.active = true;
+        this.publiclyAccessible = true;
         this.region = "US";
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
@@ -54,6 +56,9 @@ public class TierDefinition {
 
     public Boolean getCanDowngrade() { return canDowngrade != null ? canDowngrade : true; }
     public void setCanDowngrade(Boolean canDowngrade) { this.canDowngrade = canDowngrade; }
+
+    public Boolean getPubliclyAccessible() { return publiclyAccessible != null ? publiclyAccessible : true; }
+    public void setPubliclyAccessible(Boolean publiclyAccessible) { this.publiclyAccessible = publiclyAccessible; }
 
     public String getRegion() { return region; }
     public void setRegion(String region) { this.region = region; }

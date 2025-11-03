@@ -44,11 +44,18 @@ class UserAccountTierTest {
     }
     
     @Test
+    void setAccountTier_Dev_ShouldSetCorrectly() {
+        user.setAccountTier(User.AccountTier.DEV);
+        assertEquals(User.AccountTier.DEV, user.getAccountTier());
+    }
+    
+    @Test
     void accountTierEnum_ShouldHaveCorrectValues() {
-        assertEquals(3, User.AccountTier.values().length);
+        assertEquals(4, User.AccountTier.values().length);
         assertEquals("FREE", User.AccountTier.FREE.name());
         assertEquals("PRO", User.AccountTier.PRO.name());
         assertEquals("BUSINESS", User.AccountTier.BUSINESS.name());
+        assertEquals("DEV", User.AccountTier.DEV.name());
     }
     
     @Test
@@ -56,6 +63,7 @@ class UserAccountTierTest {
         assertEquals(User.AccountTier.FREE, User.AccountTier.valueOf("FREE"));
         assertEquals(User.AccountTier.PRO, User.AccountTier.valueOf("PRO"));
         assertEquals(User.AccountTier.BUSINESS, User.AccountTier.valueOf("BUSINESS"));
+        assertEquals(User.AccountTier.DEV, User.AccountTier.valueOf("DEV"));
     }
     
     @Test
@@ -63,6 +71,7 @@ class UserAccountTierTest {
         assertEquals("FREE", User.AccountTier.FREE.toString());
         assertEquals("PRO", User.AccountTier.PRO.toString());
         assertEquals("BUSINESS", User.AccountTier.BUSINESS.toString());
+        assertEquals("DEV", User.AccountTier.DEV.toString());
     }
     
     @Test

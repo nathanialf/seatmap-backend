@@ -45,6 +45,8 @@ class UserUsageLimitsServiceTest {
         freeItem.put("tierName", AttributeValue.builder().s("FREE").build());
         freeItem.put("maxBookmarks", AttributeValue.builder().n("0").build());
         freeItem.put("maxSeatmapCalls", AttributeValue.builder().n("10").build());
+        freeItem.put("canDowngrade", AttributeValue.builder().bool(true).build());
+        freeItem.put("publiclyAccessible", AttributeValue.builder().bool(true).build());
         freeItem.put("active", AttributeValue.builder().bool(true).build());
         
         Map<String, AttributeValue> proItem = new HashMap<>();
@@ -52,6 +54,8 @@ class UserUsageLimitsServiceTest {
         proItem.put("tierName", AttributeValue.builder().s("PRO").build());
         proItem.put("maxBookmarks", AttributeValue.builder().n("50").build());
         proItem.put("maxSeatmapCalls", AttributeValue.builder().n("500").build());
+        proItem.put("canDowngrade", AttributeValue.builder().bool(true).build());
+        proItem.put("publiclyAccessible", AttributeValue.builder().bool(true).build());
         proItem.put("active", AttributeValue.builder().bool(true).build());
         
         Map<String, AttributeValue> businessItem = new HashMap<>();
@@ -60,10 +64,20 @@ class UserUsageLimitsServiceTest {
         businessItem.put("maxBookmarks", AttributeValue.builder().n("-1").build());
         businessItem.put("maxSeatmapCalls", AttributeValue.builder().n("-1").build());
         businessItem.put("canDowngrade", AttributeValue.builder().bool(false).build());
+        businessItem.put("publiclyAccessible", AttributeValue.builder().bool(true).build());
         businessItem.put("active", AttributeValue.builder().bool(true).build());
         
+        Map<String, AttributeValue> devItem = new HashMap<>();
+        devItem.put("tierId", AttributeValue.builder().s("dev-us-2025").build());
+        devItem.put("tierName", AttributeValue.builder().s("DEV").build());
+        devItem.put("maxBookmarks", AttributeValue.builder().n("-1").build());
+        devItem.put("maxSeatmapCalls", AttributeValue.builder().n("-1").build());
+        devItem.put("canDowngrade", AttributeValue.builder().bool(false).build());
+        devItem.put("publiclyAccessible", AttributeValue.builder().bool(false).build());
+        devItem.put("active", AttributeValue.builder().bool(true).build());
+        
         ScanResponse mockScanResponse = ScanResponse.builder()
-            .items(freeItem, proItem, businessItem)
+            .items(freeItem, proItem, businessItem, devItem)
             .build();
             
         when(mockDynamoDbClient.scan(any(ScanRequest.class))).thenReturn(mockScanResponse);
@@ -317,12 +331,13 @@ class UserUsageLimitsServiceTest {
     
     @Test
     void validateTierTransition_FromBusinessTier_ShouldThrowException() {
-        // Create service with no mocked DynamoDB calls (tier transitions don't need tier definitions)
-        UserUsageLimitsService simpleService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         
         // Act & Assert
         SeatmapException exception = assertThrows(SeatmapException.class,
-            () -> simpleService.validateTierTransition(AccountTier.BUSINESS, AccountTier.PRO));
+            () -> service.validateTierTransition(AccountTier.BUSINESS, AccountTier.PRO));
         
         assertTrue(exception.getMessage().contains("Business tier cannot be downgraded"));
         assertTrue(exception.getMessage().contains("one-time purchase"));
@@ -330,38 +345,42 @@ class UserUsageLimitsServiceTest {
     
     @Test
     void validateTierTransition_FromFreeToPro_ShouldSucceed() {
-        // Create service with no mocked DynamoDB calls (tier transitions don't need tier definitions)
-        UserUsageLimitsService simpleService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         
         // Act & Assert
-        assertDoesNotThrow(() -> simpleService.validateTierTransition(AccountTier.FREE, AccountTier.PRO));
+        assertDoesNotThrow(() -> service.validateTierTransition(AccountTier.FREE, AccountTier.PRO));
     }
     
     @Test
     void validateTierTransition_FromProToFree_ShouldSucceed() {
-        // Create service with no mocked DynamoDB calls (tier transitions don't need tier definitions)
-        UserUsageLimitsService simpleService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         
         // Act & Assert
-        assertDoesNotThrow(() -> simpleService.validateTierTransition(AccountTier.PRO, AccountTier.FREE));
+        assertDoesNotThrow(() -> service.validateTierTransition(AccountTier.PRO, AccountTier.FREE));
     }
     
     @Test
     void validateTierTransition_FromProToBusiness_ShouldSucceed() {
-        // Create service with no mocked DynamoDB calls (tier transitions don't need tier definitions)
-        UserUsageLimitsService simpleService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         
         // Act & Assert
-        assertDoesNotThrow(() -> simpleService.validateTierTransition(AccountTier.PRO, AccountTier.BUSINESS));
+        assertDoesNotThrow(() -> service.validateTierTransition(AccountTier.PRO, AccountTier.BUSINESS));
     }
     
     @Test
     void validateTierTransition_FromFreeToBusiness_ShouldSucceed() {
-        // Create service with no mocked DynamoDB calls (tier transitions don't need tier definitions)
-        UserUsageLimitsService simpleService = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         
         // Act & Assert
-        assertDoesNotThrow(() -> simpleService.validateTierTransition(AccountTier.FREE, AccountTier.BUSINESS));
+        assertDoesNotThrow(() -> service.validateTierTransition(AccountTier.FREE, AccountTier.BUSINESS));
     }
     
     @Test
@@ -396,5 +415,156 @@ class UserUsageLimitsServiceTest {
         assertThrows(SeatmapException.class, () -> {
             emptyService.canCreateBookmark(businessUser);
         });
+    }
+    
+    // DEV Tier Tests
+    
+    @Test
+    void canCreateBookmark_DevUser_ShouldReturnTrue() throws SeatmapException {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        User devUser = createTestUser(AccountTier.DEV);
+        when(mockUsageRepository.canCreateBookmark(testUserId, -1)).thenReturn(true);
+        
+        // Act
+        boolean result = service.canCreateBookmark(devUser);
+        
+        // Assert
+        assertTrue(result);
+        verify(mockUsageRepository).canCreateBookmark(testUserId, -1);
+    }
+    
+    @Test
+    void canMakeSeatmapRequest_DevUser_ShouldReturnTrue() throws SeatmapException {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        User devUser = createTestUser(AccountTier.DEV);
+        when(mockUsageRepository.canMakeSeatmapRequest(testUserId, -1)).thenReturn(true);
+        
+        // Act
+        boolean result = service.canMakeSeatmapRequest(devUser);
+        
+        // Assert
+        assertTrue(result);
+        verify(mockUsageRepository).canMakeSeatmapRequest(testUserId, -1);
+    }
+    
+    @Test
+    void recordBookmarkCreation_DevUser_ShouldSucceed() throws SeatmapException {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        User devUser = createTestUser(AccountTier.DEV);
+        when(mockUsageRepository.canCreateBookmark(testUserId, -1)).thenReturn(true);
+        doNothing().when(mockUsageRepository).recordBookmarkCreation(testUserId);
+        
+        // Act & Assert
+        assertDoesNotThrow(() -> service.recordBookmarkCreation(devUser));
+        verify(mockUsageRepository).canCreateBookmark(testUserId, -1);
+        verify(mockUsageRepository).recordBookmarkCreation(testUserId);
+    }
+    
+    @Test
+    void getRemainingBookmarks_DevUser_ShouldReturnMaxValue() throws SeatmapException {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        User devUser = createTestUser(AccountTier.DEV);
+        when(mockUsageRepository.getRemainingBookmarks(testUserId, -1)).thenReturn(Integer.MAX_VALUE);
+        
+        // Act
+        int result = service.getRemainingBookmarks(devUser);
+        
+        // Assert
+        assertEquals(Integer.MAX_VALUE, result);
+        verify(mockUsageRepository).getRemainingBookmarks(testUserId, -1);
+    }
+    
+    @Test
+    void getRemainingBookmarks_DevUser_ShouldReturnMaxValueForSeatmaps() throws SeatmapException {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        User devUser = createTestUser(AccountTier.DEV);
+        when(mockUsageRepository.getRemainingSeatmapRequests(testUserId, -1)).thenReturn(Integer.MAX_VALUE);
+        
+        // Act
+        int result = service.getRemainingSeatmapRequests(devUser);
+        
+        // Assert
+        assertEquals(Integer.MAX_VALUE, result);
+        verify(mockUsageRepository).getRemainingSeatmapRequests(testUserId, -1);
+    }
+    
+    @Test
+    void validateTierTransition_FromDevTier_ShouldThrowException() {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        
+        // Act & Assert
+        SeatmapException exception = assertThrows(SeatmapException.class,
+            () -> service.validateTierTransition(AccountTier.DEV, AccountTier.PRO));
+        
+        assertTrue(exception.getMessage().contains("Developer tier cannot be downgraded"));
+    }
+    
+    @Test
+    void validateTierTransition_ToDevTier_ShouldThrowException() {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        
+        // Act & Assert
+        SeatmapException exception = assertThrows(SeatmapException.class,
+            () -> service.validateTierTransition(AccountTier.FREE, AccountTier.DEV));
+        
+        assertTrue(exception.getMessage().contains("not publicly accessible"));
+    }
+    
+    @Test
+    void validateTierTransition_DevToDevTier_ShouldThrowException() {
+        // Arrange
+        setupMockTierDefinitions();
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        
+        // Act & Assert
+        SeatmapException exception = assertThrows(SeatmapException.class,
+            () -> service.validateTierTransition(AccountTier.DEV, AccountTier.DEV));
+        
+        assertTrue(exception.getMessage().contains("Developer tier cannot be downgraded"));
+    }
+    
+    @Test
+    void validateTierTransition_ToNonPubliclyAccessibleTier_ShouldThrowException() {
+        // Arrange - Create a custom tier definition where PRO is not publicly accessible
+        Map<String, AttributeValue> freeItem = new HashMap<>();
+        freeItem.put("tierId", AttributeValue.builder().s("free-us-2025").build());
+        freeItem.put("tierName", AttributeValue.builder().s("FREE").build());
+        freeItem.put("canDowngrade", AttributeValue.builder().bool(true).build());
+        freeItem.put("publiclyAccessible", AttributeValue.builder().bool(true).build());
+        freeItem.put("active", AttributeValue.builder().bool(true).build());
+        
+        Map<String, AttributeValue> nonPublicProItem = new HashMap<>();
+        nonPublicProItem.put("tierId", AttributeValue.builder().s("pro-us-2025").build());
+        nonPublicProItem.put("tierName", AttributeValue.builder().s("PRO").build());
+        nonPublicProItem.put("canDowngrade", AttributeValue.builder().bool(true).build());
+        nonPublicProItem.put("publiclyAccessible", AttributeValue.builder().bool(false).build());
+        nonPublicProItem.put("active", AttributeValue.builder().bool(true).build());
+        
+        ScanResponse mockScanResponse = ScanResponse.builder()
+            .items(freeItem, nonPublicProItem)
+            .build();
+            
+        when(mockDynamoDbClient.scan(any(ScanRequest.class))).thenReturn(mockScanResponse);
+        service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
+        
+        // Act & Assert
+        SeatmapException exception = assertThrows(SeatmapException.class,
+            () -> service.validateTierTransition(AccountTier.FREE, AccountTier.PRO));
+        
+        assertTrue(exception.getMessage().contains("not publicly accessible"));
     }
 }

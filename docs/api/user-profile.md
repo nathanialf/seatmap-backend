@@ -47,7 +47,7 @@ Authorization: Bearer your_user_jwt_token
 - `authProvider`: Authentication method (`EMAIL`, `GOOGLE`, `APPLE`)
 - `emailVerified`: Email verification status
 - `status`: Account status (`ACTIVE`, `SUSPENDED`)
-- `accountTier`: User's access tier (`FREE`, `PRO`, `BUSINESS`)
+- `accountTier`: User's access tier (`FREE`, `PRO`, `BUSINESS`, `DEV`)
 - `createdAt`: Account creation timestamp
 - `updatedAt`: Last profile update timestamp
 

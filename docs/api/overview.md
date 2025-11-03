@@ -23,7 +23,7 @@ All API requests require **both** an API Key and appropriate JWT tokens:
 - **Features**: Flight search, limited seat map access
 
 ### Registered Users
-- **Access**: Tiered access levels (FREE, PRO, BUSINESS)
+- **Access**: Tiered access levels (FREE, PRO, BUSINESS, DEV)
 - **Duration**: Extended token validity
 - **Features**: Tier-based API access including bookmarks and enhanced limits
 - **Tiers**: Monthly usage quotas and features vary by account tier
@@ -32,7 +32,7 @@ All API requests require **both** an API Key and appropriate JWT tokens:
 
 Rate limits vary by:
 - **User type** (Guest vs Registered)
-- **Account tier** (FREE, PRO, BUSINESS for registered users) 
+- **Account tier** (FREE, PRO, BUSINESS, DEV for registered users) 
 - **Endpoint category** (bookmarks, seat maps, etc.)
 - **Time windows** (monthly limits reset on the 1st)
 
