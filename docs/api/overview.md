@@ -25,7 +25,7 @@ All API requests require **both** an API Key and appropriate JWT tokens:
 ### Registered Users
 - **Access**: Tiered access levels (FREE, PRO, BUSINESS, DEV)
 - **Duration**: Extended token validity
-- **Features**: Tier-based API access including bookmarks and enhanced limits
+- **Features**: Tier-based API access including bookmarks, saved searches, and enhanced limits
 - **Tiers**: Monthly usage quotas and features vary by account tier
 
 ## Rate Limiting

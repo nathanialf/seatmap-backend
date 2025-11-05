@@ -151,4 +151,74 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
             throw SeatmapException.internalError("Failed to count bookmarks for user: " + e.getMessage());
         }
     }
+    
+    /**
+     * Find bookmarks by user ID and item type
+     */
+    public List<Bookmark> findByUserIdAndItemType(String userId, Bookmark.ItemType itemType) throws SeatmapException {
+        try {
+            Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+            expressionAttributeValues.put(":userId", AttributeValue.builder().s(userId).build());
+            expressionAttributeValues.put(":itemType", AttributeValue.builder().s(itemType.name()).build());
+            
+            QueryRequest request = QueryRequest.builder()
+                    .tableName(tableName)
+                    .keyConditionExpression("userId = :userId")
+                    .filterExpression("itemType = :itemType")
+                    .expressionAttributeValues(expressionAttributeValues)
+                    .build();
+                    
+            QueryResponse response = dynamoDbClient.query(request);
+            
+            return response.items().stream()
+                    .map(item -> {
+                        try {
+                            return fromAttributeValueMap(item);
+                        } catch (SeatmapException e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
+                    .collect(Collectors.toList());
+        } catch (DynamoDbException e) {
+            throw SeatmapException.internalError("Failed to retrieve items by type for user: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Find only flight bookmarks for a user
+     */
+    public List<Bookmark> findFlightBookmarksByUserId(String userId) throws SeatmapException {
+        return findByUserIdAndItemType(userId, Bookmark.ItemType.BOOKMARK);
+    }
+    
+    /**
+     * Find only saved searches for a user
+     */
+    public List<Bookmark> findSavedSearchesByUserId(String userId) throws SeatmapException {
+        return findByUserIdAndItemType(userId, Bookmark.ItemType.SAVED_SEARCH);
+    }
+    
+    /**
+     * Count items by type for a user
+     */
+    public int countItemsByUserIdAndType(String userId, Bookmark.ItemType itemType) throws SeatmapException {
+        try {
+            Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+            expressionAttributeValues.put(":userId", AttributeValue.builder().s(userId).build());
+            expressionAttributeValues.put(":itemType", AttributeValue.builder().s(itemType.name()).build());
+            
+            QueryRequest request = QueryRequest.builder()
+                    .tableName(tableName)
+                    .keyConditionExpression("userId = :userId")
+                    .filterExpression("itemType = :itemType")
+                    .expressionAttributeValues(expressionAttributeValues)
+                    .select(Select.COUNT)
+                    .build();
+                    
+            QueryResponse response = dynamoDbClient.query(request);
+            return response.count();
+        } catch (DynamoDbException e) {
+            throw SeatmapException.internalError("Failed to count items by type for user: " + e.getMessage());
+        }
+    }
 }

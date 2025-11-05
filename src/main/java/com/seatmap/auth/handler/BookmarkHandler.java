@@ -7,7 +7,9 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.seatmap.api.model.FlightSearchRequest;
 import com.seatmap.auth.model.CreateBookmarkRequest;
+import com.seatmap.auth.model.CreateSavedSearchRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
@@ -97,6 +99,27 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
             } else if ("GET".equals(httpMethod) && path.startsWith("/bookmarks/")) {
                 String bookmarkId = path.substring("/bookmarks/".length());
                 return handleGetBookmark(event, bookmarkId);
+            } else if ("GET".equals(httpMethod) && "/saved-searches".equals(path)) {
+                return handleListSavedSearches(event);
+            } else if ("POST".equals(httpMethod) && "/saved-searches".equals(path)) {
+                return handleCreateSavedSearch(event);
+            } else if ("DELETE".equals(httpMethod) && path.startsWith("/saved-searches/")) {
+                String searchId = path.substring("/saved-searches/".length());
+                if (searchId.contains("/")) {
+                    return createErrorResponse(400, "Invalid saved search ID");
+                }
+                return handleDeleteSavedSearch(event, searchId);
+            } else if ("GET".equals(httpMethod) && path.startsWith("/saved-searches/")) {
+                String pathSuffix = path.substring("/saved-searches/".length());
+                if (pathSuffix.contains("/execute")) {
+                    String searchId = pathSuffix.replace("/execute", "");
+                    return handleExecuteSavedSearch(event, searchId);
+                } else {
+                    return handleGetSavedSearch(event, pathSuffix);
+                }
+            } else if ("POST".equals(httpMethod) && path.matches("/saved-searches/[^/]+/execute")) {
+                String searchId = path.split("/")[2]; // Extract ID from /saved-searches/{id}/execute
+                return handleExecuteSavedSearch(event, searchId);
             }
             
             return createErrorResponse(405, "Method not allowed");
@@ -241,6 +264,144 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
             return null;
         }
         return authHeader.substring(7);
+    }
+    
+    private APIGatewayProxyResponseEvent handleListSavedSearches(APIGatewayProxyRequestEvent event) throws SeatmapException {
+        logger.info("Processing list saved searches request");
+        
+        String userId = extractUserIdFromToken(event);
+        if (userId == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        List<Bookmark> savedSearches = bookmarkRepository.findSavedSearchesByUserId(userId);
+        
+        try {
+            User user = authService.validateToken(extractTokenFromEvent(event));
+            int remainingBookmarks = usageLimitsService.getRemainingBookmarks(user);
+            
+            return createSuccessResponse(Map.of(
+                "savedSearches", savedSearches,
+                "total", savedSearches.size(),
+                "tier", user.getAccountTier(),
+                "remainingThisMonth", remainingBookmarks
+            ));
+        } catch (SeatmapException e) {
+            logger.error("Error getting remaining bookmarks for user: {}", userId, e);
+            return createErrorResponse(e.getHttpStatus(), e.getMessage());
+        }
+    }
+    
+    private APIGatewayProxyResponseEvent handleCreateSavedSearch(APIGatewayProxyRequestEvent event) throws SeatmapException {
+        logger.info("Processing create saved search request");
+        
+        User user = authService.validateToken(extractTokenFromEvent(event));
+        if (user == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        // Parse request body
+        CreateSavedSearchRequest request;
+        try {
+            request = objectMapper.readValue(event.getBody(), CreateSavedSearchRequest.class);
+        } catch (Exception e) {
+            logger.error("Error parsing create saved search request body", e);
+            return createErrorResponse(400, "Invalid request format");
+        }
+        
+        // Validate request
+        Set<ConstraintViolation<CreateSavedSearchRequest>> violations = validator.validate(request);
+        if (!violations.isEmpty()) {
+            StringBuilder errors = new StringBuilder();
+            for (ConstraintViolation<CreateSavedSearchRequest> violation : violations) {
+                errors.append(violation.getMessage()).append("; ");
+            }
+            return createErrorResponse(400, "Validation errors: " + errors.toString());
+        }
+        
+        // Check tier-based limit (saved searches count toward bookmark limit)
+        try {
+            usageLimitsService.recordBookmarkCreation(user);
+        } catch (SeatmapException e) {
+            return createErrorResponse(e.getHttpStatus(), e.getMessage());
+        }
+        
+        // Create new saved search
+        String searchId = UUID.randomUUID().toString();
+        Bookmark savedSearch = new Bookmark(user.getUserId(), searchId, request.getTitle(), request.getSearchRequest());
+        
+        bookmarkRepository.saveBookmark(savedSearch);
+        
+        logger.info("Created saved search {} for user: {} tier: {}", searchId, user.getUserId(), user.getAccountTier());
+        
+        return createSuccessResponse(savedSearch);
+    }
+    
+    private APIGatewayProxyResponseEvent handleDeleteSavedSearch(APIGatewayProxyRequestEvent event, String searchId) throws SeatmapException {
+        logger.info("Processing delete saved search request for ID: {}", searchId);
+        
+        String userId = extractUserIdFromToken(event);
+        if (userId == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        // Check if saved search exists and belongs to user
+        Optional<Bookmark> existingSearch = bookmarkRepository.findByUserIdAndBookmarkId(userId, searchId);
+        if (existingSearch.isEmpty() || existingSearch.get().getItemType() != Bookmark.ItemType.SAVED_SEARCH) {
+            return createErrorResponse(404, "Saved search not found");
+        }
+        
+        bookmarkRepository.deleteBookmark(userId, searchId);
+        
+        logger.info("Deleted saved search {} for user: {}", searchId, userId);
+        
+        return createSuccessResponse(Map.of("message", "Saved search deleted successfully"));
+    }
+    
+    private APIGatewayProxyResponseEvent handleGetSavedSearch(APIGatewayProxyRequestEvent event, String searchId) throws SeatmapException {
+        logger.info("Processing get saved search request for ID: {}", searchId);
+        
+        String userId = extractUserIdFromToken(event);
+        if (userId == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        Optional<Bookmark> savedSearch = bookmarkRepository.findByUserIdAndBookmarkId(userId, searchId);
+        if (savedSearch.isEmpty() || savedSearch.get().getItemType() != Bookmark.ItemType.SAVED_SEARCH) {
+            return createErrorResponse(404, "Saved search not found");
+        }
+        
+        // Update last accessed time
+        savedSearch.get().updateLastAccessed();
+        bookmarkRepository.saveBookmark(savedSearch.get());
+        
+        return createSuccessResponse(savedSearch.get());
+    }
+    
+    private APIGatewayProxyResponseEvent handleExecuteSavedSearch(APIGatewayProxyRequestEvent event, String searchId) throws SeatmapException {
+        logger.info("Processing execute saved search request for ID: {}", searchId);
+        
+        String userId = extractUserIdFromToken(event);
+        if (userId == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        Optional<Bookmark> savedSearch = bookmarkRepository.findByUserIdAndBookmarkId(userId, searchId);
+        if (savedSearch.isEmpty() || savedSearch.get().getItemType() != Bookmark.ItemType.SAVED_SEARCH) {
+            return createErrorResponse(404, "Saved search not found");
+        }
+        
+        // Update last accessed time
+        savedSearch.get().updateLastAccessed();
+        bookmarkRepository.saveBookmark(savedSearch.get());
+        
+        // Return the search request that can be executed by the frontend
+        return createSuccessResponse(Map.of(
+            "searchRequest", savedSearch.get().getSearchRequest(),
+            "title", savedSearch.get().getTitle(),
+            "searchId", searchId,
+            "message", "Search request ready for execution"
+        ));
     }
     
     private String extractUserIdFromToken(APIGatewayProxyRequestEvent event) {

@@ -88,6 +88,12 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Source field enhancement for clean API architecture
   - Full integration with seat map API for seamless workflow
   - End-to-end testing validated with real API calls
+- ✅ **Saved Searches**: Reusable flight search criteria management
+  - Save flight search parameters for quick reuse with fresh results
+  - Unified storage with bookmarks using discriminator pattern
+  - Shared tier-based limits (FREE: disabled, PRO: 50/month, BUSINESS: unlimited)
+  - Automatic expiration based on flight departure date
+  - Complete CRUD operations plus search execution endpoints
 
 ### 📅 **Planned Features (Phase 3)**
 - **Sabre Implementation**: Fix integration issues due to external API factors
@@ -234,7 +240,7 @@ cd terraform/environments/prod
 
 ## Testing
 
-### Test Coverage (433 tests total - 73% instruction coverage)
+### Test Coverage (461 tests total - 57% instruction coverage)
 - **API Handlers**: 57 comprehensive tests (88% coverage)
   - FlightSearchHandler: Tests for integrated flight search with embedded seatmap data
   - SeatmapViewHandler: Tests for usage tracking and IP-based limit enforcement
@@ -572,6 +578,47 @@ Authorization: Bearer <jwt-token>
 - **Source tracking** (AMADEUS/SABRE) for proper seat map routing
 - **Complete flight data storage** for seamless seat map integration
 - **User isolation** - users can only access their own bookmarks
+
+### Saved Searches API
+
+#### Create Saved Search
+```http
+POST /saved-searches
+Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "title": "SFO to LAX Morning Flights",
+  "searchRequest": {
+    "origin": "SFO",
+    "destination": "LAX",
+    "departureDate": "2030-06-15",
+    "travelClass": "ECONOMY",
+    "maxResults": 10
+  }
+}
+```
+
+#### List Saved Searches
+```http
+GET /saved-searches
+Authorization: Bearer <jwt-token>
+```
+
+#### Execute Saved Search
+```http
+POST /saved-searches/{searchId}/execute
+Authorization: Bearer <jwt-token>
+```
+
+**Key Features:**
+- **Shared tier-based limits** with bookmarks (FREE: disabled, PRO: 50/month, BUSINESS: unlimited)
+- **Automatic expiration** based on flight departure date
+- **Fresh search execution** - get current flight results using saved criteria
+- **Complete CRUD operations** for saved search management
+- **User isolation** - users can only access their own saved searches
+
+For complete API documentation, see `docs/api/saved-searches.md`
 
 ### Planned Endpoints
 - `POST /subscriptions/subscribe` - Create Stripe subscription
