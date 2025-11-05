@@ -46,7 +46,7 @@ Invalid request format, missing required fields, or validation failures.
 
 **Example cURL**:
 ```bash
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -150,7 +150,7 @@ Requested resource does not exist or user lacks access.
 
 **Example cURL**:
 ```bash
-curl -X GET {BASE_URL}/seat-map/bookmark/invalid_bookmark_id \
+curl -X GET {BASE_URL}/flight-search/bookmark/invalid_bookmark_id \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}"
 ```
@@ -355,7 +355,7 @@ curl -X GET {BASE_URL}/profile \
   -H "Authorization: {JWT_TOKEN_WITHOUT_BEARER}"
 
 # Test validation error
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \

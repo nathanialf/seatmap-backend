@@ -158,10 +158,11 @@ Required Terraform variables (managed by Jenkins credentials):
 ### Key Components
 
 #### Lambda Handlers
-- `SeatMapHandler`: Main seat map retrieval with JWT auth and guest rate limiting
+- `FlightSearchHandler`: Integrated flight search with embedded seat map data from multiple APIs
+- `SeatmapViewHandler`: Usage tracking for seat map views with IP-based guest limits
 - `AuthHandler`: User authentication, registration, email verification, profile management
-- `FlightOffersHandler`: Flight search across multiple APIs with concurrent processing
 - `BookmarkHandler`: Flight bookmark CRUD operations
+- `TierHandler`: Account tier management and pricing information
 
 #### Authentication Flow
 1. **User Registration**: Email/password with bcrypt hashing (cost factor 12)

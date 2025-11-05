@@ -3,7 +3,7 @@ package com.seatmap.api.model;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 
-public class FlightOffersRequest {
+public class FlightSearchRequest {
     @NotBlank(message = "Origin is required")
     @Pattern(regexp = "^[A-Z]{3}$", message = "Origin must be a 3-letter airport code")
     private String origin;
@@ -23,9 +23,9 @@ public class FlightOffersRequest {
     private Integer maxResults = 10; // Optional, defaults to 10
     
     // Constructors
-    public FlightOffersRequest() {}
+    public FlightSearchRequest() {}
     
-    public FlightOffersRequest(String origin, String destination, String departureDate, String travelClass) {
+    public FlightSearchRequest(String origin, String destination, String departureDate, String travelClass) {
         this.origin = origin;
         this.destination = destination;
         this.departureDate = departureDate;

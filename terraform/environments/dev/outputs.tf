@@ -1,18 +1,4 @@
 # Lambda Function Outputs
-output "lambda_function_name" {
-  description = "Name of the Lambda function"
-  value       = aws_lambda_function.seat_map.function_name
-}
-
-output "lambda_function_arn" {
-  description = "ARN of the Lambda function"
-  value       = aws_lambda_function.seat_map.arn
-}
-
-output "lambda_invoke_arn" {
-  description = "Invoke ARN of the Lambda function"
-  value       = aws_lambda_function.seat_map.invoke_arn
-}
 
 output "auth_lambda_function_name" {
   description = "Name of the Auth Lambda function"
@@ -44,6 +30,36 @@ output "tiers_lambda_invoke_arn" {
   value       = aws_lambda_function.tiers.invoke_arn
 }
 
+output "flight_search_lambda_function_name" {
+  description = "Name of the Flight Search Lambda function"
+  value       = aws_lambda_function.flight_search.function_name
+}
+
+output "flight_search_lambda_function_arn" {
+  description = "ARN of the Flight Search Lambda function"
+  value       = aws_lambda_function.flight_search.arn
+}
+
+output "flight_search_lambda_invoke_arn" {
+  description = "Invoke ARN of the Flight Search Lambda function"
+  value       = aws_lambda_function.flight_search.invoke_arn
+}
+
+output "seatmap_view_lambda_function_name" {
+  description = "Name of the Seatmap View Lambda function"
+  value       = aws_lambda_function.seatmap_view.function_name
+}
+
+output "seatmap_view_lambda_function_arn" {
+  description = "ARN of the Seatmap View Lambda function"
+  value       = aws_lambda_function.seatmap_view.arn
+}
+
+output "seatmap_view_lambda_invoke_arn" {
+  description = "Invoke ARN of the Seatmap View Lambda function"
+  value       = aws_lambda_function.seatmap_view.invoke_arn
+}
+
 # API Gateway Outputs
 output "api_gateway_id" {
   description = "ID of the API Gateway"
@@ -60,10 +76,6 @@ output "api_gateway_stage" {
   value       = aws_api_gateway_deployment.main.stage_name
 }
 
-output "seat_map_endpoint" {
-  description = "Full URL for the seat map endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/seat-map"
-}
 
 output "auth_guest_endpoint" {
   description = "Full URL for the guest authentication endpoint"
@@ -83,6 +95,21 @@ output "auth_register_endpoint" {
 output "tiers_endpoint" {
   description = "Full URL for the tiers endpoint"
   value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/tiers"
+}
+
+output "flight_search_endpoint" {
+  description = "Full URL for the flight search endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/flight-search"
+}
+
+output "flight_search_bookmark_endpoint" {
+  description = "Full URL for the flight search bookmark endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/flight-search/bookmark"
+}
+
+output "seatmap_view_endpoint" {
+  description = "Full URL for the seatmap view tracking endpoint"
+  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/seatmap/view"
 }
 
 # DynamoDB Outputs

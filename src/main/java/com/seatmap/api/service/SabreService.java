@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seatmap.api.exception.SeatmapApiException;
+import com.seatmap.api.model.FlightSearchResult;
+import com.seatmap.api.model.SeatMapData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,8 +32,13 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+
+import static java.util.stream.Collectors.toList;
 
 public class SabreService {
     private static final Logger logger = LoggerFactory.getLogger(SabreService.class);
@@ -123,6 +130,143 @@ public class SabreService {
             logger.error("Error calling Sabre Flight Schedules API", e);
             throw new SeatmapApiException("Network error calling Sabre API: " + e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Search flight schedules with integrated seatmap data
+     */
+    public List<FlightSearchResult> searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
+        try {
+            // Validate inputs first
+            validateInputs(origin, destination, departureDate);
+            
+            ensureValidSession();
+            
+            // 1. Get flight schedules
+            JsonNode flightSchedules = searchFlightSchedules(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+            
+            if (flightSchedules == null || !flightSchedules.has("data")) {
+                return new ArrayList<>();
+            }
+            
+            // 2. For each flight, fetch seatmap concurrently and filter out failures
+            List<JsonNode> flights = new ArrayList<>();
+            flightSchedules.get("data").forEach(flights::add);
+            
+            List<FlightSearchResult> results = flights.parallelStream()
+                .map(this::buildFlightSearchResult)
+                .filter(Objects::nonNull)  // Only include flights with successful seatmaps
+                .collect(toList());
+            
+            logger.info("Successfully processed {} flight schedules with seatmaps from Sabre", results.size());
+            return results;
+            
+        } catch (SeatmapApiException e) {
+            // Re-throw our own exceptions
+            throw e;
+        } catch (Exception e) {
+            logger.error("Error calling Sabre API for flight search with seatmaps", e);
+            throw new SeatmapApiException("Network error calling Sabre API: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Build FlightSearchResult with integrated seatmap data
+     * Returns null if seatmap fetch fails (flight will be filtered out)
+     */
+    private FlightSearchResult buildFlightSearchResult(JsonNode flight) {
+        try {
+            // Extract flight details for seatmap call
+            String carrierCode = extractCarrierCode(flight);
+            String flightNumber = extractFlightNumber(flight);
+            String departureDate = extractDepartureDate(flight);
+            String origin = extractOrigin(flight);
+            String destination = extractDestination(flight);
+            
+            // Get seatmap data for this flight
+            JsonNode seatMapResponse = getSeatMapFromFlight(carrierCode, flightNumber, departureDate, origin, destination);
+            SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
+            
+            return new FlightSearchResult(flight, seatMapData, true, null);
+            
+        } catch (Exception e) {
+            logger.warn("Omitting flight {} - seatmap unavailable: {}", flight.path("id").asText(), e.getMessage());
+            return null; // Filter out flights without seatmaps
+        }
+    }
+    
+    /**
+     * Convert Sabre seatmap response to SeatMapData model
+     */
+    private SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
+        // For now, return a basic SeatMapData with the source marked as SABRE
+        // This will be enhanced to properly parse the Sabre seatmap response
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("SABRE");
+        
+        // TODO: Implement proper conversion from Sabre seatmap JSON to SeatMapData model
+        // This would involve parsing decks, seats, aircraft info, etc. from the response
+        
+        return seatMapData;
+    }
+    
+    // Helper methods to extract flight details from Sabre flight JSON
+    private String extractCarrierCode(JsonNode flight) {
+        JsonNode itineraries = flight.get("itineraries");
+        if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+            JsonNode segments = itineraries.get(0).get("segments");
+            if (segments != null && segments.isArray() && segments.size() > 0) {
+                return segments.get(0).path("carrierCode").asText("XX");
+            }
+        }
+        return "XX";
+    }
+    
+    private String extractFlightNumber(JsonNode flight) {
+        JsonNode itineraries = flight.get("itineraries");
+        if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+            JsonNode segments = itineraries.get(0).get("segments");
+            if (segments != null && segments.isArray() && segments.size() > 0) {
+                return segments.get(0).path("number").asText("000");
+            }
+        }
+        return "000";
+    }
+    
+    private String extractDepartureDate(JsonNode flight) {
+        JsonNode itineraries = flight.get("itineraries");
+        if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+            JsonNode segments = itineraries.get(0).get("segments");
+            if (segments != null && segments.isArray() && segments.size() > 0) {
+                String departureAt = segments.get(0).path("departure").path("at").asText("");
+                if (departureAt.length() >= 10) {
+                    return departureAt.substring(0, 10); // Extract date part (YYYY-MM-DD)
+                }
+            }
+        }
+        return LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+    
+    private String extractOrigin(JsonNode flight) {
+        JsonNode itineraries = flight.get("itineraries");
+        if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+            JsonNode segments = itineraries.get(0).get("segments");
+            if (segments != null && segments.isArray() && segments.size() > 0) {
+                return segments.get(0).path("departure").path("iataCode").asText("XXX");
+            }
+        }
+        return "XXX";
+    }
+    
+    private String extractDestination(JsonNode flight) {
+        JsonNode itineraries = flight.get("itineraries");
+        if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+            JsonNode segments = itineraries.get(0).get("segments");
+            if (segments != null && segments.isArray() && segments.size() > 0) {
+                return segments.get(0).path("arrival").path("iataCode").asText("XXX");
+            }
+        }
+        return "XXX";
     }
     
     public JsonNode getSeatMapFromFlight(String carrierCode, String flightNumber, String departureDate, String origin, String destination) throws SeatmapApiException {

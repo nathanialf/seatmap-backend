@@ -2,7 +2,7 @@
 
 ## Overview
 
-Search for flight offers from multiple providers (Amadeus and Sabre). Results include both pricing and flight details needed for seat map requests.
+Search for flight offers from multiple providers (Amadeus and Sabre) with **integrated seat map data**. Results include flight pricing, details, and embedded seat map availability - providing a complete view for travel planning.
 
 ---
 
@@ -10,7 +10,7 @@ Search for flight offers from multiple providers (Amadeus and Sabre). Results in
 
 Search for available flight offers with flexible filtering options.
 
-**Endpoint**: `POST /flight-offers`
+**Endpoint**: `POST /flight-search`
 
 **Headers**:
 ```
@@ -124,7 +124,12 @@ Content-Type: application/json
             }
           ]
         }
-      ]
+      ],
+      "seatMapAvailable": true,
+      "seatMap": {
+        "source": "AMADEUS"
+      },
+      "seatMapError": null
     }
   ],
   "meta": {
@@ -154,7 +159,7 @@ Content-Type: application/json
 
 **Example cURL**:
 ```bash
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -188,7 +193,9 @@ Flight offers are retrieved from multiple providers:
 **Key Fields for Seat Maps**:
 - `id`: Unique flight offer identifier  
 - `dataSource`: Provider source (`AMADEUS` or `SABRE`)
-- `itineraries[].segments[]`: Flight segment details needed for seat map requests
+- `seatMapAvailable`: Boolean indicating if seat map data was successfully retrieved
+- `seatMap`: Embedded seat map data object with `source` field indicating provider
+- `seatMapError`: Error message if seat map retrieval failed (null on success)
 
 **Pricing Information**:
 - `price.total`: Total price including taxes and fees
@@ -216,13 +223,14 @@ If not specified, all cabin classes are included in results.
 
 ---
 
-## Using Results for Seat Maps
+## Integrated Seat Map Data
 
-Flight offer data from this endpoint is used directly in seat map requests:
+Flight search results now include embedded seat map availability:
 
-1. **Save Full Flight Offer**: Store the complete flight offer object from this response
-2. **Seat Map Request**: Pass the entire flight offer data to the seat map API
-3. **Automatic Routing**: Seat map service automatically routes to correct provider based on `dataSource`
+1. **Integrated Response**: Each flight result includes `seatMapAvailable`, `seatMap`, and `seatMapError` fields
+2. **No Separate Requests**: Seat map data is fetched concurrently during flight search
+3. **Provider Routing**: Seat map requests are automatically routed to correct provider based on flight `dataSource`
+4. **Error Handling**: Flights without available seat maps are filtered out; remaining flights guaranteed to have seat map data
 
 ---
 

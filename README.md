@@ -74,8 +74,8 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - POST /flights/search endpoint for flight discovery
   - OPTIONS CORS with proper integration
 - ✅ **Test Coverage**: 64 comprehensive tests
-  - FlightOffersHandler: 19 tests (concurrent calls, meshing, error handling)
-  - SeatMapHandler: 38 tests (authentication, routing, rate limiting)
+  - FlightSearchHandler: Tests for integrated flight search with embedded seatmaps
+  - SeatmapViewHandler: Tests for usage tracking and limit enforcement
   - AmadeusService: 7 tests (API integration, token management)
 
 ### ✅ **Completed (Phase 2 - 100%)**
@@ -236,8 +236,8 @@ cd terraform/environments/prod
 
 ### Test Coverage (433 tests total - 73% instruction coverage)
 - **API Handlers**: 57 comprehensive tests (88% coverage)
-  - SeatMapHandler: 38 tests - JWT validation, guest rate limiting, Sabre/Amadeus routing
-  - FlightOffersHandler: 19 tests - concurrent API calls, error handling, flight meshing
+  - FlightSearchHandler: Tests for integrated flight search with embedded seatmap data
+  - SeatmapViewHandler: Tests for usage tracking and IP-based limit enforcement
 - **Authentication Services**: 100 comprehensive tests (87% coverage)
   - Password Security: bcrypt validation, strength requirements  
   - JWT Tokens: Generation, validation, expiration, security edge cases

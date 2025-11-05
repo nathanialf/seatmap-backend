@@ -169,21 +169,16 @@ Bookmarks provide a streamlined path to seat maps:
 
 **Direct Seat Map Access**:
 ```bash
-# Get seat map directly from bookmark
-curl -X GET {BASE_URL}/seat-map/bookmark/{bookmarkId} \
+# Get seat map directly from bookmark (via integrated flight search)
+curl -X GET {BASE_URL}/flight-search/bookmark/{bookmarkId} \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
 ```
 
-**Traditional Workflow**:
-1. **Create Bookmark**: Save flight offer from search results
+**Integrated Workflow**:
+1. **Create Bookmark**: Save flight offer from search results 
 2. **List Bookmarks**: Retrieve user's saved flights
-3. **Get Seat Map**: Use bookmark ID for direct seat map access
-
-**Alternative Workflow**:
-1. **Get Bookmark**: Retrieve specific bookmark
-2. **Extract Flight Data**: Use `flightOfferData` from bookmark
-3. **Manual Seat Map**: Post flight data to `/seat-map` endpoint
+3. **Get Flight + Seat Map**: Use `/flight-search/bookmark/{id}` for integrated response with embedded seatmap data
 
 ---
 

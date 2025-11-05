@@ -49,33 +49,6 @@ locals {
   }
 }
 
-# Seat Map Lambda Function
-resource "aws_lambda_function" "seat_map" {
-  filename         = local.lambda_jar_path
-  function_name    = "seatmap-seat-map-${local.environment}"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "com.seatmap.api.handler.SeatMapHandler::handleRequest"
-  runtime         = "java17"
-  memory_size     = 1024  # Higher memory for production
-  timeout         = 30
-  
-  source_code_hash = filebase64sha256(local.lambda_jar_path)
-  
-  environment {
-    variables = {
-      ENVIRONMENT        = local.environment
-      AMADEUS_ENDPOINT   = var.amadeus_endpoint
-      AMADEUS_API_KEY    = var.amadeus_api_key
-      AMADEUS_API_SECRET = var.amadeus_api_secret
-      SABRE_USER_ID      = var.sabre_user_id
-      SABRE_PASSWORD     = var.sabre_password
-      SABRE_ENDPOINT     = var.sabre_endpoint
-      JWT_SECRET         = var.jwt_secret
-    }
-  }
-
-  tags = local.common_tags
-}
 
 # Auth Lambda Function
 resource "aws_lambda_function" "auth" {
@@ -84,7 +57,7 @@ resource "aws_lambda_function" "auth" {
   role            = aws_iam_role.lambda_role.arn
   handler         = "com.seatmap.auth.handler.AuthHandler::handleRequest"
   runtime         = "java17"
-  memory_size     = 1024  # Higher memory for production
+  memory_size     = 256
   timeout         = 30
   
   source_code_hash = filebase64sha256(local.lambda_jar_path)
@@ -99,22 +72,22 @@ resource "aws_lambda_function" "auth" {
       SABRE_PASSWORD     = var.sabre_password
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
-      BASE_URL          = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
+      BASE_URL           = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
     }
   }
 
   tags = local.common_tags
 }
 
-# Flight Offers Lambda Function
-resource "aws_lambda_function" "flight_offers" {
+# Flight Search Lambda Function (replaces FlightOffersHandler)
+resource "aws_lambda_function" "flight_search" {
   filename         = local.lambda_jar_path
-  function_name    = "seatmap-flight-offers-${local.environment}"
+  function_name    = "seatmap-flight-search-${local.environment}"
   role            = aws_iam_role.lambda_role.arn
-  handler         = "com.seatmap.api.handler.FlightOffersHandler::handleRequest"
+  handler         = "com.seatmap.api.handler.FlightSearchHandler::handleRequest"
   runtime         = "java17"
-  memory_size     = 1024  # Higher memory for production
-  timeout         = 30
+  memory_size     = 512
+  timeout         = 120   # Longer timeout for multiple API calls
   
   source_code_hash = filebase64sha256(local.lambda_jar_path)
   
@@ -128,6 +101,28 @@ resource "aws_lambda_function" "flight_offers" {
       SABRE_PASSWORD     = var.sabre_password
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# Seatmap View Lambda Function (new for usage tracking)
+resource "aws_lambda_function" "seatmap_view" {
+  filename         = local.lambda_jar_path
+  function_name    = "seatmap-view-${local.environment}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "com.seatmap.api.handler.SeatmapViewHandler::handleRequest"
+  runtime         = "java17"
+  memory_size     = 512   # Same as other handlers
+  timeout         = 30    # Short timeout
+  
+  source_code_hash = filebase64sha256(local.lambda_jar_path)
+  
+  environment {
+    variables = {
+      ENVIRONMENT = local.environment
+      JWT_SECRET  = var.jwt_secret
     }
   }
 
@@ -222,9 +217,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "dynamodb:Query",
           "dynamodb:Scan",
           "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "ses:SendEmail",
-          "ses:SendRawEmail"
+          "dynamodb:DeleteItem"
         ]
         Resource = [
           aws_dynamodb_table.users.arn,
@@ -242,6 +235,14 @@ resource "aws_iam_role_policy" "lambda_policy" {
           aws_dynamodb_table.user_usage.arn,
           "${aws_dynamodb_table.user_usage.arn}/index/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -257,12 +258,10 @@ resource "aws_ses_email_identity" "test_recipient" {
   email = "nathanial@defnf.com"
 }
 
-# DynamoDB Tables with higher capacity for production
+# DynamoDB Tables
 resource "aws_dynamodb_table" "users" {
   name           = "seatmap-users-${local.environment}"
-  billing_mode   = "PROVISIONED"
-  read_capacity  = 20
-  write_capacity = 20
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "userId"
 
   attribute {
@@ -289,8 +288,6 @@ resource "aws_dynamodb_table" "users" {
   global_secondary_index {
     name            = "email-index"
     hash_key        = "email"
-    read_capacity   = 10
-    write_capacity  = 10
     projection_type = "ALL"
   }
 
@@ -298,17 +295,13 @@ resource "aws_dynamodb_table" "users" {
   global_secondary_index {
     name            = "oauth-id-index"
     hash_key        = "oauthId"
-    read_capacity   = 10
-    write_capacity  = 10
     projection_type = "ALL"
   }
 
-  # GSI for verification token lookup
+  # GSI for email verification token lookup
   global_secondary_index {
     name            = "verification-token-index"
     hash_key        = "verificationToken"
-    read_capacity   = 5
-    write_capacity  = 5
     projection_type = "ALL"
   }
 
@@ -320,9 +313,7 @@ resource "aws_dynamodb_table" "users" {
 
 resource "aws_dynamodb_table" "sessions" {
   name           = "seatmap-sessions-${local.environment}"
-  billing_mode   = "PROVISIONED"
-  read_capacity  = 20
-  write_capacity = 20
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "sessionId"
 
   attribute {
@@ -339,8 +330,6 @@ resource "aws_dynamodb_table" "sessions" {
   global_secondary_index {
     name            = "user-index"
     hash_key        = "userId"
-    read_capacity   = 10
-    write_capacity  = 10
     projection_type = "ALL"
   }
 
@@ -358,9 +347,7 @@ resource "aws_dynamodb_table" "sessions" {
 
 resource "aws_dynamodb_table" "subscriptions" {
   name           = "seatmap-subscriptions-${local.environment}"
-  billing_mode   = "PROVISIONED"
-  read_capacity  = 10
-  write_capacity = 10
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "userId"
 
   attribute {
@@ -377,8 +364,6 @@ resource "aws_dynamodb_table" "subscriptions" {
   global_secondary_index {
     name            = "stripe-customer-index"
     hash_key        = "stripeCustomerId"
-    read_capacity   = 5
-    write_capacity  = 5
     projection_type = "ALL"
   }
 
@@ -390,9 +375,7 @@ resource "aws_dynamodb_table" "subscriptions" {
 
 resource "aws_dynamodb_table" "guest_access" {
   name           = "seatmap-guest-access-${local.environment}"
-  billing_mode   = "PROVISIONED"
-  read_capacity  = 10
-  write_capacity = 10
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "ipAddress"
 
   attribute {
@@ -415,11 +398,9 @@ resource "aws_dynamodb_table" "guest_access" {
 # DynamoDB Table for Bookmarks
 resource "aws_dynamodb_table" "bookmarks" {
   name           = "seatmap-bookmarks-${local.environment}"
-  billing_mode   = "PROVISIONED"
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "userId"
   range_key      = "bookmarkId"
-  read_capacity  = 5
-  write_capacity = 5
 
   attribute {
     name = "userId"
@@ -446,10 +427,8 @@ resource "aws_dynamodb_table" "bookmarks" {
 # Account Tiers Table
 resource "aws_dynamodb_table" "account_tiers" {
   name           = "${local.project_name}-account-tiers-${local.environment}"
-  billing_mode   = "PROVISIONED"
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "tierId"
-  read_capacity  = 5
-  write_capacity = 5
 
   attribute {
     name = "tierId"
@@ -471,8 +450,6 @@ resource "aws_dynamodb_table" "account_tiers" {
     name            = "tier-name-index"
     hash_key        = "tierName"
     projection_type = "ALL"
-    read_capacity   = 5
-    write_capacity  = 5
   }
 
   # GSI for region-based tier lookup
@@ -480,8 +457,6 @@ resource "aws_dynamodb_table" "account_tiers" {
     name            = "region-index"
     hash_key        = "region"
     projection_type = "ALL"
-    read_capacity   = 5
-    write_capacity  = 5
   }
 
   tags = merge(local.common_tags, {
@@ -493,11 +468,9 @@ resource "aws_dynamodb_table" "account_tiers" {
 # User Usage Table - Monthly usage tracking for tier-based limits
 resource "aws_dynamodb_table" "user_usage" {
   name           = "${local.project_name}-user-usage-${local.environment}"
-  billing_mode   = "PROVISIONED"
+  billing_mode   = "PAY_PER_REQUEST"
   hash_key       = "userId"
   range_key      = "monthYear"
-  read_capacity  = 10
-  write_capacity = 10
 
   attribute {
     name = "userId"
@@ -529,106 +502,6 @@ resource "aws_api_gateway_rest_api" "seatmap_api" {
   tags = local.common_tags
 }
 
-# API Gateway Resource
-resource "aws_api_gateway_resource" "seat_map" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
-  path_part   = "seat-map"
-}
-
-# API Gateway Method (POST)
-resource "aws_api_gateway_method" "seat_map_post" {
-  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id   = aws_api_gateway_resource.seat_map.id
-  http_method   = "POST"
-  authorization = "NONE"
-  api_key_required = true
-}
-
-# API Gateway Integration
-resource "aws_api_gateway_integration" "seat_map_integration" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id = aws_api_gateway_resource.seat_map.id
-  http_method = aws_api_gateway_method.seat_map_post.http_method
-
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.seat_map.invoke_arn
-}
-
-# Lambda Permission for API Gateway
-resource "aws_lambda_permission" "api_gateway" {
-  statement_id  = "AllowExecutionFromAPIGateway"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.seat_map.function_name
-  principal     = "apigateway.amazonaws.com"
-
-  source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
-}
-
-# API Gateway Method Response
-resource "aws_api_gateway_method_response" "seat_map_response" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id = aws_api_gateway_resource.seat_map.id
-  http_method = aws_api_gateway_method.seat_map_post.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = true
-    "method.response.header.Access-Control-Allow-Methods" = true
-    "method.response.header.Access-Control-Allow-Headers" = true
-  }
-}
-
-# API Gateway Integration Response
-resource "aws_api_gateway_integration_response" "seat_map_integration_response" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id = aws_api_gateway_resource.seat_map.id
-  http_method = aws_api_gateway_method.seat_map_post.http_method
-  status_code = aws_api_gateway_method_response.seat_map_response.status_code
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,Authorization'"
-  }
-
-  depends_on = [aws_api_gateway_integration.seat_map_integration]
-}
-
-# API Gateway Resource for bookmark under seat-map
-resource "aws_api_gateway_resource" "seat_map_bookmark" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  parent_id   = aws_api_gateway_resource.seat_map.id
-  path_part   = "bookmark"
-}
-
-# API Gateway Resource for bookmarkId parameter under seat-map/bookmark
-resource "aws_api_gateway_resource" "seat_map_bookmark_id" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  parent_id   = aws_api_gateway_resource.seat_map_bookmark.id
-  path_part   = "{bookmarkId}"
-}
-
-# API Gateway Method for seat-map/bookmark/{bookmarkId} GET
-resource "aws_api_gateway_method" "seat_map_bookmark_get" {
-  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id   = aws_api_gateway_resource.seat_map_bookmark_id.id
-  http_method   = "GET"
-  authorization = "NONE"
-  api_key_required = true
-}
-
-# API Gateway Integration for seat-map/bookmark/{bookmarkId}
-resource "aws_api_gateway_integration" "seat_map_bookmark_integration" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id = aws_api_gateway_resource.seat_map_bookmark_id.id
-  http_method = aws_api_gateway_method.seat_map_bookmark_get.http_method
-
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.seat_map.invoke_arn
-}
 
 # Auth API Gateway Resources
 resource "aws_api_gateway_resource" "auth" {
@@ -829,38 +702,115 @@ resource "aws_lambda_permission" "auth_api_gateway" {
   source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
 }
 
-# Flight Offers API Gateway Resource
-resource "aws_api_gateway_resource" "flight_offers" {
+# Flight Search API Gateway Resource (replaces flight-offers)
+resource "aws_api_gateway_resource" "flight_search" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
   parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
-  path_part   = "flight-offers"
+  path_part   = "flight-search"
 }
 
-# Flight Offers Method (POST)
-resource "aws_api_gateway_method" "flight_offers_post" {
+# Flight Search Bookmark Resource
+resource "aws_api_gateway_resource" "flight_search_bookmark" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.flight_search.id
+  path_part   = "bookmark"
+}
+
+# Flight Search Bookmark ID Resource
+resource "aws_api_gateway_resource" "flight_search_bookmark_id" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.flight_search_bookmark.id
+  path_part   = "{bookmarkId}"
+}
+
+# Flight Search Method (POST)
+resource "aws_api_gateway_method" "flight_search_post" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id   = aws_api_gateway_resource.flight_offers.id
+  resource_id   = aws_api_gateway_resource.flight_search.id
   http_method   = "POST"
   authorization = "NONE"
   api_key_required = true
 }
 
-# Flight Offers Integration
-resource "aws_api_gateway_integration" "flight_offers_integration" {
+# Flight Search Bookmark Method (GET)
+resource "aws_api_gateway_method" "flight_search_bookmark_get" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.flight_search_bookmark_id.id
+  http_method   = "GET"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Flight Search Integration
+resource "aws_api_gateway_integration" "flight_search_integration" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id = aws_api_gateway_resource.flight_offers.id
-  http_method = aws_api_gateway_method.flight_offers_post.http_method
+  resource_id = aws_api_gateway_resource.flight_search.id
+  http_method = aws_api_gateway_method.flight_search_post.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.flight_offers.invoke_arn
+  uri                     = aws_lambda_function.flight_search.invoke_arn
 }
 
-# Lambda Permission for Flight Offers API Gateway
-resource "aws_lambda_permission" "flight_offers_api_gateway" {
+# Flight Search Bookmark Integration
+resource "aws_api_gateway_integration" "flight_search_bookmark_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.flight_search_bookmark_id.id
+  http_method = aws_api_gateway_method.flight_search_bookmark_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.flight_search.invoke_arn
+}
+
+# Lambda Permission for Flight Search API Gateway
+resource "aws_lambda_permission" "flight_search_api_gateway" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.flight_offers.function_name
+  function_name = aws_lambda_function.flight_search.function_name
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
+}
+
+# Seatmap View API Gateway Resources (new for usage tracking)
+resource "aws_api_gateway_resource" "seatmap" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_rest_api.seatmap_api.root_resource_id
+  path_part   = "seatmap"
+}
+
+resource "aws_api_gateway_resource" "seatmap_view" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  parent_id   = aws_api_gateway_resource.seatmap.id
+  path_part   = "view"
+}
+
+# Seatmap View Method (POST)
+resource "aws_api_gateway_method" "seatmap_view_post" {
+  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id   = aws_api_gateway_resource.seatmap_view.id
+  http_method   = "POST"
+  authorization = "NONE"
+  api_key_required = true
+}
+
+# Seatmap View Integration
+resource "aws_api_gateway_integration" "seatmap_view_integration" {
+  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
+  resource_id = aws_api_gateway_resource.seatmap_view.id
+  http_method = aws_api_gateway_method.seatmap_view_post.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.seatmap_view.invoke_arn
+}
+
+# Lambda Permission for Seatmap View API Gateway
+resource "aws_lambda_permission" "seatmap_view_api_gateway" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.seatmap_view.function_name
   principal     = "apigateway.amazonaws.com"
 
   source_arn = "${aws_api_gateway_rest_api.seatmap_api.execution_arn}/*/*"
@@ -1028,17 +978,14 @@ resource "aws_lambda_permission" "bookmarks_api_gateway" {
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "main" {
   depends_on = [
-    aws_api_gateway_integration.seat_map_integration,
-    aws_api_gateway_integration_response.seat_map_integration_response,
-    aws_api_gateway_integration.seat_map_bookmark_integration,
     aws_api_gateway_integration.auth_guest_integration,
     aws_api_gateway_integration.auth_login_integration,
     aws_api_gateway_integration.auth_register_integration,
     aws_api_gateway_integration.auth_verify_integration,
     aws_api_gateway_integration.auth_resend_verification_integration,
-    aws_api_gateway_integration.auth_profile_get_integration,
-    aws_api_gateway_integration.auth_profile_put_integration,
-    aws_api_gateway_integration.flight_offers_integration,
+    aws_api_gateway_integration.flight_search_integration,
+    aws_api_gateway_integration.flight_search_bookmark_integration,
+    aws_api_gateway_integration.seatmap_view_integration,
     aws_api_gateway_integration.bookmarks_get_integration,
     aws_api_gateway_integration.bookmarks_post_integration,
     aws_api_gateway_integration.bookmark_get_integration,
@@ -1050,9 +997,6 @@ resource "aws_api_gateway_deployment" "main" {
 
   triggers = {
     redeployment = sha1(jsonencode([
-      aws_api_gateway_resource.seat_map.id,
-      aws_api_gateway_method.seat_map_post.id,
-      aws_api_gateway_integration.seat_map_integration.id,
       aws_api_gateway_resource.auth.id,
       aws_api_gateway_resource.auth_guest.id,
       aws_api_gateway_resource.auth_login.id,
@@ -1074,9 +1018,17 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_integration.auth_resend_verification_integration.id,
       aws_api_gateway_integration.auth_profile_get_integration.id,
       aws_api_gateway_integration.auth_profile_put_integration.id,
-      aws_api_gateway_resource.flight_offers.id,
-      aws_api_gateway_method.flight_offers_post.id,
-      aws_api_gateway_integration.flight_offers_integration.id,
+      aws_api_gateway_resource.flight_search.id,
+      aws_api_gateway_resource.flight_search_bookmark.id,
+      aws_api_gateway_resource.flight_search_bookmark_id.id,
+      aws_api_gateway_method.flight_search_post.id,
+      aws_api_gateway_method.flight_search_bookmark_get.id,
+      aws_api_gateway_integration.flight_search_integration.id,
+      aws_api_gateway_integration.flight_search_bookmark_integration.id,
+      aws_api_gateway_resource.seatmap.id,
+      aws_api_gateway_resource.seatmap_view.id,
+      aws_api_gateway_method.seatmap_view_post.id,
+      aws_api_gateway_integration.seatmap_view_integration.id,
       aws_api_gateway_resource.bookmarks.id,
       aws_api_gateway_resource.bookmark_id.id,
       aws_api_gateway_method.bookmarks_get.id,
@@ -1093,10 +1045,6 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_method.tier_name_get.id,
       aws_api_gateway_integration.tiers_get_integration.id,
       aws_api_gateway_integration.tier_name_get_integration.id,
-      aws_api_gateway_resource.seat_map_bookmark.id,
-      aws_api_gateway_resource.seat_map_bookmark_id.id,
-      aws_api_gateway_method.seat_map_bookmark_get.id,
-      aws_api_gateway_integration.seat_map_bookmark_integration.id,
     ]))
   }
 
@@ -1125,13 +1073,13 @@ resource "aws_api_gateway_usage_plan" "main" {
   }
 
   quota_settings {
-    limit  = 50000  # Higher limit for production
+    limit  = 10000
     period = "MONTH"
   }
 
   throttle_settings {
-    rate_limit  = 500   # Higher rate limit for production
-    burst_limit = 1000  # Higher burst limit for production
+    rate_limit  = 100
+    burst_limit = 200
   }
 
   tags = local.common_tags

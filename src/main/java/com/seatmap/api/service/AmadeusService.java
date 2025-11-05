@@ -3,6 +3,8 @@ package com.seatmap.api.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatmap.api.exception.SeatmapApiException;
+import com.seatmap.api.model.FlightSearchResult;
+import com.seatmap.api.model.SeatMapData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +16,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
 
 public class AmadeusService {
     private static final Logger logger = LoggerFactory.getLogger(AmadeusService.class);
@@ -56,7 +64,7 @@ public class AmadeusService {
             
             // Step 2: Get seat map using the first flight offer
             JsonNode firstOffer = flightOffers.get("data").get(0);
-            return getSeatMapFromOffer(firstOffer);
+            return getSeatMapFromOfferInternal(firstOffer);
             
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
@@ -74,13 +82,101 @@ public class AmadeusService {
         }
     }
     
+    /**
+     * Search flight offers with integrated seatmap data
+     */
+    public List<FlightSearchResult> searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
+        try {
+            ensureValidToken();
+            
+            // 1. Get flight offers
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+            
+            if (flightOffers == null || !flightOffers.has("data")) {
+                return new ArrayList<>();
+            }
+            
+            // 2. For each offer, fetch seatmap concurrently and filter out failures
+            List<FlightSearchResult> results = extractFlightOffers(flightOffers).parallelStream()
+                .map(this::buildFlightSearchResult)
+                .filter(Objects::nonNull)  // Only include flights with successful seatmaps
+                .collect(toList());
+            
+            logger.info("Successfully processed {} flight offers with seatmaps from Amadeus", results.size());
+            return results;
+            
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error calling Amadeus API for flight search with seatmaps", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
+        }
+    }
+    
+    /**
+     * Build FlightSearchResult with integrated seatmap data
+     * Returns null if seatmap fetch fails (flight will be filtered out)
+     */
+    private FlightSearchResult buildFlightSearchResult(JsonNode offer) {
+        try {
+            // Get seatmap data for this offer
+            JsonNode seatMapResponse = getSeatMapFromOfferInternal(offer);
+            SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
+            
+            return new FlightSearchResult(offer, seatMapData, true, null);
+            
+        } catch (Exception e) {
+            logger.warn("Omitting flight {} - seatmap unavailable: {}", offer.path("id").asText(), e.getMessage());
+            return null; // Filter out flights without seatmaps
+        }
+    }
+    
+    /**
+     * Convert Amadeus seatmap response to SeatMapData model
+     */
+    private SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
+        // For now, return a basic SeatMapData with the source marked as AMADEUS
+        // This will be enhanced to properly parse the Amadeus seatmap response
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+        
+        // TODO: Implement proper conversion from Amadeus seatmap JSON to SeatMapData model
+        // This would involve parsing decks, seats, aircraft info, etc. from the response
+        
+        return seatMapData;
+    }
+    
+    /**
+     * Extract flight offers from Amadeus response
+     */
+    private List<JsonNode> extractFlightOffers(JsonNode flightOffers) {
+        List<JsonNode> offers = new ArrayList<>();
+        if (flightOffers.has("data") && flightOffers.get("data").isArray()) {
+            for (JsonNode offer : flightOffers.get("data")) {
+                offers.add(offer);
+            }
+        }
+        return offers;
+    }
+    
+    /**
+     * Get seatmap from flight offer (existing method, made public for reuse)
+     */
+    public JsonNode getSeatMapFromOffer(JsonNode flightOffer) throws SeatmapApiException {
+        try {
+            ensureValidToken();
+            return getSeatMapFromOfferInternal(flightOffer);
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error calling Amadeus API", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
+        }
+    }
+    
     public JsonNode getSeatMapFromOfferData(String flightOfferData) throws SeatmapApiException {
         try {
             ensureValidToken();
             
             // Parse the flight offer data
             JsonNode flightOffer = objectMapper.readTree(flightOfferData);
-            return getSeatMapFromOffer(flightOffer);
+            return getSeatMapFromOfferInternal(flightOffer);
             
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
@@ -138,7 +234,7 @@ public class AmadeusService {
         }
     }
     
-    private JsonNode getSeatMapFromOffer(JsonNode flightOffer) throws SeatmapApiException, IOException, InterruptedException {
+    private JsonNode getSeatMapFromOfferInternal(JsonNode flightOffer) throws SeatmapApiException, IOException, InterruptedException {
         String url = "https://" + endpoint + "/v1/shopping/seatmaps";
         
         // Create request body with flight offer

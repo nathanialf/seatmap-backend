@@ -46,7 +46,7 @@ curl -X POST {BASE_URL}/auth/guest \
 Use the guest token to search for flights:
 
 ```bash
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {GUEST_TOKEN}" \
@@ -63,7 +63,7 @@ curl -X POST {BASE_URL}/flight-offers \
 Use a flight offer from Step 2 to get seat map:
 
 ```bash
-curl -X POST {BASE_URL}/seat-map \
+curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {GUEST_TOKEN}" \
@@ -145,7 +145,7 @@ curl -X POST {BASE_URL}/auth/login \
 ### Basic Flight Search
 
 ```bash
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -159,7 +159,7 @@ curl -X POST {BASE_URL}/flight-offers \
 ### Advanced Flight Search with Filters
 
 ```bash
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -177,7 +177,7 @@ curl -X POST {BASE_URL}/flight-offers \
 
 ```bash
 # Domestic US flight
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -188,7 +188,7 @@ curl -X POST {BASE_URL}/flight-offers \
   }'
 
 # International flight
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -207,7 +207,7 @@ curl -X POST {BASE_URL}/flight-offers \
 Save a complete flight offer from flight search, then:
 
 ```bash
-curl -X POST {BASE_URL}/seat-map \
+curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -221,7 +221,7 @@ Try flights from different providers to test routing:
 
 ```bash
 # Test Amadeus seat map
-curl -X POST {BASE_URL}/seat-map \
+curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -230,7 +230,7 @@ curl -X POST {BASE_URL}/seat-map \
   }'
 
 # Test Sabre seat map  
-curl -X POST {BASE_URL}/seat-map \
+curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -270,7 +270,7 @@ curl -X GET {BASE_URL}/bookmarks \
 Using bookmark ID from create/list response:
 
 ```bash
-curl -X GET {BASE_URL}/seat-map/bookmark/{BOOKMARK_ID} \
+curl -X GET {BASE_URL}/seatmap/view/bookmark/{BOOKMARK_ID} \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {USER_JWT_TOKEN}"
 ```
@@ -344,7 +344,7 @@ curl -X GET {BASE_URL}/bookmarks \
 ### Test Validation Errors
 
 ```bash
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
@@ -371,7 +371,7 @@ GUEST_TOKEN=$(curl -s -X POST {BASE_URL}/auth/guest \
   -H "X-API-Key: {YOUR_API_KEY}" | jq -r '.token')
 
 # Search flights as guest
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer $GUEST_TOKEN" \
@@ -382,7 +382,7 @@ curl -X POST {BASE_URL}/flight-offers \
   }'
 
 # Get seat map as guest (save flight offer data first)
-curl -X POST {BASE_URL}/seat-map \
+curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer $GUEST_TOKEN" \
@@ -412,7 +412,7 @@ USER_TOKEN=$(curl -s -X GET "{BASE_URL}/auth/verify?token={VERIFICATION_TOKEN}" 
 ### 3. Full User Experience
 ```bash
 # Search flights as user
-curl -X POST {BASE_URL}/flight-offers \
+curl -X POST {BASE_URL}/flight-search \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN" \
@@ -433,7 +433,7 @@ BOOKMARK_ID=$(curl -s -X POST {BASE_URL}/bookmarks \
   }' | jq -r '.data.bookmarkId')
 
 # Get seat map by bookmark
-curl -X GET {BASE_URL}/seat-map/bookmark/$BOOKMARK_ID \
+curl -X GET {BASE_URL}/seatmap/view/bookmark/$BOOKMARK_ID \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN"
 
@@ -453,7 +453,7 @@ Test rate limits by making multiple rapid requests:
 ```bash
 # Test guest rate limits
 for i in {1..10}; do
-  curl -X POST {BASE_URL}/seat-map \
+  curl -X POST {BASE_URL}/seatmap/view \
     -H "Content-Type: application/json" \
     -H "X-API-Key: {YOUR_API_KEY}" \
     -H "Authorization: Bearer {GUEST_TOKEN}" \
@@ -468,7 +468,7 @@ done
 ```bash
 # Test concurrent flight searches
 for i in {1..5}; do
-  curl -X POST {BASE_URL}/flight-offers \
+  curl -X POST {BASE_URL}/flight-search \
     -H "Content-Type: application/json" \
     -H "X-API-Key: {YOUR_API_KEY}" \
     -H "Authorization: Bearer {USER_TOKEN}" \
