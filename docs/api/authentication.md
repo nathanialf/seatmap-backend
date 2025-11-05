@@ -91,6 +91,7 @@ Content-Type: application/json
 - No JWT token is provided until email verification is complete
 - User must check email and click verification link
 - Verification token expires in 1 hour
+- **Guest Usage Transfer**: If you used guest seat map views from the same IP address within the last 30 days, those views will be automatically transferred to your new user account, counting toward your monthly limit
 
 **Example cURL**:
 ```bash
@@ -231,6 +232,52 @@ curl -X POST {BASE_URL}/auth/login \
     "password": "SecurePass123!"
   }'
 ```
+
+---
+
+## Guest Usage Transfer
+
+When you register for a new account, any guest seat map views made from your IP address within the last 30 days are automatically transferred to your new user account. This ensures a seamless transition from guest usage to authenticated usage.
+
+### How It Works
+
+1. **Guest Usage Tracking**: Guest users can view up to 2 seat maps per IP address over 30 days
+2. **Registration Transfer**: During account registration, the system checks for guest usage from your IP
+3. **Automatic Transfer**: Guest seat map views are added to your current month's usage count
+4. **Fair Usage**: You get full tier limits minus any guest usage, ensuring fair access
+
+### Examples
+
+**Example 1: Fresh Registration**
+- Guest usage: 0 seat map views from your IP
+- After registration: Start with 0 usage, full tier limits available
+
+**Example 2: Partial Guest Usage**  
+- Guest usage: 1 seat map view from your IP
+- After registration: Start with 1 usage counted toward your monthly limit
+- FREE tier: 3 remaining (4 total - 1 transferred)
+- PRO tier: 49 remaining (50 total - 1 transferred)
+
+**Example 3: Maximum Guest Usage**
+- Guest usage: 2 seat map views from your IP  
+- After registration: Start with 2 usage counted toward your monthly limit
+- FREE tier: 2 remaining (4 total - 2 transferred)
+- PRO tier: 48 remaining (50 total - 2 transferred)
+
+### Transfer Conditions
+
+Guest usage is transferred only when:
+- ✅ Registration occurs from the same IP address as guest usage
+- ✅ Guest access record exists and is not expired (within 30 days)
+- ✅ Guest has made at least 1 seat map view
+- ❌ No transfer if guest record is expired or doesn't exist
+- ❌ No transfer if guest has 0 seat map views
+
+### Error Handling
+
+- Guest usage transfer failures do not prevent account registration
+- If transfer fails, you start with a clean usage count
+- Transfer is logged for audit purposes but runs in the background
 
 ---
 

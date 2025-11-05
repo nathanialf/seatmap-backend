@@ -146,7 +146,7 @@ class AuthHandlerTest {
         mockResponse.setPending(true);
         mockResponse.setEmail("newuser@example.com");
         mockResponse.setMessage("Registration successful! Please check your email to verify your account.");
-        when(mockAuthService.register(any(RegisterRequest.class))).thenReturn(mockResponse);
+        when(mockAuthService.register(any(RegisterRequest.class), anyString())).thenReturn(mockResponse);
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
@@ -155,7 +155,7 @@ class AuthHandlerTest {
         assertTrue(response.getBody().contains("newuser@example.com"));
         assertTrue(response.getBody().contains("\"token\":null"));
         assertTrue(response.getBody().contains("\"pending\":true"));
-        verify(mockAuthService).register(any(RegisterRequest.class));
+        verify(mockAuthService).register(any(RegisterRequest.class), anyString());
     }
     
     @Test
@@ -174,14 +174,14 @@ class AuthHandlerTest {
         request.setBody(objectMapper.writeValueAsString(registerRequest));
         
         // Mock auth service to throw bad request exception (changed from conflict)
-        when(mockAuthService.register(any(RegisterRequest.class)))
+        when(mockAuthService.register(any(RegisterRequest.class), anyString()))
             .thenThrow(SeatmapException.badRequest("Email address is already registered"));
         
         APIGatewayProxyResponseEvent response = handler.handleRequest(request, mockContext);
         
         assertEquals(400, response.getStatusCode());
         assertTrue(response.getBody().contains("Email address is already registered"));
-        verify(mockAuthService).register(any(RegisterRequest.class));
+        verify(mockAuthService).register(any(RegisterRequest.class), anyString());
     }
     
     @Test

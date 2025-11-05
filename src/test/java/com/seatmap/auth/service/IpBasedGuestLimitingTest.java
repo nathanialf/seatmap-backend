@@ -4,6 +4,7 @@ import com.seatmap.auth.model.AuthResponse;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.email.service.EmailService;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +36,9 @@ class IpBasedGuestLimitingTest {
     private GuestAccessRepository mockGuestAccessRepository;
     
     @Mock
+    private UserUsageRepository mockUserUsageRepository;
+    
+    @Mock
     private EmailService mockEmailService;
     
     private AuthService authService;
@@ -47,6 +51,7 @@ class IpBasedGuestLimitingTest {
             mockPasswordService,
             mockJwtService,
             mockGuestAccessRepository,
+            mockUserUsageRepository,
             mockEmailService
         );
         

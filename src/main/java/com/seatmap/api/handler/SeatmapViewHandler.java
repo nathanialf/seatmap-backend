@@ -9,6 +9,7 @@ import com.seatmap.api.model.SeatmapViewRequest;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.auth.service.AuthService;
 import com.seatmap.auth.service.JwtService;
 import com.seatmap.auth.service.PasswordService;
@@ -62,10 +63,11 @@ public class SeatmapViewHandler implements RequestHandler<APIGatewayProxyRequest
         // Initialize AuthService with all dependencies for token validation
         UserRepository userRepository = new UserRepository(dynamoDbClient, usersTable);
         SessionRepository sessionRepository = new SessionRepository(dynamoDbClient, sessionsTable);
+        UserUsageRepository userUsageRepository = new UserUsageRepository(dynamoDbClient);
         PasswordService passwordService = new PasswordService();
         EmailService emailService = new EmailService();
         
-        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
+        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, userUsageRepository, emailService);
         this.userUsageLimitsService = new UserUsageLimitsService(dynamoDbClient, environment);
     }
     

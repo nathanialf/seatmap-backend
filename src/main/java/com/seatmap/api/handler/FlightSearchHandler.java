@@ -76,6 +76,7 @@ public class FlightSearchHandler implements RequestHandler<APIGatewayProxyReques
             new com.seatmap.auth.service.PasswordService(),
             jwtService,
             new com.seatmap.auth.repository.GuestAccessRepository(dynamoDbClient),
+            new com.seatmap.auth.repository.UserUsageRepository(dynamoDbClient),
             new com.seatmap.email.service.EmailService()
         );
     }

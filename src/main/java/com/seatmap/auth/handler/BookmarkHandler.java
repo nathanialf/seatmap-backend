@@ -68,14 +68,14 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         UserRepository userRepository = new UserRepository(dynamoDbClient, usersTable);
         SessionRepository sessionRepository = new SessionRepository(dynamoDbClient, sessionsTable);
         GuestAccessRepository guestAccessRepository = new GuestAccessRepository(dynamoDbClient);
+        UserUsageRepository userUsageRepository = new UserUsageRepository(dynamoDbClient);
         PasswordService passwordService = new PasswordService();
         JwtService jwtService = new JwtService();
         EmailService emailService = new EmailService();
         
-        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
+        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, userUsageRepository, emailService);
         
-        // Initialize UserUsageLimitsService for tier-based limits
-        UserUsageRepository userUsageRepository = new UserUsageRepository(dynamoDbClient);
+        // Initialize UserUsageLimitsService for tier-based limits (reuse the same repository)
         this.usageLimitsService = new UserUsageLimitsService(userUsageRepository, dynamoDbClient);
     }
     

@@ -6,9 +6,12 @@ import com.seatmap.auth.model.RegisterRequest;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.common.exception.SeatmapException;
+import com.seatmap.common.model.GuestAccessHistory;
 import com.seatmap.common.model.Session;
 import com.seatmap.common.model.User;
+import com.seatmap.common.model.UserUsageHistory;
 import com.seatmap.email.service.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +29,7 @@ public class AuthService {
     private final PasswordService passwordService;
     private final JwtService jwtService;
     private final GuestAccessRepository guestAccessRepository;
+    private final UserUsageRepository userUsageRepository;
     private final EmailService emailService;
     
     public AuthService(UserRepository userRepository, 
@@ -33,19 +37,28 @@ public class AuthService {
                       PasswordService passwordService,
                       JwtService jwtService,
                       GuestAccessRepository guestAccessRepository,
+                      UserUsageRepository userUsageRepository,
                       EmailService emailService) {
         this.userRepository = userRepository;
         this.sessionRepository = sessionRepository;
         this.passwordService = passwordService;
         this.jwtService = jwtService;
         this.guestAccessRepository = guestAccessRepository;
+        this.userUsageRepository = userUsageRepository;
         this.emailService = emailService;
     }
     
     /**
-     * Register a new user with email and password
+     * Register a new user with email and password (backward compatibility)
      */
     public AuthResponse register(RegisterRequest request) throws SeatmapException {
+        return register(request, null);
+    }
+    
+    /**
+     * Register a new user with email and password, transferring guest usage from IP
+     */
+    public AuthResponse register(RegisterRequest request, String clientIp) throws SeatmapException {
         logger.info("Processing registration for email: {}", request.getEmail());
         
         // Validate password
@@ -75,6 +88,9 @@ public class AuthService {
         
         // Save unverified user
         userRepository.saveUser(user);
+        
+        // Transfer guest usage from IP if available
+        transferGuestUsageToUser(user.getUserId(), clientIp);
         
         // Send verification email
         emailService.sendVerificationEmail(user.getEmail(), user.getVerificationToken());
@@ -352,5 +368,60 @@ public class AuthService {
             token.append(String.format("%02x", b));
         }
         return token.toString();
+    }
+    
+    /**
+     * Transfer guest usage from IP to newly registered user
+     * Creates initial user usage record with guest seatmap count if guest record exists and is valid
+     */
+    private void transferGuestUsageToUser(String userId, String clientIp) {
+        // Skip if no IP provided
+        if (clientIp == null || clientIp.trim().isEmpty() || "unknown".equals(clientIp)) {
+            logger.debug("Skipping guest usage transfer - no valid IP provided");
+            return;
+        }
+        
+        try {
+            // Look up guest access history for this IP
+            Optional<GuestAccessHistory> guestHistory = guestAccessRepository.findByIpAddress(clientIp);
+            
+            if (guestHistory.isEmpty()) {
+                logger.debug("No guest access history found for IP: {} - no transfer needed", clientIp);
+                return;
+            }
+            
+            GuestAccessHistory guest = guestHistory.get();
+            
+            // Check if guest record is still valid (not expired)
+            if (guest.getExpiresAt() != null && guest.getExpiresAt().isBefore(Instant.now())) {
+                logger.debug("Guest access history for IP: {} has expired - no transfer needed", clientIp);
+                return;
+            }
+            
+            int guestSeatmapUsage = guest.getSeatmapRequestsUsed() != null ? guest.getSeatmapRequestsUsed() : 0;
+            
+            if (guestSeatmapUsage > 0) {
+                // Create user usage record for current month with transferred guest usage
+                UserUsageHistory userUsage = new UserUsageHistory(userId);
+                userUsage.setSeatmapRequestsUsed(guestSeatmapUsage);
+                
+                // Save the user usage record
+                userUsageRepository.save(userUsage);
+                
+                logger.info("Transferred {} seatmap requests from guest IP: {} to user: {}", 
+                    guestSeatmapUsage, clientIp, userId);
+                
+                // Optionally mark the guest record as transferred to prevent double-counting
+                // We could add a transferredToUserId field, but for now just log the transfer
+                
+            } else {
+                logger.debug("No seatmap usage to transfer from guest IP: {} to user: {}", clientIp, userId);
+            }
+            
+        } catch (Exception e) {
+            // Don't fail registration if guest transfer fails - just log the error
+            logger.error("Failed to transfer guest usage from IP: {} to user: {} - continuing with registration", 
+                clientIp, userId, e);
+        }
     }
 }

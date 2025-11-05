@@ -13,6 +13,7 @@ import com.seatmap.auth.model.RegisterRequest;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
 import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.auth.service.AuthService;
 import com.seatmap.common.model.User;
 import com.seatmap.auth.service.JwtService;
@@ -61,11 +62,12 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
         this.userRepository = new UserRepository(dynamoDbClient, usersTable);
         SessionRepository sessionRepository = new SessionRepository(dynamoDbClient, sessionsTable);
         GuestAccessRepository guestAccessRepository = new GuestAccessRepository(dynamoDbClient);
+        UserUsageRepository userUsageRepository = new UserUsageRepository(dynamoDbClient);
         PasswordService passwordService = new PasswordService();
         JwtService jwtService = new JwtService();
         EmailService emailService = new EmailService();
         
-        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, emailService);
+        this.authService = new AuthService(userRepository, sessionRepository, passwordService, jwtService, guestAccessRepository, userUsageRepository, emailService);
     }
     
     @Override
@@ -176,7 +178,11 @@ public class AuthHandler implements RequestHandler<APIGatewayProxyRequestEvent, 
             return createErrorResponse(400, "Validation errors: " + errors.toString());
         }
         
-        AuthResponse response = authService.register(request);
+        // Extract client IP for guest usage transfer
+        String clientIp = extractClientIp(event);
+        logger.debug("Client IP extracted for registration: {}", clientIp);
+        
+        AuthResponse response = authService.register(request, clientIp);
         return createSuccessResponse(response);
     }
     
