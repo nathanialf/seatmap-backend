@@ -187,7 +187,11 @@ public class SabreService {
             JsonNode seatMapResponse = getSeatMapFromFlight(carrierCode, flightNumber, departureDate, origin, destination);
             SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
             
-            return new FlightSearchResult(flight, seatMapData, true, null);
+            // Add dataSource field to identify this as SABRE data
+            ObjectNode flightWithDataSource = flight.deepCopy();
+            flightWithDataSource.put("dataSource", "SABRE");
+            
+            return new FlightSearchResult(flightWithDataSource, seatMapData, true, null);
             
         } catch (Exception e) {
             logger.warn("Omitting flight {} - seatmap unavailable: {}", flight.path("id").asText(), e.getMessage());

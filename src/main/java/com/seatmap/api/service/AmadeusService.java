@@ -2,6 +2,7 @@ package com.seatmap.api.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seatmap.api.exception.SeatmapApiException;
 import com.seatmap.api.model.FlightSearchResult;
 import com.seatmap.api.model.SeatMapData;
@@ -121,7 +122,11 @@ public class AmadeusService {
             JsonNode seatMapResponse = getSeatMapFromOfferInternal(offer);
             SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
             
-            return new FlightSearchResult(offer, seatMapData, true, null);
+            // Add dataSource field to identify this as AMADEUS data
+            ObjectNode offerWithDataSource = offer.deepCopy();
+            offerWithDataSource.put("dataSource", "AMADEUS");
+            
+            return new FlightSearchResult(offerWithDataSource, seatMapData, true, null);
             
         } catch (Exception e) {
             logger.warn("Omitting flight {} - seatmap unavailable: {}", offer.path("id").asText(), e.getMessage());

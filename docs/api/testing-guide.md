@@ -201,10 +201,10 @@ curl -X POST {BASE_URL}/flight-search \
 
 ---
 
-## Seat Map Testing
+## Seat Map Usage Tracking Testing
 
-### Direct Seat Map Request
-Save a complete flight offer from flight search, then:
+### Track Seat Map View
+Record that a user viewed a seat map (decrements usage quotas):
 
 ```bash
 curl -X POST {BASE_URL}/seatmap/view \
@@ -216,26 +216,45 @@ curl -X POST {BASE_URL}/seatmap/view \
   }'
 ```
 
-### Test Both Data Sources
-Try flights from different providers to test routing:
+**Expected Response**:
+```json
+{
+  "success": true,
+  "message": "Seatmap view recorded"
+}
+```
+
+**Important**: This endpoint does NOT return seat map data. It only tracks usage for quota enforcement. Actual seat map data is embedded in flight search responses.
+
+### Test Guest Usage Limits
+Test that guest users hit their view limits:
 
 ```bash
-# Test Amadeus seat map
+# First view (should succeed)
 curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
-  -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
+  -H "Authorization: Bearer {GUEST_TOKEN}" \
   -d '{
-    "flightOfferData": "{AMADEUS_FLIGHT_OFFER_WITH_dataSource_AMADEUS}"
+    "flightOfferData": "{FLIGHT_OFFER_JSON}"
   }'
 
-# Test Sabre seat map  
+# Second view (should succeed) 
 curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
-  -H "Authorization: Bearer {YOUR_JWT_TOKEN}" \
+  -H "Authorization: Bearer {GUEST_TOKEN}" \
   -d '{
-    "flightOfferData": "{SABRE_FLIGHT_OFFER_WITH_dataSource_SABRE}"
+    "flightOfferData": "{FLIGHT_OFFER_JSON}"
+  }'
+
+# Third view (should fail with quota exceeded)
+curl -X POST {BASE_URL}/seatmap/view \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -H "Authorization: Bearer {GUEST_TOKEN}" \
+  -d '{
+    "flightOfferData": "{FLIGHT_OFFER_JSON}"
   }'
 ```
 
@@ -290,7 +309,7 @@ curl -X DELETE {BASE_URL}/bookmarks/{BOOKMARK_ID} \
 ### Get Profile
 
 ```bash
-curl -X GET {BASE_URL}/profile \
+curl -X GET {BASE_URL}/auth/profile \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {USER_JWT_TOKEN}"
 ```
@@ -298,7 +317,7 @@ curl -X GET {BASE_URL}/profile \
 ### Update Profile
 
 ```bash
-curl -X PUT {BASE_URL}/profile \
+curl -X PUT {BASE_URL}/auth/profile \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {USER_JWT_TOKEN}" \
@@ -315,7 +334,7 @@ curl -X PUT {BASE_URL}/profile \
 ### Test Missing API Key
 
 ```bash
-curl -X GET {BASE_URL}/profile \
+curl -X GET {BASE_URL}/auth/profile \
   -H "Authorization: Bearer {USER_JWT_TOKEN}"
 ```
 
@@ -324,7 +343,7 @@ curl -X GET {BASE_URL}/profile \
 ### Test Invalid Token
 
 ```bash
-curl -X GET {BASE_URL}/profile \
+curl -X GET {BASE_URL}/auth/profile \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer invalid_token"
 ```
@@ -438,7 +457,7 @@ curl -X GET {BASE_URL}/seatmap/view/bookmark/$BOOKMARK_ID \
   -H "Authorization: Bearer $USER_TOKEN"
 
 # Check profile
-curl -X GET {BASE_URL}/profile \
+curl -X GET {BASE_URL}/auth/profile \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer $USER_TOKEN"
 ```
@@ -519,7 +538,7 @@ export BASE_URL="your_base_url"
 export USER_TOKEN="your_user_token"
 
 # Then use in commands
-curl -X GET $BASE_URL/profile \
+curl -X GET $BASE_URL/auth/profile \
   -H "X-API-Key: $API_KEY" \
   -H "Authorization: Bearer $USER_TOKEN"
 ```

@@ -4,11 +4,16 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
 
 public class FlightSearchResult {
     private String id;
+    
+    @NotNull(message = "dataSource is required for provider routing")
+    @NotBlank(message = "dataSource cannot be blank")
     private String dataSource;
     private String type;
     private String source;
@@ -35,7 +40,12 @@ public class FlightSearchResult {
     public FlightSearchResult(JsonNode flightOffer, SeatMapData seatMap, boolean seatMapAvailable, String seatMapError) {
         // Extract flight offer fields
         this.id = flightOffer.path("id").asText();
-        this.dataSource = flightOffer.path("dataSource").asText();
+        
+        // dataSource is required for proper routing - fail fast if missing
+        if (!flightOffer.has("dataSource") || flightOffer.get("dataSource").asText().trim().isEmpty()) {
+            throw new IllegalArgumentException("Flight offer must contain a valid dataSource field for provider routing");
+        }
+        this.dataSource = flightOffer.get("dataSource").asText();
         this.type = flightOffer.path("type").asText();
         this.source = flightOffer.path("source").asText();
         this.instantTicketingRequired = flightOffer.path("instantTicketingRequired").asBoolean();

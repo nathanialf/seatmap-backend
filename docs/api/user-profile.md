@@ -10,7 +10,7 @@ Manage user profile information and account settings. **Requires user authentica
 
 Retrieve the current user's profile information.
 
-**Endpoint**: `GET /profile`
+**Endpoint**: `GET /auth/profile`
 
 **Headers**:
 ```
@@ -66,7 +66,7 @@ curl -X GET {BASE_URL}/profile \
 
 Update the current user's profile information.
 
-**Endpoint**: `PUT /profile`
+**Endpoint**: `PUT /auth/profile`
 
 **Headers**:
 ```
