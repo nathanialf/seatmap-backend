@@ -6,6 +6,8 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.api.model.FlightSearchRequest;
+import com.seatmap.api.model.FlightSearchResponse;
+import com.seatmap.api.service.FlightSearchService;
 import com.seatmap.auth.model.CreateBookmarkRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.service.AuthService;
@@ -44,6 +46,9 @@ class BookmarkHandlerTest {
     private UserUsageLimitsService mockUsageLimitsService;
     
     @Mock
+    private FlightSearchService mockFlightSearchService;
+    
+    @Mock
     private Context mockContext;
     
     private ObjectMapper objectMapper;
@@ -68,6 +73,10 @@ class BookmarkHandlerTest {
         Field usageLimitsServiceField = BookmarkHandler.class.getDeclaredField("usageLimitsService");
         usageLimitsServiceField.setAccessible(true);
         usageLimitsServiceField.set(handler, mockUsageLimitsService);
+        
+        Field flightSearchServiceField = BookmarkHandler.class.getDeclaredField("flightSearchService");
+        flightSearchServiceField.setAccessible(true);
+        flightSearchServiceField.set(handler, mockFlightSearchService);
     }
     
     private APIGatewayProxyRequestEvent createRequestEvent(String method, String path, String authToken, String body) {
@@ -631,14 +640,19 @@ class BookmarkHandlerTest {
         when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
             .thenReturn(Optional.of(savedSearch));
         
+        // Mock the flight search service to return a response
+        FlightSearchResponse mockResponse = new FlightSearchResponse(new ArrayList<>(), new FlightSearchResponse.SearchMetadata(0, "AMADEUS,SABRE"));
+        when(mockFlightSearchService.searchFlightsWithSeatmaps(any(FlightSearchRequest.class))).thenReturn(mockResponse);
+        
         // Act
         APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
         
         // Assert
         assertEquals(200, response.getStatusCode());
-        assertTrue(response.getBody().contains("message"));
+        assertTrue(response.getBody().contains("data"));
         verify(mockAuthService).validateToken("valid-token");
         verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
+        verify(mockFlightSearchService).searchFlightsWithSeatmaps(any(FlightSearchRequest.class));
     }
     
     @Test

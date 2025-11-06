@@ -8,6 +8,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.api.model.FlightSearchRequest;
+import com.seatmap.api.model.FlightSearchResponse;
+import com.seatmap.api.service.AmadeusService;
+import com.seatmap.api.service.FlightSearchService;
+import com.seatmap.api.service.SabreService;
 import com.seatmap.auth.model.CreateBookmarkRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
@@ -42,6 +46,7 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
     private final BookmarkRepository bookmarkRepository;
     private final AuthService authService;
     private final UserUsageLimitsService usageLimitsService;
+    private final FlightSearchService flightSearchService;
     
     public BookmarkHandler() {
         this.objectMapper = new ObjectMapper();
@@ -78,6 +83,11 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         
         // Initialize UserUsageLimitsService for tier-based limits (reuse the same repository)
         this.usageLimitsService = new UserUsageLimitsService(userUsageRepository, dynamoDbClient);
+        
+        // Initialize FlightSearchService for bookmark execution
+        AmadeusService amadeusService = new AmadeusService();
+        SabreService sabreService = new SabreService();
+        this.flightSearchService = new FlightSearchService(amadeusService, sabreService);
     }
     
     @Override
@@ -318,17 +328,41 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
             return createErrorResponse(400, "Only saved search items can be executed");
         }
         
-        // Update last accessed time
-        bookmark.get().updateLastAccessed();
-        bookmarkRepository.saveBookmark(bookmark.get());
+        // Parse stored search request JSON
+        FlightSearchRequest searchRequest;
+        try {
+            searchRequest = objectMapper.readValue(
+                bookmark.get().getSearchRequest(), 
+                FlightSearchRequest.class
+            );
+        } catch (Exception e) {
+            logger.error("Error parsing stored search request", e);
+            return createErrorResponse(400, "Invalid stored search data - unable to parse search parameters");
+        }
         
-        // Return the search request that can be executed by the frontend
-        return createSuccessResponse(Map.of(
-            "searchRequest", bookmark.get().getSearchRequest(),
-            "title", bookmark.get().getTitle(),
-            "searchId", bookmarkId,
-            "message", "Search request ready for execution"
-        ));
+        // Validate parsed request
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(searchRequest);
+        if (!violations.isEmpty()) {
+            StringBuilder errors = new StringBuilder();
+            for (ConstraintViolation<FlightSearchRequest> violation : violations) {
+                errors.append(violation.getMessage()).append("; ");
+            }
+            return createErrorResponse(400, "Invalid search parameters in bookmark: " + errors.toString());
+        }
+        
+        // Execute flight search  
+        try {
+            FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(searchRequest);
+            
+            // Update last accessed time
+            bookmark.get().updateLastAccessed();
+            bookmarkRepository.saveBookmark(bookmark.get());
+            
+            return createSuccessResponse(response);
+        } catch (SeatmapException e) {
+            logger.error("Error executing saved search", e);
+            return createErrorResponse(e.getHttpStatus(), e.getMessage());
+        }
     }
     
     private String extractUserIdFromToken(APIGatewayProxyRequestEvent event) {

@@ -240,22 +240,22 @@ cd terraform/environments/prod
 
 ## Testing
 
-### Test Coverage (581 tests total - 66% instruction coverage)
-**Summary**: 581 tests, 0 failures, 6 skipped (100% success rate)
+### Test Coverage (595 tests total - 68% instruction coverage)
+**Summary**: 595 tests, 0 failures, 6 skipped (100% success rate)
 
 #### **Package-Level Coverage**:
 - **com.seatmap.api.exception**: 3 tests (100% coverage)
 - **com.seatmap.email.service**: 9 tests (98% coverage)
 - **com.seatmap.common.model**: 76 tests (90% coverage) 
 - **com.seatmap.auth.service**: 139 tests (89% coverage)
-- **com.seatmap.auth.handler**: 70 tests (87% coverage)
+- **com.seatmap.auth.handler**: 70 tests (85% coverage)
 - **com.seatmap.auth.model**: Not separately tested (83% coverage)
 - **com.seatmap.common.exception**: Not separately tested (79% coverage)
 - **com.seatmap.api.model**: 95 tests (72% coverage)
 - **com.seatmap.common.repository**: 16 tests (70% coverage)
 - **com.seatmap.auth.repository**: 65 tests (66% coverage)
-- **com.seatmap.api.handler**: 57 tests (55% coverage)
-- **com.seatmap.api.service**: 41 tests (34% coverage, 6 skipped)
+- **com.seatmap.api.handler**: 57 tests (65% coverage)
+- **com.seatmap.api.service**: 55 tests (39% coverage, 6 skipped)
 
 #### **Key Test Areas**:
 - **Authentication Services**: 139 comprehensive tests (89% coverage)
@@ -279,7 +279,8 @@ cd terraform/environments/prod
   - Request/response validation with Jakarta Bean Validation
   - Complex nested object serialization/deserialization
   - Edge cases and error scenarios
-- **API Services**: 41 tests (34% coverage)
+- **API Services**: 55 tests (39% coverage) 
+  - **FlightSearchService**: 14 tests (95% coverage) ⭐ **NEW** - Concurrent API execution, result meshing, error handling
   - AmadeusService: 6 tests (61% coverage) - OAuth2 integration, error handling
   - SabreService: 35 tests (28% coverage) - SOAP integration, JSON parsing, authentication
   - 6 skipped tests (performance and real API integration tests)
@@ -678,7 +679,7 @@ For complete API documentation, see `docs/api/saved-searches.md`
 - ✅ **Build Validation**: Tests run on every deployment with fail-fast on failures
 - ✅ **Infrastructure as Code**: Complete Terraform management
 - ✅ **Environment Separation**: dev/prod isolation
-- ✅ **Test Quality**: 66% code coverage with comprehensive integration tests
+- ✅ **Test Quality**: 68% code coverage with comprehensive integration tests
 
 ### Planned
 - CloudWatch alarms for Lambda errors and API Gateway 5xx
