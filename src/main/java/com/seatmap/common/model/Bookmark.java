@@ -2,7 +2,6 @@ package com.seatmap.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.seatmap.api.model.FlightSearchRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -29,8 +28,8 @@ public class Bookmark {
     private ItemType itemType = ItemType.BOOKMARK; // Default for backward compatibility
     
     // Type-specific fields - only one should be populated based on itemType
-    private String flightOfferData;           // For BOOKMARK type
-    private FlightSearchRequest searchRequest; // For SAVED_SEARCH type
+    private String flightOfferData;           // For BOOKMARK type - JSON string
+    private String searchRequest;             // For SAVED_SEARCH type - JSON string
     
     private Instant createdAt;
     private Instant updatedAt;
@@ -44,34 +43,19 @@ public class Bookmark {
     }
 
     // Constructor for flight bookmark
-    public Bookmark(String userId, String bookmarkId, String title, String flightOfferData) {
+    public Bookmark(String userId, String bookmarkId, String title, String flightOfferData, ItemType itemType) {
         this();
         this.userId = userId;
         this.bookmarkId = bookmarkId;
         this.title = title;
-        this.itemType = ItemType.BOOKMARK;
-        this.flightOfferData = flightOfferData;
-    }
-    
-    // Constructor for saved search
-    public Bookmark(String userId, String bookmarkId, String title, FlightSearchRequest searchRequest) {
-        this();
-        this.userId = userId;
-        this.bookmarkId = bookmarkId;
-        this.title = title;
-        this.itemType = ItemType.SAVED_SEARCH;
-        this.searchRequest = searchRequest;
+        this.itemType = itemType;
         
-        // Set expiration to flight departure date
-        if (searchRequest != null && searchRequest.getDepartureDate() != null) {
-            try {
-                // Parse departure date and set expiration to end of that day
-                java.time.LocalDate departureDate = java.time.LocalDate.parse(searchRequest.getDepartureDate());
-                this.expiresAt = departureDate.atTime(23, 59, 59).atZone(java.time.ZoneOffset.UTC).toInstant();
-            } catch (Exception e) {
-                // If parsing fails, fall back to 30 days
-                this.expiresAt = Instant.now().plusSeconds(30 * 24 * 60 * 60);
-            }
+        if (itemType == ItemType.BOOKMARK) {
+            this.flightOfferData = flightOfferData;
+        } else if (itemType == ItemType.SAVED_SEARCH) {
+            this.searchRequest = flightOfferData; // flightOfferData parameter is actually searchRequest JSON
+            // Set expiration to 30 days by default for saved searches
+            this.expiresAt = Instant.now().plusSeconds(30 * 24 * 60 * 60);
         }
     }
 
@@ -115,11 +99,11 @@ public class Bookmark {
         this.itemType = itemType;
     }
 
-    public FlightSearchRequest getSearchRequest() {
+    public String getSearchRequest() {
         return searchRequest;
     }
 
-    public void setSearchRequest(FlightSearchRequest searchRequest) {
+    public void setSearchRequest(String searchRequest) {
         this.searchRequest = searchRequest;
     }
 

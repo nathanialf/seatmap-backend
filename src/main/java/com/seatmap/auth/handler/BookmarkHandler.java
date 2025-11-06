@@ -228,9 +228,17 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         Bookmark bookmark;
         
         if (request.getItemType() == Bookmark.ItemType.BOOKMARK) {
-            bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), request.getFlightOfferData());
+            bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), request.getFlightOfferData(), Bookmark.ItemType.BOOKMARK);
         } else if (request.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
-            bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), request.getSearchRequest());
+            // Convert FlightSearchRequest object to JSON string
+            String searchRequestJson;
+            try {
+                searchRequestJson = objectMapper.writeValueAsString(request.getSearchRequest());
+            } catch (Exception e) {
+                logger.error("Error serializing search request to JSON", e);
+                return createErrorResponse(400, "Invalid search request format");
+            }
+            bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), searchRequestJson, Bookmark.ItemType.SAVED_SEARCH);
         } else {
             return createErrorResponse(400, "Invalid item type");
         }

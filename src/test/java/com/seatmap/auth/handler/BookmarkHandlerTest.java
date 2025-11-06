@@ -109,7 +109,7 @@ class BookmarkHandlerTest {
         
         String flightOfferData = objectMapper.writeValueAsString(flightOfferMap);
         
-        Bookmark bookmark = new Bookmark(testUserId, testBookmarkId, "Test Flight", flightOfferData);
+        Bookmark bookmark = new Bookmark(testUserId, testBookmarkId, "Test Flight", flightOfferData, Bookmark.ItemType.BOOKMARK);
         bookmark.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60)); // 30 days
         return bookmark;
     }
@@ -613,12 +613,9 @@ class BookmarkHandlerTest {
     // SAVED SEARCH EXECUTION TESTS
     
     private Bookmark createTestSavedSearch() throws Exception {
-        FlightSearchRequest searchRequest = new FlightSearchRequest();
-        searchRequest.setOrigin("LAX");
-        searchRequest.setDestination("JFK");
-        searchRequest.setDepartureDate("2024-06-15");
+        String searchRequestJson = "{\"origin\":\"LAX\",\"destination\":\"JFK\",\"departureDate\":\"2024-06-15\",\"travelClass\":\"ECONOMY\",\"maxResults\":10}";
         
-        Bookmark savedSearch = new Bookmark(testUserId, testBookmarkId, "Test Saved Search", searchRequest);
+        Bookmark savedSearch = new Bookmark(testUserId, testBookmarkId, "Test Saved Search", searchRequestJson, Bookmark.ItemType.SAVED_SEARCH);
         savedSearch.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60)); // 30 days
         return savedSearch;
     }
