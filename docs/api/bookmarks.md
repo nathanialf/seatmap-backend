@@ -163,7 +163,7 @@ Authorization: Bearer your_user_jwt_token
     ],
     "total": 2,
     "tier": "PRO",
-    "remainingThisMonth": 48
+    "remaining": 8
   }
 }
 ```
@@ -190,7 +190,7 @@ Authorization: Bearer your_user_jwt_token
     ],
     "total": 1,
     "tier": "PRO",
-    "remainingThisMonth": 48
+    "remaining": 9
   }
 }
 ```
@@ -223,7 +223,7 @@ Authorization: Bearer your_user_jwt_token
     ],
     "total": 1,
     "tier": "PRO",
-    "remainingThisMonth": 48
+    "remaining": 9
   }
 }
 ```
@@ -449,7 +449,7 @@ The unified API uses real-time usage counting instead of cumulative counters:
 
 ### Usage Limits by Tier
 - **FREE Tier**: Cannot create bookmarks or saved searches
-- **PRO Tier**: 50 active items per month
+- **PRO Tier**: 10 active items total
 - **BUSINESS Tier**: Unlimited items
 - **DEV Tier**: Unlimited items (development only)
 
@@ -457,15 +457,15 @@ The unified API uses real-time usage counting instead of cumulative counters:
 Every list response includes:
 - `total`: Number of items currently returned
 - `tier`: Your account tier
-- `remainingThisMonth`: How many more items you can create this month
+- `remaining`: How many more items you can create (real-time active count)
 
 ### Example Real-Time Counting
 ```
-PRO user (50/month limit):
-- Creates 30 bookmarks and 15 saved searches = 45 active items
-- Deletes 10 bookmarks = 35 active items, 15 remaining slots
-- 5 bookmarks expire after flights = 30 active items, 20 remaining slots
-- Can create 20 more items before hitting the 50-item limit
+PRO user (10 total limit):
+- Creates 7 bookmarks and 2 saved searches = 9 active items
+- Deletes 3 bookmarks = 6 active items, 4 remaining slots
+- 2 bookmarks expire after flights = 4 active items, 6 remaining slots
+- Can create 6 more items before hitting the 10-item limit
 ```
 
 This is a significant improvement from the old cumulative system where deletions didn't reduce your usage count.

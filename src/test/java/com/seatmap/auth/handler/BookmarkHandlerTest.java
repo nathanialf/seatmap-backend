@@ -123,7 +123,7 @@ class BookmarkHandlerTest {
         
         when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
         when(mockBookmarkRepository.findByUserId(testUserId)).thenReturn(bookmarks);
-        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(25);
+        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(9);
         
         // Act
         APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
@@ -132,7 +132,7 @@ class BookmarkHandlerTest {
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("\"total\":1"));
         assertTrue(response.getBody().contains("\"tier\":\"PRO\""));
-        assertTrue(response.getBody().contains("\"remainingThisMonth\":25"));
+        assertTrue(response.getBody().contains("\"remaining\":9"));
         verify(mockAuthService, times(2)).validateToken("valid-token"); // Called twice in updated handler
         verify(mockBookmarkRepository).findByUserId(testUserId);
         verify(mockUsageLimitsService).getRemainingBookmarks(testUser);
@@ -214,7 +214,7 @@ class BookmarkHandlerTest {
         User testUser = createTestUser();
         
         when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
-        doThrow(SeatmapException.forbidden("Monthly bookmark limit reached (50/50) for PRO tier"))
+        doThrow(SeatmapException.forbidden("Monthly bookmark limit reached (10/10) for PRO tier"))
             .when(mockUsageLimitsService).recordBookmarkCreation(testUser);
         
         // Act
@@ -422,7 +422,7 @@ class BookmarkHandlerTest {
         assertEquals(200, response.getStatusCode());
         assertTrue(response.getBody().contains("\"total\":1"));
         assertTrue(response.getBody().contains("\"tier\":\"BUSINESS\""));
-        assertTrue(response.getBody().contains("\"remainingThisMonth\":" + Integer.MAX_VALUE));
+        assertTrue(response.getBody().contains("\"remaining\":" + Integer.MAX_VALUE));
         verify(mockAuthService, times(2)).validateToken("valid-token");
         verify(mockBookmarkRepository).findByUserId(testUserId);
         verify(mockUsageLimitsService).getRemainingBookmarks(businessUser);
@@ -548,7 +548,7 @@ class BookmarkHandlerTest {
         when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
         when(mockBookmarkRepository.findByUserIdAndItemType(testUserId, Bookmark.ItemType.BOOKMARK))
             .thenReturn(filteredBookmarks);
-        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(25);
+        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(9);
         
         // Act
         APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
@@ -575,7 +575,7 @@ class BookmarkHandlerTest {
         when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
         when(mockBookmarkRepository.findByUserIdAndItemType(testUserId, Bookmark.ItemType.SAVED_SEARCH))
             .thenReturn(savedSearches);
-        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(25);
+        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(9);
         
         // Act
         APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);

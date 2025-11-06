@@ -56,7 +56,7 @@ class UserUsageLimitsServiceTest {
         Map<String, AttributeValue> proItem = new HashMap<>();
         proItem.put("tierId", AttributeValue.builder().s("pro-us-2025").build());
         proItem.put("tierName", AttributeValue.builder().s("PRO").build());
-        proItem.put("maxBookmarks", AttributeValue.builder().n("50").build());
+        proItem.put("maxBookmarks", AttributeValue.builder().n("10").build());
         proItem.put("maxSeatmapCalls", AttributeValue.builder().n("500").build());
         proItem.put("canDowngrade", AttributeValue.builder().bool(true).build());
         proItem.put("publiclyAccessible", AttributeValue.builder().bool(true).build());
@@ -117,7 +117,7 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockBookmarkRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(25); // Under limit of 50
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(5); // Under limit of 10
         
         // Act
         boolean result = service.canCreateBookmark(proUser);
@@ -133,7 +133,7 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockBookmarkRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(50); // At limit of 50
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(10); // At limit of 10
         
         // Act
         boolean result = service.canCreateBookmark(proUser);
@@ -229,7 +229,7 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockBookmarkRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(25); // Under limit
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(5); // Under limit
         
         // Act & Assert
         assertDoesNotThrow(() -> service.recordBookmarkCreation(proUser));
@@ -259,13 +259,13 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockBookmarkRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(50); // At limit
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(10); // At limit
         
         // Act & Assert
         SeatmapException exception = assertThrows(SeatmapException.class, 
             () -> service.recordBookmarkCreation(proUser));
         
-        assertTrue(exception.getMessage().contains("Monthly bookmark limit reached (50/50)"));
+        assertTrue(exception.getMessage().contains("Monthly bookmark limit reached (10/10)"));
         assertTrue(exception.getMessage().contains("PRO tier"));
         verify(mockBookmarkRepository, times(2)).countBookmarksByUserId(testUserId); // Called in canCreateBookmark and for error message
     }
@@ -302,13 +302,13 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockBookmarkRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(25); // 50 - 25 = 25 remaining
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(3); // 10 - 3 = 7 remaining
         
         // Act
         int result = service.getRemainingBookmarks(proUser);
         
         // Assert
-        assertEquals(25, result); // 50 limit - 25 current = 25 remaining
+        assertEquals(7, result); // 10 limit - 3 current = 7 remaining
         verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     

@@ -174,7 +174,7 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
                 responseKey, activeBookmarks,
                 "total", activeBookmarks.size(),
                 "tier", user.getAccountTier(),
-                "remainingThisMonth", remainingBookmarks
+                "remaining", remainingBookmarks
             ));
         } catch (SeatmapException e) {
             logger.error("Error getting remaining bookmarks for user: {}", user.getUserId(), e);
