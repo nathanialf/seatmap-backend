@@ -72,11 +72,26 @@ Content-Type: application/json
 
 ## Environment Endpoints
 
+The API uses custom domains managed by Route53 for professional endpoints:
+
+### Custom Domain Infrastructure
+- **DNS Management**: Route53 hosted zones
+- **SSL Certificates**: AWS Certificate Manager for HTTPS
+- **Domain Mapping**: API Gateway custom domain integration
+- **Environment Routing**: Subdomain-based environment separation
+
+### Getting API Access
 Contact your administrator for:
-- Base API URLs
+- Custom domain URLs for your environment
 - API key credentials  
 - Environment-specific configuration
 - Rate limit specifications
+
+**Benefits of Custom Domains**:
+- Professional branded endpoints
+- SSL/TLS security by default
+- Simplified URL structure
+- Environment-specific routing
 
 ## Data Retention
 

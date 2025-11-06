@@ -38,7 +38,7 @@ The Jenkins pipeline requires these environment variables to be configured in th
 **Profile Name**: `seatmap-dev`
 - **Region**: `us-west-1`
 - **Purpose**: Development environment deployment
-- **Access**: DynamoDB, Lambda, API Gateway, IAM, SES, S3
+- **Access**: DynamoDB, Lambda, API Gateway, Route53, Certificate Manager, IAM, SES, S3
 
 ### AWS Credentials Setup
 
@@ -189,6 +189,48 @@ The AWS credentials must have the following service permissions:
 }
 ```
 
+#### Route53 (for custom domain DNS)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "route53:CreateHostedZone",
+        "route53:DeleteHostedZone",
+        "route53:GetHostedZone",
+        "route53:ListHostedZones",
+        "route53:ChangeResourceRecordSets",
+        "route53:GetChange",
+        "route53:ListResourceRecordSets"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+#### Certificate Manager (for SSL certificates)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+        "acm:DeleteCertificate",
+        "acm:AddTagsToCertificate"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
 ## Jenkins Pipeline Structure
 
 ### Build Stage
@@ -205,9 +247,11 @@ The AWS credentials must have the following service permissions:
 
 ### Deployment Stage
 1. **Terraform Apply**: Deploy with real credential variables
-2. **Function Update**: Update Lambda functions with new code
-3. **Account Tier Setup**: Configure tier definitions
-4. **Smoke Tests**: Basic API health checks
+2. **Custom Domain Setup**: Deploy Route53 DNS and SSL certificates
+3. **Function Update**: Update Lambda functions with new code
+4. **Domain Mapping**: Configure API Gateway custom domain mappings
+5. **Account Tier Setup**: Configure tier definitions
+6. **Smoke Tests**: Basic API health checks using custom domain endpoints
 
 ## Terraform Backend Configuration
 

@@ -31,6 +31,12 @@ This documentation is organized into focused sections for easy navigation and ma
 
 ### 🌐 Environment Configuration
 
+The API now uses custom domains managed by Route53:
+- **Professional endpoints** with custom domain branding
+- **SSL/TLS security** via AWS Certificate Manager
+- **Environment-specific routing** through subdomain mapping
+- **Simplified URL structure** for better developer experience
+
 Contact administrator for environment-specific configuration details.
 
 ### 🆕 Latest Updates
@@ -43,6 +49,7 @@ Contact administrator for environment-specific configuration details.
 - ✅ Complete API documentation with cURL examples
 - ✅ Comprehensive testing guide for all endpoints
 - ✅ Improved error handling and documentation
+- ✅ **NEW**: Route53 custom domain infrastructure for professional API endpoints
 
 ### 📋 API Summary
 

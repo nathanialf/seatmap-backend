@@ -17,7 +17,8 @@ This guide provides comprehensive instructions for setting up a development envi
 ### AWS Account Requirements
 - AWS account with appropriate permissions
 - AWS CLI configured with profiles
-- Access to DynamoDB, Lambda, API Gateway, and SES services
+- Access to DynamoDB, Lambda, API Gateway, SES, and Route53 services
+- Custom domain configured via Route53 for API Gateway endpoints
 
 ## AWS Configuration
 
@@ -39,9 +40,11 @@ The AWS user/role must have permissions for:
 - **DynamoDB**: Full access to create, read, update tables
 - **Lambda**: Create and manage Lambda functions
 - **API Gateway**: Create and manage REST APIs
+- **Route53**: Manage DNS records and custom domain configuration
 - **IAM**: Create roles and policies for Lambda functions
 - **SES**: Send emails for user verification
 - **S3**: Access to Terraform state bucket
+- **Certificate Manager**: Manage SSL certificates for custom domains
 
 ## Project Structure
 
@@ -155,6 +158,24 @@ When deploying via Jenkins, these variables are injected:
 - `JWT_SECRET` - JSON Web Token signing secret
 
 **Note**: These are sensitive values managed by the CI/CD pipeline.
+
+### Custom Domain Infrastructure
+
+The API Gateway now uses custom domains managed by Route53:
+
+**Components**:
+- **Route53 Hosted Zone**: DNS management for the domain
+- **ACM Certificate**: SSL/TLS certificate for HTTPS endpoints
+- **API Gateway Custom Domain**: Maps custom domain to API Gateway stages
+- **Domain Base Mapping**: Routes requests to appropriate API Gateway deployment
+
+**Benefits**:
+- Professional custom domain instead of AWS-generated URLs
+- SSL/TLS termination at the edge
+- Simplified endpoint URLs for API consumers
+- Environment-specific subdomain routing (e.g., `api-dev.domain.com`, `api.domain.com`)
+
+**Deployment**: Custom domain infrastructure is automatically managed by Terraform and deployed via Jenkins pipeline.
 
 ## Testing
 
