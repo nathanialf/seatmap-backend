@@ -216,3 +216,39 @@ output "api_key_value" {
   value       = aws_api_gateway_api_key.client_key.value
   sensitive   = true
 }
+
+# Domain and Certificate Outputs
+output "route53_zone_id" {
+  description = "Route53 hosted zone ID for api-dev.myseatmap.com"
+  value       = aws_route53_zone.api_dev.zone_id
+}
+
+output "route53_name_servers" {
+  description = "Route53 name servers for api-dev.myseatmap.com (for DNS delegation)"
+  value       = aws_route53_zone.api_dev.name_servers
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate ARN for api-dev.myseatmap.com"
+  value       = aws_acm_certificate.api_dev.arn
+}
+
+output "api_gateway_custom_domain_name" {
+  description = "API Gateway custom domain name"
+  value       = aws_api_gateway_domain_name.api_dev.domain_name
+}
+
+output "api_gateway_domain_regional_name" {
+  description = "API Gateway regional domain name"
+  value       = aws_api_gateway_domain_name.api_dev.regional_domain_name
+}
+
+output "api_gateway_domain_regional_zone_id" {
+  description = "API Gateway regional zone ID"
+  value       = aws_api_gateway_domain_name.api_dev.regional_zone_id
+}
+
+output "custom_domain_url" {
+  description = "Full custom domain URL for the API"
+  value       = "https://api-dev.myseatmap.com"
+}

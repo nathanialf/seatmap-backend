@@ -123,12 +123,12 @@ aws s3 ls --profile seatmap-prod --region us-west-1
 aws logs describe-log-groups --profile seatmap-dev --region us-west-1
 aws logs get-log-events --log-group-name "/aws/lambda/seatmap-flight-offers-dev" --profile seatmap-dev --region us-west-1
 
-# Terraform commands (use environment variables)
+# Terraform commands (use environment variables - ALWAYS use this exact format)
 export AWS_PROFILE=seatmap-dev
-terraform plan
+terraform plan -var="amadeus_api_key=dummy" -var="amadeus_api_secret=dummy" -var="jwt_secret=dummy" -var="sabre_user_id=dummy" -var="sabre_password=dummy"
 
 export AWS_PROFILE=seatmap-prod
-terraform plan
+terraform plan -var="amadeus_api_key=dummy" -var="amadeus_api_secret=dummy" -var="jwt_secret=dummy" -var="sabre_user_id=dummy" -var="sabre_password=dummy"
 ```
 
 **IMPORTANT**: All AWS CLI commands MUST include `--region us-west-1` parameter. The AWS CLI will fail without explicit region specification.
