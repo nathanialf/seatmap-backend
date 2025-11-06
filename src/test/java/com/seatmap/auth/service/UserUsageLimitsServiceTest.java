@@ -1,5 +1,6 @@
 package com.seatmap.auth.service;
 
+import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.common.model.User.AccountTier;
@@ -25,6 +26,9 @@ class UserUsageLimitsServiceTest {
     
     @Mock
     private UserUsageRepository mockUsageRepository;
+    
+    @Mock
+    private BookmarkRepository mockBookmarkRepository;
     
     @Mock
     private DynamoDbClient mockDynamoDbClient;
@@ -97,14 +101,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User freeUser = createTestUser(AccountTier.FREE);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 0)).thenReturn(false);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(0);
         
         // Act
         boolean result = service.canCreateBookmark(freeUser);
         
         // Assert
-        assertFalse(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 0);
+        assertFalse(result); // FREE tier can't create bookmarks
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -113,14 +117,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 50)).thenReturn(true);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(25); // Under limit of 50
         
         // Act
         boolean result = service.canCreateBookmark(proUser);
         
         // Assert
         assertTrue(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 50);
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -129,14 +133,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 50)).thenReturn(false);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(50); // At limit of 50
         
         // Act
         boolean result = service.canCreateBookmark(proUser);
         
         // Assert
         assertFalse(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 50);
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -145,14 +149,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User businessUser = createTestUser(AccountTier.BUSINESS);
-        when(mockUsageRepository.canCreateBookmark(testUserId, -1)).thenReturn(true);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(100); // Any count, unlimited
         
         // Act
         boolean result = service.canCreateBookmark(businessUser);
         
         // Assert
-        assertTrue(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, -1);
+        assertTrue(result); // BUSINESS tier has unlimited bookmarks
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -161,7 +165,7 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canCreateBookmark(anyString(), anyInt()))
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId))
             .thenThrow(new RuntimeException("Database error"));
         
         // Act
@@ -225,13 +229,12 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 50)).thenReturn(true);
-        doNothing().when(mockUsageRepository).recordBookmarkCreation(testUserId);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(25); // Under limit
         
         // Act & Assert
         assertDoesNotThrow(() -> service.recordBookmarkCreation(proUser));
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 50);
-        verify(mockUsageRepository).recordBookmarkCreation(testUserId);
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
+        // Note: Real-time counting doesn't record to UserUsageRepository anymore
     }
     
     @Test
@@ -240,16 +243,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User freeUser = createTestUser(AccountTier.FREE);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 0)).thenReturn(false);
-        when(mockUsageRepository.getCurrentMonthBookmarkCount(testUserId)).thenReturn(0);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(0);
         
         // Act & Assert
         SeatmapException exception = assertThrows(SeatmapException.class, 
             () -> service.recordBookmarkCreation(freeUser));
         
         assertTrue(exception.getMessage().contains("Bookmark creation is not available for FREE tier"));
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 0);
-        verify(mockUsageRepository, never()).recordBookmarkCreation(anyString());
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -258,8 +259,7 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.canCreateBookmark(testUserId, 50)).thenReturn(false);
-        when(mockUsageRepository.getCurrentMonthBookmarkCount(testUserId)).thenReturn(50);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(50); // At limit
         
         // Act & Assert
         SeatmapException exception = assertThrows(SeatmapException.class, 
@@ -267,8 +267,7 @@ class UserUsageLimitsServiceTest {
         
         assertTrue(exception.getMessage().contains("Monthly bookmark limit reached (50/50)"));
         assertTrue(exception.getMessage().contains("PRO tier"));
-        verify(mockUsageRepository).canCreateBookmark(testUserId, 50);
-        verify(mockUsageRepository, never()).recordBookmarkCreation(anyString());
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -303,14 +302,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User proUser = createTestUser(AccountTier.PRO);
-        when(mockUsageRepository.getRemainingBookmarks(testUserId, 50)).thenReturn(25);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(25); // 50 - 25 = 25 remaining
         
         // Act
         int result = service.getRemainingBookmarks(proUser);
         
         // Assert
-        assertEquals(25, result);
-        verify(mockUsageRepository).getRemainingBookmarks(testUserId, 50);
+        assertEquals(25, result); // 50 limit - 25 current = 25 remaining
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -319,14 +318,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User businessUser = createTestUser(AccountTier.BUSINESS);
-        when(mockUsageRepository.getRemainingBookmarks(testUserId, -1)).thenReturn(Integer.MAX_VALUE);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(100); // Any count
         
         // Act
         int result = service.getRemainingBookmarks(businessUser);
         
         // Assert
-        assertEquals(Integer.MAX_VALUE, result);
-        verify(mockUsageRepository).getRemainingBookmarks(testUserId, -1);
+        assertEquals(Integer.MAX_VALUE, result); // Unlimited for BUSINESS tier
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -425,14 +424,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User devUser = createTestUser(AccountTier.DEV);
-        when(mockUsageRepository.canCreateBookmark(testUserId, -1)).thenReturn(true);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(1000); // Any count
         
         // Act
         boolean result = service.canCreateBookmark(devUser);
         
         // Assert
-        assertTrue(result);
-        verify(mockUsageRepository).canCreateBookmark(testUserId, -1);
+        assertTrue(result); // DEV tier has unlimited bookmarks
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -457,13 +456,11 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User devUser = createTestUser(AccountTier.DEV);
-        when(mockUsageRepository.canCreateBookmark(testUserId, -1)).thenReturn(true);
-        doNothing().when(mockUsageRepository).recordBookmarkCreation(testUserId);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(1000); // Any count
         
         // Act & Assert
         assertDoesNotThrow(() -> service.recordBookmarkCreation(devUser));
-        verify(mockUsageRepository).canCreateBookmark(testUserId, -1);
-        verify(mockUsageRepository).recordBookmarkCreation(testUserId);
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test
@@ -472,14 +469,14 @@ class UserUsageLimitsServiceTest {
         setupMockTierDefinitions();
         service = new UserUsageLimitsService(mockUsageRepository, mockDynamoDbClient);
         User devUser = createTestUser(AccountTier.DEV);
-        when(mockUsageRepository.getRemainingBookmarks(testUserId, -1)).thenReturn(Integer.MAX_VALUE);
+        when(mockBookmarkRepository.countBookmarksByUserId(testUserId)).thenReturn(1000); // Any count
         
         // Act
         int result = service.getRemainingBookmarks(devUser);
         
         // Assert
-        assertEquals(Integer.MAX_VALUE, result);
-        verify(mockUsageRepository).getRemainingBookmarks(testUserId, -1);
+        assertEquals(Integer.MAX_VALUE, result); // Unlimited for DEV tier
+        verify(mockBookmarkRepository).countBookmarksByUserId(testUserId);
     }
     
     @Test

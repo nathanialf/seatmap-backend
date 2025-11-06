@@ -1,14 +1,18 @@
-# Bookmarks API
+# Unified Bookmarks & Saved Searches API
 
 ## Overview
 
-Save and manage favorite flights for quick access to seat maps and flight details. **Requires user authentication (not guest tokens).**
+Save and manage both flight bookmarks and saved searches through a unified API. **Requires user authentication (not guest tokens).**
+
+This unified API handles two types of saved items:
+- **Bookmarks**: Save specific flight offers for quick access to seat maps and flight details
+- **Saved Searches**: Save search parameters for repeated flight discovery
 
 ---
 
-## Create Bookmark
+## Create Bookmark or Saved Search
 
-Save a flight offer as a bookmark for future reference.
+Save a flight offer as a bookmark OR save search parameters as a saved search.
 
 **Endpoint**: `POST /bookmarks`
 
@@ -19,25 +23,53 @@ Authorization: Bearer your_user_jwt_token
 Content-Type: application/json
 ```
 
+### Creating a Flight Bookmark
+
 **Request Body**:
 ```json
 {
+  "itemType": "BOOKMARK",
   "title": "LAX to JFK - Dec 15",
   "flightOfferData": "{\"type\":\"flight-offer\",\"dataSource\":\"AMADEUS\",\"source\":\"GDS\",\"instantTicketingRequired\":false,\"nonHomogeneous\":false,\"oneWay\":false,\"lastTicketingDate\":\"2025-12-10\",\"numberOfBookableSeats\":9,\"itineraries\":[{\"duration\":\"PT5H35M\",\"segments\":[{\"departure\":{\"iataCode\":\"LAX\",\"terminal\":\"4\",\"at\":\"2025-12-15T08:00:00\"},\"arrival\":{\"iataCode\":\"JFK\",\"terminal\":\"8\",\"at\":\"2025-12-15T16:35:00\"},\"carrierCode\":\"AA\",\"number\":\"123\",\"aircraft\":{\"code\":\"321\"},\"operating\":{\"carrierCode\":\"AA\"},\"duration\":\"PT5H35M\",\"id\":\"1\",\"numberOfStops\":0,\"blacklistedInEU\":false}]}],\"price\":{\"currency\":\"USD\",\"total\":\"299.00\",\"base\":\"249.00\"}}"
 }
 ```
 
 **Parameters**:
+- `itemType` (required): Must be `"BOOKMARK"`
 - `title` (required): Descriptive name for the bookmark
 - `flightOfferData` (required): Complete flight offer object as JSON string from flight search
 
-**Response**:
+### Creating a Saved Search
+
+**Request Body**:
+```json
+{
+  "itemType": "SAVED_SEARCH",
+  "title": "Weekly LAX to JFK search",
+  "searchRequest": {
+    "origin": "LAX",
+    "destination": "JFK",
+    "departureDate": "2025-12-15",
+    "travelClass": "ECONOMY",
+    "flightNumber": null,
+    "maxResults": 10
+  }
+}
+```
+
+**Parameters**:
+- `itemType` (required): Must be `"SAVED_SEARCH"`
+- `title` (required): Descriptive name for the saved search
+- `searchRequest` (required): Flight search parameters object
+
+**Response** (same for both types):
 ```json
 {
   "success": true,
   "data": {
     "bookmarkId": "bm_abc123xyz",
     "userId": "user_456def",
+    "itemType": "BOOKMARK",
     "title": "LAX to JFK - Dec 15",
     "flightOfferData": "{\"type\":\"flight-offer\",\"dataSource\":\"AMADEUS\",\"source\":\"GDS\",\"instantTicketingRequired\":false,\"nonHomogeneous\":false,\"oneWay\":false,\"lastTicketingDate\":\"2025-12-10\",\"numberOfBookableSeats\":9,\"itineraries\":[{\"duration\":\"PT5H35M\",\"segments\":[{\"departure\":{\"iataCode\":\"LAX\",\"terminal\":\"4\",\"at\":\"2025-12-15T08:00:00\"},\"arrival\":{\"iataCode\":\"JFK\",\"terminal\":\"8\",\"at\":\"2025-12-15T16:35:00\"},\"carrierCode\":\"AA\",\"number\":\"123\",\"aircraft\":{\"code\":\"321\"},\"operating\":{\"carrierCode\":\"AA\"},\"duration\":\"PT5H35M\",\"id\":\"1\",\"numberOfStops\":0,\"blacklistedInEU\":false}]}],\"price\":{\"currency\":\"USD\",\"total\":\"299.00\",\"base\":\"249.00\"}}",
     "createdAt": "2025-10-30T12:00:00Z",
@@ -46,25 +78,44 @@ Content-Type: application/json
 }
 ```
 
-**Example cURL**:
+**Example cURL for Bookmark**:
 ```bash
 curl -X POST {BASE_URL}/bookmarks \
   -H "Content-Type: application/json" \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}" \
   -d '{
+    "itemType": "BOOKMARK",
     "title": "LAX to JFK - Dec 15",
     "flightOfferData": "{\"type\":\"flight-offer\",\"dataSource\":\"AMADEUS\",\"source\":\"GDS\",\"instantTicketingRequired\":false,\"nonHomogeneous\":false,\"oneWay\":false,\"lastTicketingDate\":\"2025-12-10\",\"numberOfBookableSeats\":9,\"itineraries\":[{\"duration\":\"PT5H35M\",\"segments\":[{\"departure\":{\"iataCode\":\"LAX\",\"terminal\":\"4\",\"at\":\"2025-12-15T08:00:00\"},\"arrival\":{\"iataCode\":\"JFK\",\"terminal\":\"8\",\"at\":\"2025-12-15T16:35:00\"},\"carrierCode\":\"AA\",\"number\":\"123\",\"aircraft\":{\"code\":\"321\"},\"operating\":{\"carrierCode\":\"AA\"},\"duration\":\"PT5H35M\",\"id\":\"1\",\"numberOfStops\":0,\"blacklistedInEU\":false}]}],\"price\":{\"currency\":\"USD\",\"total\":\"299.00\",\"base\":\"249.00\"}}"
   }'
 ```
 
+**Example cURL for Saved Search**:
+```bash
+curl -X POST {BASE_URL}/bookmarks \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}" \
+  -d '{
+    "itemType": "SAVED_SEARCH",
+    "title": "Weekly LAX to JFK search",
+    "searchRequest": {
+      "origin": "LAX",
+      "destination": "JFK",
+      "departureDate": "2025-12-15",
+      "travelClass": "ECONOMY"
+    }
+  }'
+```
+
 ---
 
-## Get User Bookmarks
+## Get User Items (Bookmarks & Saved Searches)
 
-Retrieve all bookmarks for the authenticated user.
+Retrieve all saved items for the authenticated user, with optional filtering by type.
 
-**Endpoint**: `GET /bookmarks`
+**Endpoint**: `GET /bookmarks[?type=BOOKMARK|SAVED_SEARCH]`
 
 **Headers**:
 ```
@@ -72,43 +123,212 @@ X-API-Key: your_api_key
 Authorization: Bearer your_user_jwt_token
 ```
 
+**Query Parameters** (optional):
+- `type`: Filter by item type (`BOOKMARK` or `SAVED_SEARCH`)
+
+### Get All Items (no filter)
+
+**Example**: `GET /bookmarks`
+
 **Response**:
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "bookmarkId": "bm_abc123xyz",
-      "userId": "user_456def",
-      "title": "LAX to JFK - Dec 15",
-      "flightOfferData": "{\"type\":\"flight-offer\",\"dataSource\":\"AMADEUS\",\"source\":\"GDS\",\"instantTicketingRequired\":false,\"nonHomogeneous\":false,\"oneWay\":false,\"lastTicketingDate\":\"2025-12-10\",\"numberOfBookableSeats\":9,\"itineraries\":[{\"duration\":\"PT5H35M\",\"segments\":[{\"departure\":{\"iataCode\":\"LAX\",\"terminal\":\"4\",\"at\":\"2025-12-15T08:00:00\"},\"arrival\":{\"iataCode\":\"JFK\",\"terminal\":\"8\",\"at\":\"2025-12-15T16:35:00\"},\"carrierCode\":\"AA\",\"number\":\"123\",\"aircraft\":{\"code\":\"321\"},\"operating\":{\"carrierCode\":\"AA\"},\"duration\":\"PT5H35M\",\"id\":\"1\",\"numberOfStops\":0,\"blacklistedInEU\":false}]}],\"price\":{\"currency\":\"USD\",\"total\":\"299.00\",\"base\":\"249.00\"}}",
-      "createdAt": "2025-10-30T12:00:00Z",
-      "expiresAt": "2025-12-16T08:00:00Z"
-    },
-    {
-      "bookmarkId": "bm_def456uvw",
-      "userId": "user_456def",
-      "title": "SFO to ORD - Dec 20",
-      "flightOfferData": "{\"type\":\"flight-offer\",\"dataSource\":\"SABRE\",\"source\":\"GDS\",\"instantTicketingRequired\":false,\"nonHomogeneous\":false,\"oneWay\":false,\"lastTicketingDate\":\"2025-12-15\",\"numberOfBookableSeats\":5,\"itineraries\":[{\"duration\":\"PT4H20M\",\"segments\":[{\"departure\":{\"iataCode\":\"SFO\",\"terminal\":\"1\",\"at\":\"2025-12-20T14:30:00\"},\"arrival\":{\"iataCode\":\"ORD\",\"terminal\":\"2\",\"at\":\"2025-12-20T20:50:00\"},\"carrierCode\":\"UA\",\"number\":\"456\",\"aircraft\":{\"code\":\"737\"},\"operating\":{\"carrierCode\":\"UA\"},\"duration\":\"PT4H20M\",\"id\":\"1\",\"numberOfStops\":0,\"blacklistedInEU\":false}]}],\"price\":{\"currency\":\"USD\",\"total\":\"189.00\",\"base\":\"159.00\"}}",
-      "createdAt": "2025-10-30T10:30:00Z",
-      "expiresAt": "2025-12-21T14:30:00Z"
-    }
-  ]
+  "data": {
+    "bookmarks": [
+      {
+        "bookmarkId": "bm_abc123xyz",
+        "userId": "user_456def",
+        "itemType": "BOOKMARK",
+        "title": "LAX to JFK - Dec 15",
+        "flightOfferData": "{\"type\":\"flight-offer\",\"dataSource\":\"AMADEUS\",\"source\":\"GDS\",\"instantTicketingRequired\":false,\"nonHomogeneous\":false,\"oneWay\":false,\"lastTicketingDate\":\"2025-12-10\",\"numberOfBookableSeats\":9,\"itineraries\":[{\"duration\":\"PT5H35M\",\"segments\":[{\"departure\":{\"iataCode\":\"LAX\",\"terminal\":\"4\",\"at\":\"2025-12-15T08:00:00\"},\"arrival\":{\"iataCode\":\"JFK\",\"terminal\":\"8\",\"at\":\"2025-12-15T16:35:00\"},\"carrierCode\":\"AA\",\"number\":\"123\",\"aircraft\":{\"code\":\"321\"},\"operating\":{\"carrierCode\":\"AA\"},\"duration\":\"PT5H35M\",\"id\":\"1\",\"numberOfStops\":0,\"blacklistedInEU\":false}]}],\"price\":{\"currency\":\"USD\",\"total\":\"299.00\",\"base\":\"249.00\"}}",
+        "createdAt": "2025-10-30T12:00:00Z",
+        "expiresAt": "2025-12-16T08:00:00Z"
+      },
+      {
+        "bookmarkId": "bm_def456uvw",
+        "userId": "user_456def",
+        "itemType": "SAVED_SEARCH",
+        "title": "Weekly LAX to JFK search",
+        "searchRequest": {
+          "origin": "LAX",
+          "destination": "JFK",
+          "departureDate": "2025-12-15",
+          "travelClass": "ECONOMY",
+          "maxResults": 10
+        },
+        "createdAt": "2025-10-30T10:30:00Z",
+        "expiresAt": "2025-11-29T10:30:00Z"
+      }
+    ],
+    "total": 2,
+    "tier": "PRO",
+    "remainingThisMonth": 48
+  }
+}
+```
+
+### Get Only Bookmarks
+
+**Example**: `GET /bookmarks?type=BOOKMARK`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "bookmarks": [
+      {
+        "bookmarkId": "bm_abc123xyz",
+        "userId": "user_456def",
+        "itemType": "BOOKMARK",
+        "title": "LAX to JFK - Dec 15",
+        "flightOfferData": "{...}",
+        "createdAt": "2025-10-30T12:00:00Z",
+        "expiresAt": "2025-12-16T08:00:00Z"
+      }
+    ],
+    "total": 1,
+    "tier": "PRO",
+    "remainingThisMonth": 48
+  }
+}
+```
+
+### Get Only Saved Searches
+
+**Example**: `GET /bookmarks?type=SAVED_SEARCH`
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "savedSearches": [
+      {
+        "bookmarkId": "bm_def456uvw",
+        "userId": "user_456def",
+        "itemType": "SAVED_SEARCH",
+        "title": "Weekly LAX to JFK search",
+        "searchRequest": {
+          "origin": "LAX",
+          "destination": "JFK",
+          "departureDate": "2025-12-15",
+          "travelClass": "ECONOMY",
+          "maxResults": 10
+        },
+        "createdAt": "2025-10-30T10:30:00Z",
+        "expiresAt": "2025-11-29T10:30:00Z"
+      }
+    ],
+    "total": 1,
+    "tier": "PRO",
+    "remainingThisMonth": 48
+  }
 }
 ```
 
 **Example cURL**:
 ```bash
+# Get all items
 curl -X GET {BASE_URL}/bookmarks \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
+
+# Get only bookmarks
+curl -X GET {BASE_URL}/bookmarks?type=BOOKMARK \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
+
+# Get only saved searches
+curl -X GET {BASE_URL}/bookmarks?type=SAVED_SEARCH \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
 ```
 
 ---
 
-## Delete Bookmark
+## Execute Saved Search
 
-Remove a specific bookmark from the user's saved flights.
+Execute a saved search to get current flight results.
+
+**Endpoint**: `POST /bookmarks/{bookmarkId}/execute`
+
+**Headers**:
+```
+X-API-Key: your_api_key
+Authorization: Bearer your_user_jwt_token
+```
+
+**Path Parameters**:
+- `bookmarkId` (required): Unique identifier of the saved search item
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "searchRequest": {
+      "origin": "LAX",
+      "destination": "JFK",
+      "departureDate": "2025-12-15",
+      "travelClass": "ECONOMY",
+      "maxResults": 10
+    },
+    "title": "Weekly LAX to JFK search",
+    "searchId": "bm_def456uvw",
+    "message": "Search request ready for execution"
+  }
+}
+```
+
+**Example cURL**:
+```bash
+curl -X POST {BASE_URL}/bookmarks/bm_def456uvw/execute \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
+```
+
+**Note**: This endpoint only works with saved searches (`itemType: "SAVED_SEARCH"`). Attempting to execute a regular bookmark will return a 400 error.
+
+---
+
+## Get Specific Item
+
+Retrieve a specific bookmark or saved search by ID.
+
+**Endpoint**: `GET /bookmarks/{bookmarkId}`
+
+**Headers**:
+```
+X-API-Key: your_api_key
+Authorization: Bearer your_user_jwt_token
+```
+
+**Path Parameters**:
+- `bookmarkId` (required): Unique identifier
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "bookmarkId": "bm_abc123xyz",
+    "userId": "user_456def",
+    "itemType": "BOOKMARK",
+    "title": "LAX to JFK - Dec 15",
+    "flightOfferData": "{...}",
+    "createdAt": "2025-10-30T12:00:00Z",
+    "expiresAt": "2025-12-16T08:00:00Z"
+  }
+}
+```
+
+---
+
+## Delete Item
+
+Remove a specific bookmark or saved search from the user's saved items.
 
 **Endpoint**: `DELETE /bookmarks/{bookmarkId}`
 
@@ -119,13 +339,15 @@ Authorization: Bearer your_user_jwt_token
 ```
 
 **Path Parameters**:
-- `bookmarkId` (required): Unique bookmark identifier
+- `bookmarkId` (required): Unique identifier
 
 **Response**:
 ```json
 {
   "success": true,
-  "message": "Bookmark deleted successfully"
+  "data": {
+    "message": "Bookmark deleted successfully"
+  }
 }
 ```
 
@@ -138,36 +360,64 @@ curl -X DELETE {BASE_URL}/bookmarks/bm_abc123xyz \
 
 ---
 
-## Bookmark Data Structure
+## Data Structure
 
-### Bookmark Fields
-- `bookmarkId`: Unique identifier for the bookmark
-- `userId`: ID of the user who created the bookmark
+### Unified Item Fields
+- `bookmarkId`: Unique identifier for the item
+- `userId`: ID of the user who created the item
+- `itemType`: Type of item (`"BOOKMARK"` or `"SAVED_SEARCH"`)
 - `title`: User-defined descriptive name
+- `createdAt`: Timestamp when item was created
+- `updatedAt`: Timestamp when item was last modified
+- `expiresAt`: Automatic expiration timestamp
+- `lastAccessedAt`: Timestamp when item was last accessed
+
+### Type-Specific Fields
+
+**For Bookmarks** (`itemType: "BOOKMARK"`):
 - `flightOfferData`: Complete flight offer object as JSON string
-- `createdAt`: Timestamp when bookmark was created
-- `expiresAt`: Automatic expiration based on flight departure
+
+**For Saved Searches** (`itemType: "SAVED_SEARCH"`):
+- `searchRequest`: Flight search parameters object
 
 ### Automatic Expiration
-Bookmarks automatically expire based on the flight's departure time:
-- **Expiration**: 24 hours after scheduled departure
-- **Cleanup**: Expired bookmarks are automatically removed
+
+Both bookmarks and saved searches automatically expire:
+
+**Bookmarks**:
+- **Expiration**: 24 hours after scheduled flight departure
 - **Purpose**: Prevents accumulation of outdated flight data
 
-### Flight Offer Data
-The `flightOfferData` field contains the complete flight offer object exactly as received from flight search, including:
-- Flight details (carrier, flight number, times)
-- Pricing information
-- Aircraft and route data
-- Data source information for seat map routing
+**Saved Searches**:
+- **Expiration**: Based on departure date (end of departure day)
+- **Fallback**: 30 days after creation if date parsing fails
+
+**Cleanup**: Expired items are automatically removed by TTL
+
+### Flight Search Request Structure
+
+When creating saved searches, the `searchRequest` object supports these fields:
+
+```json
+{
+  "origin": "LAX",                    // Required: 3-letter airport code
+  "destination": "JFK",               // Required: 3-letter airport code  
+  "departureDate": "2025-12-15",      // Required: YYYY-MM-DD format
+  "travelClass": "ECONOMY",           // Optional: ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST
+  "flightNumber": "AA123",            // Optional: Filter for specific flight
+  "maxResults": 10                    // Optional: Maximum results, defaults to 10
+}
+```
+
+**Important**: Only these fields are supported. The system does not support `returnDate`, `adults`, `children`, `infants`, `includeCarriers`, `excludeCarriers`, `directFlights`, or `currencyCode`.
 
 ---
 
 ## Integration with Seat Maps
 
-Bookmarks provide a streamlined path to seat maps:
+Both bookmarks and saved searches provide paths to seat maps:
 
-**Direct Seat Map Access**:
+**Direct Seat Map Access from Bookmark**:
 ```bash
 # Get seat map directly from bookmark (via integrated flight search)
 curl -X GET {BASE_URL}/flight-search/bookmark/{bookmarkId} \
@@ -175,39 +425,92 @@ curl -X GET {BASE_URL}/flight-search/bookmark/{bookmarkId} \
   -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
 ```
 
+**Saved Search Workflow**:
+1. **Execute Saved Search**: Use `/bookmarks/{id}/execute` to get search parameters
+2. **Run Flight Search**: Use returned search parameters with `/flight-search` endpoint
+3. **Get Seat Maps**: Use flight search results for seat map access
+
 **Integrated Workflow**:
-1. **Create Bookmark**: Save flight offer from search results 
-2. **List Bookmarks**: Retrieve user's saved flights
-3. **Get Flight + Seat Map**: Use `/flight-search/bookmark/{id}` for integrated response with embedded seatmap data
+1. **Create Items**: Save flight offers as bookmarks OR search parameters as saved searches
+2. **List Items**: Retrieve user's saved bookmarks and searches (optionally filtered)
+3. **Execute/Access**: Use bookmarks for direct seat maps, or execute saved searches for new results
 
 ---
 
-## Rate Limiting
+## Real-Time Usage Counting
 
-Bookmark operations are subject to user tier limits:
+The unified API uses real-time usage counting instead of cumulative counters:
 
-### Bookmark Limits
-- **Creation**: Monthly limits based on user account tier (FREE, PRO, BUSINESS, DEV)
-- **Storage**: Tier-based monthly quotas with automatic cleanup
-- **Access**: Unlimited retrieval for owned bookmarks
-- **FREE Tier**: Bookmark creation not available
-- **Upgrade**: Higher tiers provide increased or unlimited bookmark access
+### How Real-Time Counting Works
+- **Live Count**: Usage is calculated by counting active (non-expired) items in real-time
+- **Deletions Count**: When you delete an item, your usage count immediately decreases
+- **Expiration Counts**: When items expire, they no longer count toward your limit
+- **Accurate Limits**: You always have an accurate view of how many slots you're using
 
-### Automatic Management
-- **Expiration**: Bookmarks auto-expire after flight departure
-- **Cleanup**: System automatically removes expired entries  
-- **Monthly Reset**: Usage limits reset on the 1st of each month
-- **Storage Optimization**: Prevents unlimited accumulation
+### Usage Limits by Tier
+- **FREE Tier**: Cannot create bookmarks or saved searches
+- **PRO Tier**: 50 active items per month
+- **BUSINESS Tier**: Unlimited items
+- **DEV Tier**: Unlimited items (development only)
+
+### Usage Response Fields
+Every list response includes:
+- `total`: Number of items currently returned
+- `tier`: Your account tier
+- `remainingThisMonth`: How many more items you can create this month
+
+### Example Real-Time Counting
+```
+PRO user (50/month limit):
+- Creates 30 bookmarks and 15 saved searches = 45 active items
+- Deletes 10 bookmarks = 35 active items, 15 remaining slots
+- 5 bookmarks expire after flights = 30 active items, 20 remaining slots
+- Can create 20 more items before hitting the 50-item limit
+```
+
+This is a significant improvement from the old cumulative system where deletions didn't reduce your usage count.
 
 ---
 
 ## Error Responses
 
-**400 Bad Request**:
+**400 Bad Request** (Missing itemType):
 ```json
 {
   "success": false,
-  "message": "Validation errors: Title is required; Flight offer data is required;"
+  "message": "Item type is required"
+}
+```
+
+**400 Bad Request** (Invalid itemType):
+```json
+{
+  "success": false,
+  "message": "Invalid item type. Must be BOOKMARK or SAVED_SEARCH"
+}
+```
+
+**400 Bad Request** (Validation errors):
+```json
+{
+  "success": false,
+  "message": "Validation errors: Title is required; Flight offer data is required for bookmarks;"
+}
+```
+
+**400 Bad Request** (Invalid type filter):
+```json
+{
+  "success": false,
+  "message": "Invalid item type. Valid types: BOOKMARK, SAVED_SEARCH"
+}
+```
+
+**400 Bad Request** (Execute non-saved search):
+```json
+{
+  "success": false,
+  "message": "Only saved search items can be executed"
 }
 ```
 
@@ -231,7 +534,7 @@ Bookmark operations are subject to user tier limits:
 ```json
 {
   "success": false,
-  "message": "Bookmark not found or access denied"
+  "message": "Bookmark not found"
 }
 ```
 
@@ -243,7 +546,7 @@ Bookmark operations are subject to user tier limits:
 }
 ```
 
-**403 Forbidden** (FREE tier bookmark creation):
+**403 Forbidden** (FREE tier creation):
 ```json
 {
   "success": false,
@@ -251,10 +554,49 @@ Bookmark operations are subject to user tier limits:
 }
 ```
 
+**405 Method Not Allowed**:
+```json
+{
+  "success": false,
+  "message": "Method POST not allowed for this endpoint"
+}
+```
+
+**410 Gone** (Expired item):
+```json
+{
+  "success": false,
+  "message": "Bookmark has expired"
+}
+```
+
 **500 Internal Server Error**:
 ```json
 {
   "success": false,
-  "message": "Error processing bookmark request"
+  "message": "Internal server error"
 }
 ```
+
+---
+
+## Migration from Separate APIs
+
+**Breaking Changes**: This unified API replaces the previous separate `/bookmarks` and `/saved-searches` endpoints:
+
+### What Changed
+- **Required Field**: `itemType` is now required for all creation requests
+- **Unified Endpoint**: Both bookmarks and saved searches use `/bookmarks` endpoint
+- **Type Filtering**: Use `?type=` parameter instead of separate endpoints
+- **Execute Endpoint**: Moved from `/saved-searches/{id}/execute` to `/bookmarks/{id}/execute`
+- **Real-Time Counting**: Usage limits now reflect active items, not cumulative creation
+
+### Migration Guide
+1. **Update Creation Calls**: Add `"itemType": "BOOKMARK"` or `"itemType": "SAVED_SEARCH"` to all creation requests
+2. **Update List Calls**: Use `GET /bookmarks?type=BOOKMARK` instead of `GET /bookmarks` for bookmarks only
+3. **Update Saved Search Lists**: Use `GET /bookmarks?type=SAVED_SEARCH` instead of `GET /saved-searches`
+4. **Update Execute Calls**: Use `POST /bookmarks/{id}/execute` instead of `POST /saved-searches/{id}/execute`
+5. **Update Error Handling**: Review new error messages and status codes
+
+### Backward Compatibility
+**None**: This is a clean breaking change with no backward compatibility. All clients must be updated to use the new unified API.

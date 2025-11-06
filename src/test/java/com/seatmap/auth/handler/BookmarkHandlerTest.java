@@ -5,6 +5,7 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.seatmap.api.model.FlightSearchRequest;
 import com.seatmap.auth.model.CreateBookmarkRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.service.AuthService;
@@ -174,6 +175,7 @@ class BookmarkHandlerTest {
         // Arrange
         CreateBookmarkRequest request = new CreateBookmarkRequest();
         request.setTitle("My Test Flight");
+        request.setItemType(Bookmark.ItemType.BOOKMARK);
         Map<String, Object> flightData = new HashMap<>();
         flightData.put("flight", "AA123");
         flightData.put("dataSource", "AMADEUS");
@@ -204,6 +206,7 @@ class BookmarkHandlerTest {
         // Arrange
         CreateBookmarkRequest request = new CreateBookmarkRequest();
         request.setTitle("My Test Flight");
+        request.setItemType(Bookmark.ItemType.BOOKMARK);
         request.setFlightOfferData("{\"dataSource\":\"SABRE\"}");
         
         String requestBody = objectMapper.writeValueAsString(request);
@@ -351,6 +354,7 @@ class BookmarkHandlerTest {
         // Arrange
         CreateBookmarkRequest request = new CreateBookmarkRequest();
         request.setTitle("My Test Flight");
+        request.setItemType(Bookmark.ItemType.BOOKMARK);
         request.setFlightOfferData("{\"dataSource\":\"AMADEUS\"}");
         
         String requestBody = objectMapper.writeValueAsString(request);
@@ -378,6 +382,7 @@ class BookmarkHandlerTest {
         // Arrange
         CreateBookmarkRequest request = new CreateBookmarkRequest();
         request.setTitle("Business Flight");
+        request.setItemType(Bookmark.ItemType.BOOKMARK);
         request.setFlightOfferData("{\"dataSource\":\"AMADEUS\"}");
         
         String requestBody = objectMapper.writeValueAsString(request);
@@ -427,7 +432,7 @@ class BookmarkHandlerTest {
     void testCreateBookmark_ValidationErrors_ReturnsBadRequest() throws Exception {
         // Arrange
         CreateBookmarkRequest request = new CreateBookmarkRequest();
-        // Missing title, flightOfferData, and source to trigger validation errors
+        // Missing title, flightOfferData, and itemType to trigger validation errors
         
         String requestBody = objectMapper.writeValueAsString(request);
         APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks", "valid-token", requestBody);
@@ -443,5 +448,240 @@ class BookmarkHandlerTest {
         assertTrue(response.getBody().contains("Validation errors"));
         verify(mockAuthService).validateToken("valid-token");
         verify(mockBookmarkRepository, never()).saveBookmark(any(Bookmark.class));
+    }
+    
+    // SAVED SEARCH TESTS
+    
+    @Test
+    void testCreateSavedSearch_ValidRequest_CreatesBookmark() throws Exception {
+        // Arrange
+        FlightSearchRequest searchRequest = new FlightSearchRequest();
+        searchRequest.setOrigin("LAX");
+        searchRequest.setDestination("JFK");
+        searchRequest.setDepartureDate("2024-06-15");
+        
+        CreateBookmarkRequest request = new CreateBookmarkRequest();
+        request.setTitle("My Saved Search");
+        request.setItemType(Bookmark.ItemType.SAVED_SEARCH);
+        request.setSearchRequest(searchRequest);
+        
+        String requestBody = objectMapper.writeValueAsString(request);
+        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks", "valid-token", requestBody);
+        User testUser = createTestUser();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        doNothing().when(mockUsageLimitsService).recordBookmarkCreation(testUser);
+        doNothing().when(mockBookmarkRepository).saveBookmark(any(Bookmark.class));
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(200, response.getStatusCode());
+        assertTrue(response.getBody().contains("My Saved Search"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockUsageLimitsService).recordBookmarkCreation(testUser);
+        verify(mockBookmarkRepository).saveBookmark(any(Bookmark.class));
+    }
+    
+    @Test
+    void testCreateSavedSearch_MissingSearchRequest_ReturnsBadRequest() throws Exception {
+        // Arrange
+        CreateBookmarkRequest request = new CreateBookmarkRequest();
+        request.setTitle("My Saved Search");
+        request.setItemType(Bookmark.ItemType.SAVED_SEARCH);
+        // Missing searchRequest for saved search
+        
+        String requestBody = objectMapper.writeValueAsString(request);
+        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks", "valid-token", requestBody);
+        User testUser = createTestUser();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(400, response.getStatusCode());
+        assertTrue(response.getBody().contains("Search request is required for saved search items"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockBookmarkRepository, never()).saveBookmark(any(Bookmark.class));
+    }
+    
+    @Test
+    void testCreateBookmark_MissingFlightOfferData_ReturnsBadRequest() throws Exception {
+        // Arrange
+        CreateBookmarkRequest request = new CreateBookmarkRequest();
+        request.setTitle("My Bookmark");
+        request.setItemType(Bookmark.ItemType.BOOKMARK);
+        // Missing flightOfferData for bookmark
+        
+        String requestBody = objectMapper.writeValueAsString(request);
+        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks", "valid-token", requestBody);
+        User testUser = createTestUser();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(400, response.getStatusCode());
+        assertTrue(response.getBody().contains("Flight offer data is required for bookmark items"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockBookmarkRepository, never()).saveBookmark(any(Bookmark.class));
+    }
+    
+    // TYPE FILTERING TESTS
+    
+    @Test
+    void testListBookmarks_FilterByBookmarkType_ReturnsFilteredResults() throws Exception {
+        // Arrange
+        APIGatewayProxyRequestEvent event = createRequestEvent("GET", "/bookmarks", "valid-token", null);
+        Map<String, String> queryParams = new HashMap<>();
+        queryParams.put("type", "BOOKMARK");
+        event.setQueryStringParameters(queryParams);
+        
+        User testUser = createTestUser();
+        List<Bookmark> filteredBookmarks = Arrays.asList(createTestBookmark());
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockBookmarkRepository.findByUserIdAndItemType(testUserId, Bookmark.ItemType.BOOKMARK))
+            .thenReturn(filteredBookmarks);
+        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(25);
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(200, response.getStatusCode());
+        assertTrue(response.getBody().contains("\"total\":1"));
+        verify(mockAuthService, times(2)).validateToken("valid-token");
+        verify(mockBookmarkRepository).findByUserIdAndItemType(testUserId, Bookmark.ItemType.BOOKMARK);
+        verify(mockUsageLimitsService).getRemainingBookmarks(testUser);
+    }
+    
+    @Test
+    void testListBookmarks_FilterBySavedSearchType_ReturnsFilteredResults() throws Exception {
+        // Arrange
+        APIGatewayProxyRequestEvent event = createRequestEvent("GET", "/bookmarks", "valid-token", null);
+        Map<String, String> queryParams = new HashMap<>();
+        queryParams.put("type", "SAVED_SEARCH");
+        event.setQueryStringParameters(queryParams);
+        
+        User testUser = createTestUser();
+        List<Bookmark> savedSearches = new ArrayList<>();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockBookmarkRepository.findByUserIdAndItemType(testUserId, Bookmark.ItemType.SAVED_SEARCH))
+            .thenReturn(savedSearches);
+        when(mockUsageLimitsService.getRemainingBookmarks(testUser)).thenReturn(25);
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(200, response.getStatusCode());
+        assertTrue(response.getBody().contains("\"total\":0"));
+        verify(mockAuthService, times(2)).validateToken("valid-token");
+        verify(mockBookmarkRepository).findByUserIdAndItemType(testUserId, Bookmark.ItemType.SAVED_SEARCH);
+        verify(mockUsageLimitsService).getRemainingBookmarks(testUser);
+    }
+    
+    @Test
+    void testListBookmarks_InvalidFilterType_ReturnsBadRequest() throws Exception {
+        // Arrange
+        APIGatewayProxyRequestEvent event = createRequestEvent("GET", "/bookmarks", "valid-token", null);
+        Map<String, String> queryParams = new HashMap<>();
+        queryParams.put("type", "INVALID_TYPE");
+        event.setQueryStringParameters(queryParams);
+        
+        User testUser = createTestUser();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(400, response.getStatusCode());
+        assertTrue(response.getBody().contains("Invalid item type. Valid types: BOOKMARK, SAVED_SEARCH"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockBookmarkRepository, never()).findByUserIdAndItemType(anyString(), any());
+    }
+    
+    // SAVED SEARCH EXECUTION TESTS
+    
+    private Bookmark createTestSavedSearch() throws Exception {
+        FlightSearchRequest searchRequest = new FlightSearchRequest();
+        searchRequest.setOrigin("LAX");
+        searchRequest.setDestination("JFK");
+        searchRequest.setDepartureDate("2024-06-15");
+        
+        Bookmark savedSearch = new Bookmark(testUserId, testBookmarkId, "Test Saved Search", searchRequest);
+        savedSearch.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60)); // 30 days
+        return savedSearch;
+    }
+    
+    @Test
+    void testExecuteBookmark_ValidSavedSearch_ReturnsExecutionResult() throws Exception {
+        // Arrange
+        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks/" + testBookmarkId + "/execute", "valid-token", null);
+        User testUser = createTestUser();
+        Bookmark savedSearch = createTestSavedSearch();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
+            .thenReturn(Optional.of(savedSearch));
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(200, response.getStatusCode());
+        assertTrue(response.getBody().contains("message"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
+    }
+    
+    @Test
+    void testExecuteBookmark_RegularBookmark_ReturnsBadRequest() throws Exception {
+        // Arrange
+        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks/" + testBookmarkId + "/execute", "valid-token", null);
+        User testUser = createTestUser();
+        Bookmark regularBookmark = createTestBookmark(); // This is a regular bookmark, not saved search
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
+            .thenReturn(Optional.of(regularBookmark));
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(400, response.getStatusCode());
+        assertTrue(response.getBody().contains("Only saved search items can be executed"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
+    }
+    
+    @Test
+    void testExecuteBookmark_NotFound_ReturnsNotFound() throws Exception {
+        // Arrange
+        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks/" + testBookmarkId + "/execute", "valid-token", null);
+        User testUser = createTestUser();
+        
+        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
+        when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
+            .thenReturn(Optional.empty());
+        
+        // Act
+        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
+        
+        // Assert
+        assertEquals(404, response.getStatusCode());
+        assertTrue(response.getBody().contains("Bookmark not found"));
+        verify(mockAuthService).validateToken("valid-token");
+        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
     }
 }

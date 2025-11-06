@@ -1,5 +1,6 @@
 package com.seatmap.auth.service;
 
+import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.UserUsageRepository;
 import com.seatmap.common.exception.SeatmapException;
 import com.seatmap.common.model.User.AccountTier;
@@ -23,6 +24,7 @@ public class UserUsageLimitsService {
     private static final Logger logger = LoggerFactory.getLogger(UserUsageLimitsService.class);
     
     private final UserUsageRepository usageRepository;
+    private final BookmarkRepository bookmarkRepository;
     private final DynamoDbClient dynamoDbClient;
     private final String tierTableName;
     
@@ -32,23 +34,28 @@ public class UserUsageLimitsService {
     
     public UserUsageLimitsService(UserUsageRepository usageRepository, DynamoDbClient dynamoDbClient) {
         this.usageRepository = usageRepository;
+        this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, "seatmap-bookmarks-" + getEnvironment());
         this.dynamoDbClient = dynamoDbClient;
         this.tierTableName = "seatmap-account-tiers-" + getEnvironment();
     }
     
     public UserUsageLimitsService(DynamoDbClient dynamoDbClient, String environment) {
         this.usageRepository = new UserUsageRepository(dynamoDbClient);
+        this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, "seatmap-bookmarks-" + environment);
         this.dynamoDbClient = dynamoDbClient;
         this.tierTableName = "seatmap-account-tiers-" + environment;
     }
     
     /**
-     * Check if user can create a bookmark
+     * Check if user can create a bookmark using real-time DDB counting
      */
     public boolean canCreateBookmark(User user) throws SeatmapException {
         try {
             int tierLimit = getTierBookmarkLimit(user.getAccountTier());
-            return usageRepository.canCreateBookmark(user.getUserId(), tierLimit);
+            if (tierLimit == -1) return true; // Unlimited
+            
+            int currentCount = bookmarkRepository.countBookmarksByUserId(user.getUserId());
+            return currentCount < tierLimit;
         } catch (SeatmapException e) {
             // Re-throw tier definition exceptions (fail-closed behavior)
             throw e;
@@ -75,20 +82,19 @@ public class UserUsageLimitsService {
     }
     
     /**
-     * Record a bookmark creation and validate limit
+     * Validate bookmark creation limits using real-time counting
      */
     public void recordBookmarkCreation(User user) throws SeatmapException {
         if (!canCreateBookmark(user)) {
             int tierLimit = getTierBookmarkLimit(user.getAccountTier());
-            int currentCount = usageRepository.getCurrentMonthBookmarkCount(user.getUserId());
+            int currentCount = bookmarkRepository.countBookmarksByUserId(user.getUserId());
             
             throw SeatmapException.forbidden(
                 getBookmarkLimitErrorMessage(user.getAccountTier(), tierLimit, currentCount)
             );
         }
         
-        usageRepository.recordBookmarkCreation(user.getUserId());
-        logger.info("Recorded bookmark creation for user: {} tier: {}", 
+        logger.info("Validated bookmark creation limits for user: {} tier: {}", 
             user.getUserId(), user.getAccountTier());
     }
     
@@ -102,11 +108,14 @@ public class UserUsageLimitsService {
     }
     
     /**
-     * Get remaining bookmarks for user's current tier
+     * Get remaining bookmarks for user's current tier using real-time counting
      */
     public int getRemainingBookmarks(User user) throws SeatmapException {
         int tierLimit = getTierBookmarkLimit(user.getAccountTier());
-        return usageRepository.getRemainingBookmarks(user.getUserId(), tierLimit);
+        if (tierLimit == -1) return Integer.MAX_VALUE; // Unlimited
+        
+        int currentCount = bookmarkRepository.countBookmarksByUserId(user.getUserId());
+        return Math.max(0, tierLimit - currentCount);
     }
     
     /**

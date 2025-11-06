@@ -64,7 +64,9 @@ public abstract class DynamoDbRepository<T> {
     }
     
     private AttributeValue toAttributeValue(Object value) {
-        if (value instanceof String) {
+        if (value == null) {
+            return AttributeValue.builder().nul(true).build();
+        } else if (value instanceof String) {
             return AttributeValue.builder().s((String) value).build();
         } else if (value instanceof Number) {
             return AttributeValue.builder().n(value.toString()).build();

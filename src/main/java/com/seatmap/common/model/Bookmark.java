@@ -1,5 +1,6 @@
 package com.seatmap.common.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.seatmap.api.model.FlightSearchRequest;
 import jakarta.validation.constraints.NotBlank;
@@ -154,17 +155,20 @@ public class Bookmark {
         this.expiresAt = expiresAt;
     }
 
-    @JsonProperty("isExpired")
+    @JsonIgnore  // Don't serialize to DynamoDB
+    @JsonProperty("isExpired")  // But include in API responses
     public boolean isExpired() {
         return expiresAt != null && Instant.now().isAfter(expiresAt);
     }
 
-    @JsonProperty("isBookmark")
+    @JsonIgnore  // Don't serialize to DynamoDB
+    @JsonProperty("isBookmark")  // But include in API responses
     public boolean isBookmark() {
         return itemType == ItemType.BOOKMARK;
     }
 
-    @JsonProperty("isSavedSearch")
+    @JsonIgnore  // Don't serialize to DynamoDB
+    @JsonProperty("isSavedSearch")  // But include in API responses
     public boolean isSavedSearch() {
         return itemType == ItemType.SAVED_SEARCH;
     }
