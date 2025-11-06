@@ -104,7 +104,9 @@ rm -f /tmp/api_endpoint /tmp/jwt_token /tmp/request_body.json
 **Commit Message Guidelines:**
 - Write clear, descriptive commit messages
 - Focus on what and why, not how
-- **NEVER include Claude authoring or AI generation references in commit messages**
+- **❌ NEVER include Claude authoring or AI generation references in commit messages**
+  - ❌ Don't include: "Generated with Claude Code", "Co-Authored-By: Claude", "🤖" emojis, "AI-generated", etc.
+  - ✅ Write natural commit messages as if authored by a human developer
 - Use conventional commit format when appropriate
 
 ### AWS Profile Configuration
