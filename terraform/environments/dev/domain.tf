@@ -1,29 +1,19 @@
-# Provider for us-east-1 (required for ACM certificates used with API Gateway)
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-}
-
 # Route53 Hosted Zone for api-dev.myseatmap.com
 resource "aws_route53_zone" "api_dev" {
   name = "api-dev.myseatmap.com"
 
   tags = merge(local.common_tags, {
-    Name   = "api-dev.myseatmap.com"
-    Region = "us-east-1"  # Override region tag since ACM cert is in us-east-1
+    Name = "api-dev.myseatmap.com"
   })
 }
 
-# ACM Certificate for api-dev.myseatmap.com (must be in us-east-1 for API Gateway)
+# ACM Certificate for api-dev.myseatmap.com (must be in same region as regional API Gateway)
 resource "aws_acm_certificate" "api_dev" {
-  provider = aws.us_east_1
-  
   domain_name       = "api-dev.myseatmap.com"
   validation_method = "DNS"
 
   tags = merge(local.common_tags, {
-    Name   = "api-dev.myseatmap.com"
-    Region = "us-east-1"  # Override region tag since ACM cert is in us-east-1
+    Name = "api-dev.myseatmap.com"
   })
 
   lifecycle {
@@ -51,8 +41,6 @@ resource "aws_route53_record" "api_dev_validation" {
 
 # ACM certificate validation - wait for DNS propagation without timeout
 resource "aws_acm_certificate_validation" "api_dev" {
-  provider = aws.us_east_1
-  
   certificate_arn         = aws_acm_certificate.api_dev.arn
   validation_record_fqdns = [for record in aws_route53_record.api_dev_validation : record.fqdn]
 
@@ -72,8 +60,7 @@ resource "aws_api_gateway_domain_name" "api_dev" {
   }
 
   tags = merge(local.common_tags, {
-    Name   = "api-dev.myseatmap.com"
-    Region = "us-east-1"  # Override region tag since ACM cert is in us-east-1
+    Name = "api-dev.myseatmap.com"
   })
 
   depends_on = [aws_acm_certificate_validation.api_dev]
