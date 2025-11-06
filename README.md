@@ -28,7 +28,7 @@ A serverless REST API built on AWS that aggregates flight seat availability data
   - Amadeus API credentials integration
 - ✅ **Build System**: Gradle 8.4 with Java 17
   - Fat JAR packaging for Lambda deployment
-  - Comprehensive test suite with JUnit 5 (433 tests, 73% coverage)
+  - Comprehensive test suite with JUnit 5 (581 tests, 66% coverage)
   - Jakarta validation for request validation
   - Automated test failure handling in CI/CD pipeline
 
@@ -240,26 +240,55 @@ cd terraform/environments/prod
 
 ## Testing
 
-### Test Coverage (461 tests total - 57% instruction coverage)
-- **API Handlers**: 57 comprehensive tests (88% coverage)
-  - FlightSearchHandler: Tests for integrated flight search with embedded seatmap data
-  - SeatmapViewHandler: Tests for usage tracking and IP-based limit enforcement
-- **Authentication Services**: 100 comprehensive tests (87% coverage)
+### Test Coverage (581 tests total - 66% instruction coverage)
+**Summary**: 581 tests, 0 failures, 6 skipped (100% success rate)
+
+#### **Package-Level Coverage**:
+- **com.seatmap.api.exception**: 3 tests (100% coverage)
+- **com.seatmap.email.service**: 9 tests (98% coverage)
+- **com.seatmap.common.model**: 76 tests (90% coverage) 
+- **com.seatmap.auth.service**: 139 tests (89% coverage)
+- **com.seatmap.auth.handler**: 70 tests (87% coverage)
+- **com.seatmap.auth.model**: Not separately tested (83% coverage)
+- **com.seatmap.common.exception**: Not separately tested (79% coverage)
+- **com.seatmap.api.model**: 95 tests (72% coverage)
+- **com.seatmap.common.repository**: 16 tests (70% coverage)
+- **com.seatmap.auth.repository**: 65 tests (66% coverage)
+- **com.seatmap.api.handler**: 57 tests (55% coverage)
+- **com.seatmap.api.service**: 41 tests (34% coverage, 6 skipped)
+
+#### **Key Test Areas**:
+- **Authentication Services**: 139 comprehensive tests (89% coverage)
   - Password Security: bcrypt validation, strength requirements  
   - JWT Tokens: Generation, validation, expiration, security edge cases
   - User Management: Registration, login, session management
   - Guest Access: IP-based rate limiting (2 seat map views max)
-- **Email Services**: 10 comprehensive tests (98% coverage)
+  - Email verification with AWS SES integration
+- **Data Layer**: 65 repository tests (66% coverage)
+  - UserRepository: 20 tests (100% instruction coverage)
+  - SessionRepository: 11 tests (86% instruction coverage)
+  - UserUsageRepository: 19 tests (94% instruction coverage)
+  - GuestAccessRepository: 7 integration tests (86% instruction coverage)
+  - BookmarkRepository: 8 integration tests (1% instruction coverage - needs expansion)
+- **API Handlers**: 57 comprehensive tests (55% coverage)
+  - FlightSearchHandler: Tests for integrated flight search with embedded seatmap data
+  - SeatmapViewHandler: Tests for usage tracking and IP-based limit enforcement
+  - AuthHandler: Complete authentication flow testing
+  - BookmarkHandler: CRUD operations with validation
+- **API Models**: 95 comprehensive tests (72% coverage)
+  - Request/response validation with Jakarta Bean Validation
+  - Complex nested object serialization/deserialization
+  - Edge cases and error scenarios
+- **API Services**: 41 tests (34% coverage)
+  - AmadeusService: 6 tests (61% coverage) - OAuth2 integration, error handling
+  - SabreService: 35 tests (28% coverage) - SOAP integration, JSON parsing, authentication
+  - 6 skipped tests (performance and real API integration tests)
+- **Email Services**: 9 comprehensive tests (98% coverage)
   - AWS SES integration with verification and welcome emails
   - Error handling and template validation
-- **API Services**: 7 tests (35% coverage)
-  - AmadeusService: OAuth2 integration, error handling, token management
-- **Exception Handling**: 3 comprehensive tests (100% coverage)
-  - SeatmapApiException: All constructor variants and error scenarios
-- **Data Layer**: 42 comprehensive tests (40-78% coverage)
-  - DynamoDB repositories with serialization testing
-  - User and guest access models with JSON validation
-  - Rate limiting integration tests
+- **Common Models**: 76 tests (90% coverage)
+  - Domain object serialization and validation
+  - Business logic methods and computed properties
 
 ### Running Tests
 ```bash
@@ -649,7 +678,7 @@ For complete API documentation, see `docs/api/saved-searches.md`
 - ✅ **Build Validation**: Tests run on every deployment with fail-fast on failures
 - ✅ **Infrastructure as Code**: Complete Terraform management
 - ✅ **Environment Separation**: dev/prod isolation
-- ✅ **Test Quality**: 73% code coverage with comprehensive integration tests
+- ✅ **Test Quality**: 66% code coverage with comprehensive integration tests
 
 ### Planned
 - CloudWatch alarms for Lambda errors and API Gateway 5xx
