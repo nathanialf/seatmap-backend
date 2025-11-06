@@ -32,6 +32,13 @@ public class UserUsageLimitsService {
     private final Map<AccountTier, TierDefinition> tierDefinitionsCache = new ConcurrentHashMap<>();
     private volatile boolean tierDefinitionsLoaded = false;
     
+    public UserUsageLimitsService(UserUsageRepository usageRepository, BookmarkRepository bookmarkRepository, DynamoDbClient dynamoDbClient) {
+        this.usageRepository = usageRepository;
+        this.bookmarkRepository = bookmarkRepository;
+        this.dynamoDbClient = dynamoDbClient;
+        this.tierTableName = "seatmap-account-tiers-" + getEnvironment();
+    }
+    
     public UserUsageLimitsService(UserUsageRepository usageRepository, DynamoDbClient dynamoDbClient) {
         this.usageRepository = usageRepository;
         this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, "seatmap-bookmarks-" + getEnvironment());
