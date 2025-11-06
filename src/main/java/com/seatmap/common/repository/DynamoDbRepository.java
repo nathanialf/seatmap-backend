@@ -127,6 +127,8 @@ public abstract class DynamoDbRepository<T> {
                 map.put(entry.getKey(), fromAttributeValue(entry.getValue()));
             }
             return map;
+        } else if (attributeValue.nul() != null && attributeValue.nul()) {
+            return null;
         } else {
             return null;
         }
