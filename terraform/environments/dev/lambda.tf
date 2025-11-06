@@ -93,8 +93,14 @@ resource "aws_lambda_function" "bookmarks" {
   
   environment {
     variables = {
-      ENVIRONMENT = local.environment
-      JWT_SECRET  = var.jwt_secret
+      ENVIRONMENT        = local.environment
+      AMADEUS_ENDPOINT   = var.amadeus_endpoint
+      AMADEUS_API_KEY    = var.amadeus_api_key
+      AMADEUS_API_SECRET = var.amadeus_api_secret
+      SABRE_USER_ID      = var.sabre_user_id
+      SABRE_PASSWORD     = var.sabre_password
+      SABRE_ENDPOINT     = var.sabre_endpoint
+      JWT_SECRET         = var.jwt_secret
     }
   }
 
