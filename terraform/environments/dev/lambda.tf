@@ -22,7 +22,7 @@ resource "aws_lambda_function" "auth" {
       SABRE_PASSWORD     = var.sabre_password
       SABRE_ENDPOINT     = var.sabre_endpoint
       JWT_SECRET         = var.jwt_secret
-      BASE_URL           = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${local.environment}"
+      BASE_URL           = "https://${aws_api_gateway_domain_name.api_dev.domain_name}"
     }
   }
 
