@@ -137,14 +137,148 @@ public class AmadeusService {
     /**
      * Convert Amadeus seatmap response to SeatMapData model
      */
-    private SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
-        // For now, return a basic SeatMapData with the source marked as AMADEUS
-        // This will be enhanced to properly parse the Amadeus seatmap response
+    public SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
         SeatMapData seatMapData = new SeatMapData();
         seatMapData.setSource("AMADEUS");
         
-        // TODO: Implement proper conversion from Amadeus seatmap JSON to SeatMapData model
-        // This would involve parsing decks, seats, aircraft info, etc. from the response
+        if (seatMapResponse == null || !seatMapResponse.has("data")) {
+            return seatMapData;
+        }
+        
+        try {
+            // Get the first seat map from the response (Amadeus returns array)
+            JsonNode data = seatMapResponse.get("data");
+            JsonNode firstSeatMap = data.isArray() && data.size() > 0 ? data.get(0) : data;
+            
+            // Extract flight information
+            SeatMapData.FlightInfo flightInfo = new SeatMapData.FlightInfo();
+            flightInfo.setNumber(firstSeatMap.path("number").asText());
+            flightInfo.setCarrierCode(firstSeatMap.path("carrierCode").asText());
+            
+            // Extract departure info
+            if (firstSeatMap.has("departure")) {
+                JsonNode departure = firstSeatMap.get("departure");
+                SeatMapData.FlightInfo.DepartureInfo departureInfo = new SeatMapData.FlightInfo.DepartureInfo();
+                departureInfo.setIataCode(departure.path("iataCode").asText());
+                departureInfo.setTerminal(departure.path("terminal").asText());
+                departureInfo.setAt(departure.path("at").asText());
+                flightInfo.setDeparture(departureInfo);
+            }
+            
+            // Extract arrival info
+            if (firstSeatMap.has("arrival")) {
+                JsonNode arrival = firstSeatMap.get("arrival");
+                SeatMapData.FlightInfo.ArrivalInfo arrivalInfo = new SeatMapData.FlightInfo.ArrivalInfo();
+                arrivalInfo.setIataCode(arrival.path("iataCode").asText());
+                arrivalInfo.setTerminal(arrival.path("terminal").asText());
+                arrivalInfo.setAt(arrival.path("at").asText());
+                flightInfo.setArrival(arrivalInfo);
+            }
+            
+            // Extract operating info if present
+            if (firstSeatMap.has("operating")) {
+                flightInfo.setOperating(firstSeatMap.get("operating"));
+            }
+            
+            seatMapData.setFlight(flightInfo);
+            
+            // Extract aircraft information
+            if (firstSeatMap.has("aircraft")) {
+                JsonNode aircraft = firstSeatMap.get("aircraft");
+                SeatMapData.AircraftInfo aircraftInfo = new SeatMapData.AircraftInfo();
+                aircraftInfo.setCode(aircraft.path("code").asText());
+                // Aircraft name could be derived from code, but Amadeus doesn't provide it
+                aircraftInfo.setName("");
+                seatMapData.setAircraft(aircraftInfo);
+            }
+            
+            // Extract deck information and seats
+            if (firstSeatMap.has("decks")) {
+                List<SeatMapData.SeatMapDeck> decks = new ArrayList<>();
+                List<SeatMapData.Seat> allSeats = new ArrayList<>();
+                int totalRows = 0;
+                int totalColumns = 0;
+                
+                for (JsonNode deckNode : firstSeatMap.get("decks")) {
+                    SeatMapData.SeatMapDeck deck = new SeatMapData.SeatMapDeck();
+                    deck.setDeckType(deckNode.path("deckType").asText());
+                    
+                    // Store deck configuration
+                    if (deckNode.has("deckConfiguration")) {
+                        deck.setDeckConfiguration(deckNode.get("deckConfiguration"));
+                        
+                        // Extract layout dimensions from deck configuration
+                        JsonNode deckConfig = deckNode.get("deckConfiguration");
+                        totalColumns = Math.max(totalColumns, deckConfig.path("width").asInt(0));
+                        totalRows = Math.max(totalRows, deckConfig.path("length").asInt(0));
+                    }
+                    
+                    // Store facilities
+                    if (deckNode.has("facilities")) {
+                        List<JsonNode> facilities = new ArrayList<>();
+                        for (JsonNode facility : deckNode.get("facilities")) {
+                            facilities.add(facility);
+                        }
+                        deck.setFacilities(facilities);
+                    }
+                    
+                    // Extract seats from this deck
+                    List<SeatMapData.Seat> deckSeats = new ArrayList<>();
+                    if (deckNode.has("seats")) {
+                        for (JsonNode seatNode : deckNode.get("seats")) {
+                            SeatMapData.Seat seat = new SeatMapData.Seat();
+                            seat.setNumber(seatNode.path("number").asText());
+                            seat.setCabin(seatNode.path("cabin").asText());
+                            
+                            // Extract characteristics codes
+                            if (seatNode.has("characteristicsCodes")) {
+                                List<String> characteristics = new ArrayList<>();
+                                for (JsonNode code : seatNode.get("characteristicsCodes")) {
+                                    characteristics.add(code.asText());
+                                }
+                                seat.setCharacteristicsCodes(characteristics);
+                            }
+                            
+                            // Extract coordinates
+                            if (seatNode.has("coordinates")) {
+                                seat.setCoordinates(seatNode.get("coordinates"));
+                            }
+                            
+                            // Extract traveler pricing (availability and pricing info)
+                            if (seatNode.has("travelerPricing")) {
+                                List<JsonNode> travelerPricing = new ArrayList<>();
+                                for (JsonNode pricing : seatNode.get("travelerPricing")) {
+                                    travelerPricing.add(pricing);
+                                }
+                                seat.setTravelerPricing(travelerPricing);
+                            }
+                            
+                            deckSeats.add(seat);
+                            allSeats.add(seat);
+                        }
+                    }
+                    
+                    deck.setSeats(deckSeats);
+                    decks.add(deck);
+                }
+                
+                seatMapData.setDecks(decks);
+                seatMapData.setSeats(allSeats);
+                
+                // Create layout info
+                if (totalRows > 0 || totalColumns > 0) {
+                    SeatMapData.LayoutInfo layout = new SeatMapData.LayoutInfo();
+                    layout.setTotalRows(totalRows);
+                    layout.setTotalColumns(totalColumns);
+                    layout.setConfiguration(String.format("%dx%d", totalRows, totalColumns));
+                    seatMapData.setLayout(layout);
+                }
+            }
+            
+        } catch (Exception e) {
+            logger.warn("Error converting Amadeus seat map response: {}", e.getMessage());
+            // Return basic seat map data with source only if conversion fails
+        }
         
         return seatMapData;
     }

@@ -216,8 +216,7 @@ public class FlightSearchHandler implements RequestHandler<APIGatewayProxyReques
             if ("AMADEUS".equals(dataSource)) {
                 // Use Amadeus service to get fresh seatmap
                 JsonNode seatMapResponse = amadeusService.getSeatMapFromOffer(flightOffer);
-                com.seatmap.api.model.SeatMapData seatMapData = new com.seatmap.api.model.SeatMapData();
-                seatMapData.setSource("AMADEUS");
+                com.seatmap.api.model.SeatMapData seatMapData = amadeusService.convertToSeatMapData(seatMapResponse);
                 return new FlightSearchResult(flightOffer, seatMapData, true, null);
             } else if ("SABRE".equals(dataSource)) {
                 // Extract flight details and use Sabre service
@@ -228,8 +227,7 @@ public class FlightSearchHandler implements RequestHandler<APIGatewayProxyReques
                 String destination = extractFromFlightOffer(flightOffer, "destination");
                 
                 JsonNode seatMapResponse = sabreService.getSeatMapFromFlight(carrierCode, flightNumber, departureDate, origin, destination);
-                com.seatmap.api.model.SeatMapData seatMapData = new com.seatmap.api.model.SeatMapData();
-                seatMapData.setSource("SABRE");
+                com.seatmap.api.model.SeatMapData seatMapData = sabreService.convertToSeatMapData(seatMapResponse);
                 return new FlightSearchResult(flightOffer, seatMapData, true, null);
             } else {
                 throw new Exception("Unknown data source: " + dataSource);

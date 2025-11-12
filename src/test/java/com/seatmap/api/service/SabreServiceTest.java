@@ -391,4 +391,6 @@ class SabreServiceTest {
             assertEquals("XX", result2);
         }
     }
+    
+    // TODO: SeatMap Data Conversion Tests will be added when SabreService.convertToSeatMapData() is fully implemented
 }

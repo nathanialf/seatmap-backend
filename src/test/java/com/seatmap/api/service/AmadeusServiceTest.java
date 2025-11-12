@@ -3,6 +3,7 @@ package com.seatmap.api.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatmap.api.exception.SeatmapApiException;
+import com.seatmap.api.model.SeatMapData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -187,5 +188,365 @@ class AmadeusServiceTest {
         
         // Should have made 6 HTTP calls total (2 tokens + 2 flight offers + 2 seat maps)
         verify(mockHttpClient, times(6)).send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
+    }
+    
+    @Test
+    void convertToSeatMapData_WithValidResponse_ReturnsCompleteData() throws Exception {
+        String seatMapJson = """
+        {
+            "data": [{
+                "type": "seat-map",
+                "number": "1",
+                "carrierCode": "UA",
+                "aircraft": {
+                    "code": "73H"
+                },
+                "departure": {
+                    "iataCode": "SFO",
+                    "at": "2025-12-05T08:30:00"
+                },
+                "arrival": {
+                    "iataCode": "CUN",
+                    "at": "2025-12-05T16:45:00"
+                },
+                "decks": [{
+                    "deckType": "MAIN",
+                    "deckConfiguration": {
+                        "width": 6,
+                        "length": 30
+                    },
+                    "facilities": [{
+                        "code": "LA",
+                        "column": "3",
+                        "row": "15"
+                    }],
+                    "seats": [{
+                        "number": "12A",
+                        "characteristicsCodes": ["9", "A", "CH", "K", "LS", "O", "Q", "W"],
+                        "travelerPricing": [{
+                            "travelerId": "1",
+                            "seatAvailabilityStatus": "AVAILABLE",
+                            "price": {
+                                "currency": "USD",
+                                "total": "25.00",
+                                "base": "20.00",
+                                "fees": [{
+                                    "amount": "5.00",
+                                    "type": "TICKETING"
+                                }],
+                                "taxes": [{
+                                    "amount": "2.50",
+                                    "code": "YQ"
+                                }]
+                            }
+                        }]
+                    }]
+                }]
+            }]
+        }
+        """;
+        
+        JsonNode seatMapResponse = objectMapper.readTree(seatMapJson);
+        SeatMapData result = amadeusService.convertToSeatMapData(seatMapResponse);
+        
+        // Verify basic flight info
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNotNull(result.getFlight());
+        assertEquals("1", result.getFlight().getNumber());
+        assertEquals("UA", result.getFlight().getCarrierCode());
+        assertEquals("SFO", result.getFlight().getDeparture().getIataCode());
+        assertEquals("CUN", result.getFlight().getArrival().getIataCode());
+        
+        // Verify aircraft info
+        assertNotNull(result.getAircraft());
+        assertEquals("73H", result.getAircraft().getCode());
+        
+        // Verify decks
+        assertNotNull(result.getDecks());
+        assertEquals(1, result.getDecks().size());
+        SeatMapData.SeatMapDeck deck = result.getDecks().get(0);
+        assertEquals("MAIN", deck.getDeckType());
+        assertNotNull(deck.getDeckConfiguration());
+        
+        // Verify facilities
+        assertNotNull(deck.getFacilities());
+        assertEquals(1, deck.getFacilities().size());
+        // Facilities are stored as JsonNode
+        assertNotNull(deck.getFacilities().get(0));
+        
+        // Verify seats
+        assertNotNull(deck.getSeats());
+        assertEquals(1, deck.getSeats().size());
+        SeatMapData.Seat seat = deck.getSeats().get(0);
+        assertEquals("12A", seat.getNumber());
+        assertNotNull(seat.getCharacteristicsCodes());
+        assertEquals(8, seat.getCharacteristicsCodes().size());
+        assertTrue(seat.getCharacteristicsCodes().contains("9"));
+        assertTrue(seat.getCharacteristicsCodes().contains("W"));
+        
+        // Verify seat pricing (stored as JsonNode in the model)
+        assertNotNull(seat.getTravelerPricing());
+        assertEquals(1, seat.getTravelerPricing().size());
+    }
+    
+    @Test
+    void convertToSeatMapData_WithNullResponse_ReturnsEmptyData() {
+        SeatMapData result = amadeusService.convertToSeatMapData(null);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNull(result.getFlight());
+        assertNull(result.getAircraft());
+        assertNull(result.getDecks());
+        assertNull(result.getSeats());
+        assertNull(result.getLayout());
+    }
+    
+    @Test
+    void convertToSeatMapData_WithEmptyResponse_ReturnsEmptyData() throws Exception {
+        String emptyJson = "{}";
+        JsonNode emptyResponse = objectMapper.readTree(emptyJson);
+        
+        SeatMapData result = amadeusService.convertToSeatMapData(emptyResponse);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNull(result.getFlight());
+        assertNull(result.getAircraft());
+        assertNull(result.getDecks());
+    }
+    
+    @Test
+    void convertToSeatMapData_WithMissingDataField_ReturnsEmptyData() throws Exception {
+        String noDataJson = """
+        {
+            "meta": {
+                "count": 0
+            }
+        }
+        """;
+        JsonNode noDataResponse = objectMapper.readTree(noDataJson);
+        
+        SeatMapData result = amadeusService.convertToSeatMapData(noDataResponse);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNull(result.getFlight());
+    }
+    
+    @Test
+    void convertToSeatMapData_WithMultipleDecks_HandlesCorrectly() throws Exception {
+        String multiDeckJson = """
+        {
+            "data": [{
+                "type": "seat-map",
+                "number": "777",
+                "carrierCode": "UA",
+                "decks": [
+                    {
+                        "deckType": "MAIN",
+                        "seats": [{
+                            "number": "1A",
+                            "characteristicsCodes": ["F"]
+                        }]
+                    },
+                    {
+                        "deckType": "UPPER",
+                        "seats": [{
+                            "number": "2A",
+                            "characteristicsCodes": ["F"]
+                        }]
+                    }
+                ]
+            }]
+        }
+        """;
+        
+        JsonNode multiDeckResponse = objectMapper.readTree(multiDeckJson);
+        SeatMapData result = amadeusService.convertToSeatMapData(multiDeckResponse);
+        
+        assertNotNull(result.getDecks());
+        assertEquals(2, result.getDecks().size());
+        assertEquals("MAIN", result.getDecks().get(0).getDeckType());
+        assertEquals("UPPER", result.getDecks().get(1).getDeckType());
+        assertEquals("1A", result.getDecks().get(0).getSeats().get(0).getNumber());
+        assertEquals("2A", result.getDecks().get(1).getSeats().get(0).getNumber());
+    }
+    
+    @Test
+    void convertToSeatMapData_WithMalformedJson_HandlesGracefully() throws Exception {
+        String malformedJson = """
+        {
+            "data": [{
+                "number": 123,
+                "departure": {
+                    "at": "not-a-date"
+                },
+                "decks": [{
+                    "seats": [{
+                        "number": null
+                    }]
+                }]
+            }]
+        }
+        """;
+        
+        JsonNode malformedResponse = objectMapper.readTree(malformedJson);
+        
+        // Should not throw exception, but handle gracefully
+        assertDoesNotThrow(() -> {
+            SeatMapData result = amadeusService.convertToSeatMapData(malformedResponse);
+            assertNotNull(result);
+            assertEquals("AMADEUS", result.getSource());
+        });
+    }
+    
+    @Test
+    void convertToSeatMapData_WithMultiSegmentFlight_HandlesCorrectly() throws Exception {
+        String multiSegmentJson = """
+        {
+            "data": [{
+                "type": "seat-map",
+                "number": "1",
+                "carrierCode": "UA",
+                "aircraft": {
+                    "code": "73H"
+                },
+                "departure": {
+                    "iataCode": "SFO",
+                    "at": "2025-12-05T08:30:00"
+                },
+                "arrival": {
+                    "iataCode": "DEN",
+                    "at": "2025-12-05T11:45:00"
+                },
+                "decks": [{
+                    "deckType": "MAIN",
+                    "seats": [{
+                        "number": "12A",
+                        "characteristicsCodes": ["W"],
+                        "travelerPricing": [{
+                            "travelerId": "1",
+                            "seatAvailabilityStatus": "AVAILABLE",
+                            "price": {"currency": "USD", "total": "25.00"}
+                        }]
+                    }]
+                }]
+            }, {
+                "type": "seat-map",
+                "number": "456",
+                "carrierCode": "UA",
+                "aircraft": {
+                    "code": "320"
+                },
+                "departure": {
+                    "iataCode": "DEN",
+                    "at": "2025-12-05T13:30:00"
+                },
+                "arrival": {
+                    "iataCode": "CUN",
+                    "at": "2025-12-05T18:45:00"
+                },
+                "decks": [{
+                    "deckType": "MAIN",
+                    "seats": [{
+                        "number": "15F",
+                        "characteristicsCodes": ["W"],
+                        "travelerPricing": [{
+                            "travelerId": "1",
+                            "seatAvailabilityStatus": "AVAILABLE",
+                            "price": {"currency": "USD", "total": "30.00"}
+                        }]
+                    }]
+                }]
+            }]
+        }
+        """;
+        
+        JsonNode multiSegmentResponse = objectMapper.readTree(multiSegmentJson);
+        SeatMapData result = amadeusService.convertToSeatMapData(multiSegmentResponse);
+        
+        // Should process the first segment
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNotNull(result.getFlight());
+        assertEquals("1", result.getFlight().getNumber());
+        assertEquals("UA", result.getFlight().getCarrierCode());
+        assertEquals("SFO", result.getFlight().getDeparture().getIataCode());
+        assertEquals("DEN", result.getFlight().getArrival().getIataCode());
+        
+        // Verify aircraft and seat data from first segment
+        assertNotNull(result.getAircraft());
+        assertEquals("73H", result.getAircraft().getCode());
+        
+        assertNotNull(result.getDecks());
+        assertEquals(1, result.getDecks().size());
+        assertEquals("12A", result.getDecks().get(0).getSeats().get(0).getNumber());
+    }
+    
+    @Test
+    void convertToSeatMapData_WithSegmentMissingData_HandlesGracefully() throws Exception {
+        String incompleteSegmentJson = """
+        {
+            "data": [{
+                "type": "seat-map",
+                "number": "1",
+                "carrierCode": "UA",
+                "departure": {
+                    "iataCode": "SFO"
+                },
+                "arrival": {
+                    "iataCode": "CUN"
+                }
+            }]
+        }
+        """;
+        
+        JsonNode incompleteResponse = objectMapper.readTree(incompleteSegmentJson);
+        SeatMapData result = amadeusService.convertToSeatMapData(incompleteResponse);
+        
+        // Should handle missing data gracefully
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNotNull(result.getFlight());
+        assertEquals("1", result.getFlight().getNumber());
+        assertEquals("UA", result.getFlight().getCarrierCode());
+        assertEquals("SFO", result.getFlight().getDeparture().getIataCode());
+        assertEquals("CUN", result.getFlight().getArrival().getIataCode());
+        
+        // Missing data should be null but not cause errors
+        assertNull(result.getAircraft());
+        assertNull(result.getDecks());
+    }
+    
+    @Test 
+    void convertToSeatMapData_WithEmptySeatsArray_HandlesCorrectly() throws Exception {
+        String emptySeatsJson = """
+        {
+            "data": [{
+                "type": "seat-map",
+                "number": "1",
+                "carrierCode": "UA",
+                "decks": [{
+                    "deckType": "MAIN",
+                    "seats": []
+                }]
+            }]
+        }
+        """;
+        
+        JsonNode emptySeatsResponse = objectMapper.readTree(emptySeatsJson);
+        SeatMapData result = amadeusService.convertToSeatMapData(emptySeatsResponse);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getSource());
+        assertNotNull(result.getDecks());
+        assertEquals(1, result.getDecks().size());
+        
+        SeatMapData.SeatMapDeck deck = result.getDecks().get(0);
+        assertEquals("MAIN", deck.getDeckType());
+        assertNotNull(deck.getSeats());
+        assertEquals(0, deck.getSeats().size()); // Empty seats array
     }
 }

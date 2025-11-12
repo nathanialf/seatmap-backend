@@ -202,7 +202,7 @@ public class SabreService {
     /**
      * Convert Sabre seatmap response to SeatMapData model
      */
-    private SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
+    public SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
         // For now, return a basic SeatMapData with the source marked as SABRE
         // This will be enhanced to properly parse the Sabre seatmap response
         SeatMapData seatMapData = new SeatMapData();
