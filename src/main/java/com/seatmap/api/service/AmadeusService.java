@@ -360,13 +360,27 @@ public class AmadeusService {
                 return new ArrayList<>();
             }
             
-            // 3. Make single batch seat map request for all offers
-            JsonNode batchSeatMapResponse = getBatchSeatMapsFromOffersInternal(offers);
+            // 3. Make chunked batch seat map requests (Amadeus allows max 6 offers per batch)
+            List<FlightSearchResult> results = new ArrayList<>();
+            int chunkSize = 6; // Amadeus batch API limit
             
-            // 4. Build results with matched seat map data, filtering out unavailable ones
-            List<FlightSearchResult> results = buildFlightSearchResultsFromBatch(offers, batchSeatMapResponse);
+            for (int i = 0; i < offers.size(); i += chunkSize) {
+                int endIndex = Math.min(i + chunkSize, offers.size());
+                List<JsonNode> chunk = offers.subList(i, endIndex);
+                
+                try {
+                    JsonNode batchSeatMapResponse = getBatchSeatMapsFromOffersInternal(chunk);
+                    List<FlightSearchResult> chunkResults = buildFlightSearchResultsFromBatch(chunk, batchSeatMapResponse);
+                    results.addAll(chunkResults);
+                    
+                    logger.info("Successfully processed chunk {}-{} with {} flight offers", i, endIndex - 1, chunkResults.size());
+                } catch (Exception e) {
+                    logger.warn("Error processing batch chunk {}-{}: {}", i, endIndex - 1, e.getMessage());
+                    // Continue with next chunk even if this one fails
+                }
+            }
             
-            logger.info("Successfully processed {} flight offers with batch seatmaps from Amadeus (filtered from {} offers)", 
+            logger.info("Successfully processed {} flight offers with chunked batch seatmaps from Amadeus (filtered from {} offers)", 
                 results.size(), offers.size());
             return results;
             
