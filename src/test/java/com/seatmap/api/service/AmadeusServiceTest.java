@@ -2,7 +2,10 @@ package com.seatmap.api.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seatmap.api.exception.SeatmapApiException;
+import com.seatmap.api.model.FlightSearchResult;
 import com.seatmap.api.model.SeatMapData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,8 @@ import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -548,5 +553,194 @@ class AmadeusServiceTest {
         assertEquals("MAIN", deck.getDeckType());
         assertNotNull(deck.getSeats());
         assertEquals(0, deck.getSeats().size()); // Empty seats array
+    }
+    
+    @Test
+    void getBatchSeatMapsFromOffers_WithValidOffers_ReturnsJsonNode() throws Exception {
+        // Arrange
+        List<JsonNode> flightOffers = createMockFlightOffers();
+        
+        // Mock token response
+        HttpResponse<String> tokenResponse = mock(HttpResponse.class);
+        when(tokenResponse.statusCode()).thenReturn(200);
+        when(tokenResponse.body()).thenReturn("{\"access_token\":\"test-token\",\"expires_in\":3600}");
+        
+        // Mock batch seat map response
+        String batchResponseJson = """
+        {
+            "data": [
+                {
+                    "type": "seat-map",
+                    "flightOfferId": "offer1",
+                    "number": "101",
+                    "carrierCode": "AA",
+                    "decks": [{
+                        "deckType": "MAIN",
+                        "seats": [{"number": "1A", "characteristicsCodes": ["W"]}]
+                    }]
+                },
+                {
+                    "type": "seat-map", 
+                    "flightOfferId": "offer2",
+                    "number": "201",
+                    "carrierCode": "UA",
+                    "decks": [{
+                        "deckType": "MAIN",
+                        "seats": [{"number": "12F", "characteristicsCodes": ["A"]}]
+                    }]
+                }
+            ]
+        }
+        """;
+        
+        HttpResponse<String> batchResponse = mock(HttpResponse.class);
+        when(batchResponse.statusCode()).thenReturn(200);
+        when(batchResponse.body()).thenReturn(batchResponseJson);
+        
+        when(mockHttpClient.send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString())))
+            .thenReturn(tokenResponse)
+            .thenReturn(batchResponse);
+        
+        // Act
+        JsonNode result = amadeusService.getBatchSeatMapsFromOffers(flightOffers);
+        
+        // Assert
+        assertNotNull(result);
+        assertTrue(result.has("data"));
+        assertEquals(2, result.get("data").size());
+    }
+    
+    @Test
+    void searchFlightsWithBatchSeatmaps_WithValidParameters_ReturnsFilteredResults() throws Exception {
+        // Arrange
+        // Mock token response
+        HttpResponse<String> tokenResponse = mock(HttpResponse.class);
+        when(tokenResponse.statusCode()).thenReturn(200);
+        when(tokenResponse.body()).thenReturn("{\"access_token\":\"test-token\",\"expires_in\":3600}");
+        
+        // Mock flight offers response
+        String flightOffersJson = """
+        {
+            "data": [
+                {"id": "offer1", "type": "flight-offer"},
+                {"id": "offer2", "type": "flight-offer"},
+                {"id": "offer3", "type": "flight-offer"}
+            ]
+        }
+        """;
+        
+        HttpResponse<String> flightOffersResponse = mock(HttpResponse.class);
+        when(flightOffersResponse.statusCode()).thenReturn(200);
+        when(flightOffersResponse.body()).thenReturn(flightOffersJson);
+        
+        // Mock batch seat map response (only 2 out of 3 offers have seat maps)
+        String batchSeatMapJson = """
+        {
+            "data": [
+                {
+                    "type": "seat-map",
+                    "flightOfferId": "offer1", 
+                    "number": "101",
+                    "carrierCode": "AA",
+                    "decks": [{"deckType": "MAIN", "seats": []}]
+                },
+                {
+                    "type": "seat-map",
+                    "flightOfferId": "offer2",
+                    "number": "201", 
+                    "carrierCode": "UA",
+                    "decks": [{"deckType": "MAIN", "seats": []}]
+                }
+            ]
+        }
+        """;
+        
+        HttpResponse<String> seatMapResponse = mock(HttpResponse.class);
+        when(seatMapResponse.statusCode()).thenReturn(200);
+        when(seatMapResponse.body()).thenReturn(batchSeatMapJson);
+        
+        when(mockHttpClient.send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString())))
+            .thenReturn(tokenResponse)
+            .thenReturn(flightOffersResponse)
+            .thenReturn(seatMapResponse);
+        
+        // Act
+        List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(
+            "LAX", "JFK", "2024-12-15", "ECONOMY", null, 10
+        );
+        
+        // Assert
+        assertNotNull(results);
+        assertEquals(2, results.size()); // Only 2 out of 3 offers had seat maps
+        
+        for (FlightSearchResult result : results) {
+            assertEquals("AMADEUS", result.getDataSource());
+            assertNotNull(result.getSeatMap());
+            assertEquals("AMADEUS", result.getSeatMap().getSource());
+        }
+    }
+    
+    @Test 
+    void getBatchSeatMapsFromOffers_WithNetworkError_ThrowsException() throws Exception {
+        // Arrange
+        List<JsonNode> flightOffers = createMockFlightOffers();
+        
+        // Mock token response first
+        HttpResponse<String> tokenResponse = mock(HttpResponse.class);
+        when(tokenResponse.statusCode()).thenReturn(200);
+        when(tokenResponse.body()).thenReturn("{\"access_token\":\"test-token\",\"expires_in\":3600}");
+        
+        when(mockHttpClient.send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString())))
+            .thenReturn(tokenResponse)
+            .thenThrow(new IOException("Network error"));
+        
+        // Act & Assert
+        assertThrows(SeatmapApiException.class, () -> {
+            amadeusService.getBatchSeatMapsFromOffers(flightOffers);
+        });
+    }
+    
+    @Test
+    void getBatchSeatMapsFromOffers_WithApiError_ThrowsException() throws Exception {
+        // Arrange
+        List<JsonNode> flightOffers = createMockFlightOffers();
+        
+        // Mock token response
+        HttpResponse<String> tokenResponse = mock(HttpResponse.class);
+        when(tokenResponse.statusCode()).thenReturn(200);
+        when(tokenResponse.body()).thenReturn("{\"access_token\":\"test-token\",\"expires_in\":3600}");
+        
+        // Mock error response
+        HttpResponse<String> errorResponse = mock(HttpResponse.class);
+        when(errorResponse.statusCode()).thenReturn(400);
+        when(errorResponse.body()).thenReturn("{\"error\": \"Invalid request\"}");
+        
+        when(mockHttpClient.send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString())))
+            .thenReturn(tokenResponse)
+            .thenReturn(errorResponse);
+        
+        // Act & Assert
+        assertThrows(SeatmapApiException.class, () -> {
+            amadeusService.getBatchSeatMapsFromOffers(flightOffers);
+        });
+    }
+    
+    // Helper methods for batch tests
+    
+    private List<JsonNode> createMockFlightOffers() {
+        List<JsonNode> offers = new ArrayList<>();
+        ObjectMapper mapper = new ObjectMapper();
+        
+        ObjectNode offer1 = mapper.createObjectNode();
+        offer1.put("id", "offer1");
+        offer1.put("type", "flight-offer");
+        offers.add(offer1);
+        
+        ObjectNode offer2 = mapper.createObjectNode();
+        offer2.put("id", "offer2");
+        offer2.put("type", "flight-offer");
+        offers.add(offer2);
+        
+        return offers;
     }
 }

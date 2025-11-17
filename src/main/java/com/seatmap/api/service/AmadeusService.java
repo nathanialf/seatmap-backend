@@ -2,6 +2,7 @@ package com.seatmap.api.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.seatmap.api.exception.SeatmapApiException;
 import com.seatmap.api.model.FlightSearchResult;
@@ -19,7 +20,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -323,6 +326,56 @@ public class AmadeusService {
         }
     }
     
+    /**
+     * Get seat maps for multiple flight offers in a single batch request
+     */
+    public JsonNode getBatchSeatMapsFromOffers(List<JsonNode> flightOffers) throws SeatmapApiException {
+        try {
+            ensureValidToken();
+            return getBatchSeatMapsFromOffersInternal(flightOffers);
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error calling Amadeus batch seat map API", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
+        }
+    }
+    
+    /**
+     * Enhanced search method that uses batch seat map requests for better performance
+     */
+    public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
+        try {
+            ensureValidToken();
+            
+            // 1. Get flight offers
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+            
+            if (flightOffers == null || !flightOffers.has("data")) {
+                return new ArrayList<>();
+            }
+            
+            // 2. Extract flight offers into a list
+            List<JsonNode> offers = extractFlightOffers(flightOffers);
+            
+            if (offers.isEmpty()) {
+                return new ArrayList<>();
+            }
+            
+            // 3. Make single batch seat map request for all offers
+            JsonNode batchSeatMapResponse = getBatchSeatMapsFromOffersInternal(offers);
+            
+            // 4. Build results with matched seat map data, filtering out unavailable ones
+            List<FlightSearchResult> results = buildFlightSearchResultsFromBatch(offers, batchSeatMapResponse);
+            
+            logger.info("Successfully processed {} flight offers with batch seatmaps from Amadeus (filtered from {} offers)", 
+                results.size(), offers.size());
+            return results;
+            
+        } catch (IOException | InterruptedException e) {
+            logger.error("Error calling Amadeus API for batch flight search with seatmaps", e);
+            throw new SeatmapApiException("Network error calling Amadeus API", e);
+        }
+    }
+    
     private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException, IOException, InterruptedException {
         int max = maxResults != null ? maxResults : 10;
         
@@ -401,6 +454,110 @@ public class AmadeusService {
             logger.error("Seat map API error: {} - {}", response.statusCode(), response.body());
             throw new SeatmapApiException("Failed to retrieve seat map: " + response.statusCode());
         }
+    }
+    
+    private JsonNode getBatchSeatMapsFromOffersInternal(List<JsonNode> flightOffers) throws SeatmapApiException, IOException, InterruptedException {
+        String url = "https://" + endpoint + "/v1/shopping/seatmaps";
+        
+        // Create request body with multiple flight offers
+        ArrayNode dataArray = objectMapper.createArrayNode();
+        for (JsonNode offer : flightOffers) {
+            dataArray.add(offer);
+        }
+        
+        String requestBody = objectMapper.writeValueAsString(
+            objectMapper.createObjectNode().set("data", dataArray)
+        );
+        
+        logger.info("Getting batch seat maps for {} flight offers", flightOffers.size());
+        
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .header("Authorization", "Bearer " + accessToken)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+            .build();
+        
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        
+        if (response.statusCode() == 200) {
+            JsonNode result = objectMapper.readTree(response.body());
+            logger.info("Successfully retrieved batch seat map data");
+            return result;
+        } else {
+            logger.error("Batch seat map API error: {} - {}", response.statusCode(), response.body());
+            throw new SeatmapApiException("Failed to retrieve batch seat maps: " + response.statusCode());
+        }
+    }
+    
+    private List<FlightSearchResult> buildFlightSearchResultsFromBatch(List<JsonNode> offers, JsonNode batchSeatMapResponse) {
+        List<FlightSearchResult> results = new ArrayList<>();
+        
+        // Create a map of flight offer ID to seat map data for quick lookup
+        Map<String, JsonNode> seatMapsByOfferId = new HashMap<>();
+        
+        if (batchSeatMapResponse != null && batchSeatMapResponse.has("data") && batchSeatMapResponse.get("data").isArray()) {
+            for (JsonNode seatMapData : batchSeatMapResponse.get("data")) {
+                // Extract the associated flight offer ID from the seat map response
+                String offerId = extractOfferIdFromSeatMap(seatMapData);
+                if (offerId != null) {
+                    seatMapsByOfferId.put(offerId, seatMapData);
+                }
+            }
+        }
+        
+        // Match offers with their seat maps and filter out those without seat maps
+        for (JsonNode offer : offers) {
+            String offerId = offer.path("id").asText();
+            JsonNode seatMapData = seatMapsByOfferId.get(offerId);
+            
+            if (seatMapData != null) {
+                try {
+                    // Convert seat map data to our model
+                    SeatMapData convertedSeatMap = convertSeatMapDataFromBatchResponse(seatMapData);
+                    
+                    // Add dataSource field to identify this as AMADEUS data
+                    ObjectNode offerWithDataSource = offer.deepCopy();
+                    offerWithDataSource.put("dataSource", "AMADEUS");
+                    
+                    results.add(new FlightSearchResult(offerWithDataSource, convertedSeatMap, true, null));
+                    
+                } catch (Exception e) {
+                    logger.warn("Error converting seat map for offer {}: {}", offerId, e.getMessage());
+                    // Skip this flight offer if seat map conversion fails
+                }
+            } else {
+                logger.debug("No seat map available for flight offer: {}", offerId);
+                // Filter out flights without seat maps
+            }
+        }
+        
+        return results;
+    }
+    
+    private String extractOfferIdFromSeatMap(JsonNode seatMapData) {
+        // The seat map response should include the original flight offer ID
+        // This might be in different locations depending on Amadeus response structure
+        if (seatMapData.has("flightOfferId")) {
+            return seatMapData.get("flightOfferId").asText();
+        }
+        
+        // Alternative: check if there's an associated offer in the response
+        if (seatMapData.has("associatedOffer") && seatMapData.get("associatedOffer").has("id")) {
+            return seatMapData.get("associatedOffer").get("id").asText();
+        }
+        
+        // If no direct ID mapping, we'll need to match by flight details
+        // This is less reliable but may be necessary depending on Amadeus response format
+        return null;
+    }
+    
+    private SeatMapData convertSeatMapDataFromBatchResponse(JsonNode seatMapData) {
+        // Wrap the individual seat map in the expected structure for conversion
+        ObjectNode wrappedResponse = objectMapper.createObjectNode();
+        wrappedResponse.set("data", objectMapper.createArrayNode().add(seatMapData));
+        
+        return convertToSeatMapData(wrappedResponse);
     }
     
     private void ensureValidToken() throws SeatmapApiException {

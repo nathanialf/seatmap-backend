@@ -60,8 +60,47 @@ curl -X POST {BASE_URL}/flight-search \
 ```
 
 ### Step 3: Get Seat Map
-Use a flight offer from Step 2 to get seat map:
+Use flight offers from Step 2 to get seat maps:
 
+#### Option A: Batch Request (Recommended - Multiple Offers)
+```bash
+curl -X POST {BASE_URL}/seatmap/view \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: {YOUR_API_KEY}" \
+  -H "Authorization: Bearer {GUEST_TOKEN}" \
+  -d '{
+    "data": [
+      {FLIGHT_OFFER_1_FROM_STEP_2},
+      {FLIGHT_OFFER_2_FROM_STEP_2},
+      {FLIGHT_OFFER_3_FROM_STEP_2}
+    ]
+  }'
+```
+
+**Expected Response**:
+```json
+{
+  "success": true,
+  "message": "Batch seat maps retrieved successfully",
+  "source": "AMADEUS",
+  "totalRequested": 3,
+  "totalReturned": 2,
+  "seatMaps": [
+    {
+      "flightOfferId": "offer1", 
+      "available": true,
+      "seatMapData": {...}
+    },
+    {
+      "flightOfferId": "offer2",
+      "available": true, 
+      "seatMapData": {...}
+    }
+  ]
+}
+```
+
+#### Option B: Single Request (Legacy Format)
 ```bash
 curl -X POST {BASE_URL}/seatmap/view \
   -H "Content-Type: application/json" \

@@ -40,12 +40,12 @@ public class FlightSearchService {
     public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
         logger.info("Searching flights with seatmaps from Amadeus and Sabre sources");
         
-        // Search both sources concurrently
+        // Search both sources concurrently using batch seat map requests
         CompletableFuture<List<FlightSearchResult>> amadeusFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return amadeusService.searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+                return amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults);
             } catch (Exception e) {
-                logger.error("Error calling Amadeus API for flight search with seatmaps", e);
+                logger.error("Error calling Amadeus API for batch flight search with seatmaps", e);
                 return new ArrayList<>();
             }
         });

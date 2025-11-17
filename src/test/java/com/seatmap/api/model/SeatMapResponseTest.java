@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class SeatMapResponseTest {
@@ -276,5 +279,158 @@ class SeatMapResponseTest {
         assertEquals(3, responseData.get("data").get(0).get("array").size());
         assertTrue(responseData.get("data").get(0).get("boolean").asBoolean());
         assertTrue(responseData.get("data").get(0).get("null").isNull());
+    }
+    
+    // Batch response tests
+    
+    @Test
+    void batchSuccess_WithValidSeatMaps_ReturnsCorrectResponse() throws Exception {
+        // Arrange
+        List<SeatMapResponse.SeatMapResult> seatMaps = new ArrayList<>();
+        
+        JsonNode seatMapData1 = objectMapper.readTree("{\"number\": \"1A\", \"available\": true}");
+        JsonNode seatMapData2 = objectMapper.readTree("{\"number\": \"12F\", \"available\": true}");
+        
+        seatMaps.add(new SeatMapResponse.SeatMapResult("offer1", seatMapData1));
+        seatMaps.add(new SeatMapResponse.SeatMapResult("offer2", seatMapData2));
+        
+        // Act
+        SeatMapResponse response = SeatMapResponse.batchSuccess(seatMaps, "AMADEUS", 3);
+        
+        // Assert
+        assertTrue(response.isSuccess());
+        assertEquals("Batch seat maps retrieved successfully", response.getMessage());
+        assertEquals("AMADEUS", response.getSource());
+        assertEquals(3, response.getTotalRequested());
+        assertEquals(2, response.getTotalReturned());
+        assertEquals(2, response.getSeatMaps().size());
+        
+        // Check individual results
+        SeatMapResponse.SeatMapResult result1 = response.getSeatMaps().get(0);
+        assertEquals("offer1", result1.getFlightOfferId());
+        assertTrue(result1.isAvailable());
+        assertEquals("1A", result1.getSeatMapData().get("number").asText());
+        
+        SeatMapResponse.SeatMapResult result2 = response.getSeatMaps().get(1);
+        assertEquals("offer2", result2.getFlightOfferId());
+        assertTrue(result2.isAvailable());
+        assertEquals("12F", result2.getSeatMapData().get("number").asText());
+    }
+    
+    @Test
+    void batchSuccess_WithMixedResults_HandlesCorrectly() throws Exception {
+        // Arrange
+        List<SeatMapResponse.SeatMapResult> seatMaps = new ArrayList<>();
+        
+        JsonNode seatMapData = objectMapper.readTree("{\"seats\": [\"1A\", \"1B\"]}");
+        
+        // One successful, one failed
+        seatMaps.add(new SeatMapResponse.SeatMapResult("offer1", seatMapData));
+        seatMaps.add(new SeatMapResponse.SeatMapResult("offer2", "Seat map not available"));
+        
+        // Act
+        SeatMapResponse response = SeatMapResponse.batchSuccess(seatMaps, "AMADEUS", 2);
+        
+        // Assert
+        assertTrue(response.isSuccess());
+        assertEquals(2, response.getTotalRequested());
+        assertEquals(2, response.getTotalReturned()); // Both are returned, but one has error
+        
+        SeatMapResponse.SeatMapResult successResult = response.getSeatMaps().get(0);
+        assertTrue(successResult.isAvailable());
+        assertNotNull(successResult.getSeatMapData());
+        
+        SeatMapResponse.SeatMapResult failedResult = response.getSeatMaps().get(1);
+        assertFalse(failedResult.isAvailable());
+        assertEquals("Seat map not available", failedResult.getError());
+        assertNull(failedResult.getSeatMapData());
+    }
+    
+    @Test
+    void batchSuccess_WithEmptyList_HandlesCorrectly() {
+        // Arrange
+        List<SeatMapResponse.SeatMapResult> emptySeatMaps = new ArrayList<>();
+        
+        // Act
+        SeatMapResponse response = SeatMapResponse.batchSuccess(emptySeatMaps, "AMADEUS", 5);
+        
+        // Assert
+        assertTrue(response.isSuccess());
+        assertEquals("Batch seat maps retrieved successfully", response.getMessage());
+        assertEquals(5, response.getTotalRequested());
+        assertEquals(0, response.getTotalReturned());
+        assertTrue(response.getSeatMaps().isEmpty());
+    }
+    
+    @Test
+    void seatMapResult_SuccessConstructor_SetsCorrectValues() throws Exception {
+        // Arrange
+        JsonNode mockData = objectMapper.readTree("{\"seat\": \"1A\", \"available\": true}");
+        
+        // Act
+        SeatMapResponse.SeatMapResult result = new SeatMapResponse.SeatMapResult("flight123", mockData);
+        
+        // Assert
+        assertEquals("flight123", result.getFlightOfferId());
+        assertTrue(result.isAvailable());
+        assertNotNull(result.getSeatMapData());
+        assertEquals("1A", result.getSeatMapData().get("seat").asText());
+        assertNull(result.getError());
+    }
+    
+    @Test
+    void seatMapResult_ErrorConstructor_SetsCorrectValues() {
+        // Act
+        SeatMapResponse.SeatMapResult result = new SeatMapResponse.SeatMapResult("flight456", "API timeout error");
+        
+        // Assert
+        assertEquals("flight456", result.getFlightOfferId());
+        assertFalse(result.isAvailable());
+        assertEquals("API timeout error", result.getError());
+        assertNull(result.getSeatMapData());
+    }
+    
+    @Test
+    void seatMapResult_DefaultConstructor_CreatesEmptyObject() {
+        // Act
+        SeatMapResponse.SeatMapResult result = new SeatMapResponse.SeatMapResult();
+        
+        // Assert
+        assertNull(result.getFlightOfferId());
+        assertFalse(result.isAvailable()); // Default should be false
+        assertNull(result.getSeatMapData());
+        assertNull(result.getError());
+    }
+    
+    @Test
+    void seatMapResult_SettersAndGetters_WorkCorrectly() throws Exception {
+        // Arrange
+        SeatMapResponse.SeatMapResult result = new SeatMapResponse.SeatMapResult();
+        JsonNode testData = objectMapper.readTree("{\"test\": \"value\"}");
+        
+        // Act
+        result.setFlightOfferId("test-offer");
+        result.setAvailable(true);
+        result.setSeatMapData(testData);
+        result.setError("test error");
+        
+        // Assert
+        assertEquals("test-offer", result.getFlightOfferId());
+        assertTrue(result.isAvailable());
+        assertEquals("value", result.getSeatMapData().get("test").asText());
+        assertEquals("test error", result.getError());
+    }
+    
+    @Test
+    void batchResponse_HandlesNullValues() {
+        // Act
+        SeatMapResponse response = SeatMapResponse.batchSuccess(null, null, 0);
+        
+        // Assert
+        assertTrue(response.isSuccess());
+        assertNull(response.getSeatMaps());
+        assertNull(response.getSource());
+        assertEquals(0, response.getTotalRequested());
+        assertEquals(0, response.getTotalReturned()); // null list has size 0
     }
 }

@@ -55,7 +55,7 @@ class FlightSearchServiceTest {
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 2);
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 1);
         
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5))
             .thenReturn(amadeusMockResults);
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5))
             .thenReturn(sabreMockResults);
@@ -68,7 +68,7 @@ class FlightSearchServiceTest {
         assertEquals(3, response.getData().size());
         assertEquals("AMADEUS,SABRE", response.getMeta().getSources());
         
-        verify(mockAmadeusService).searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5);
+        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5);
         verify(mockSabreService).searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5);
     }
     
@@ -78,7 +78,7 @@ class FlightSearchServiceTest {
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 2);
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 2);
         
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(amadeusMockResults);
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(sabreMockResults);
@@ -104,7 +104,7 @@ class FlightSearchServiceTest {
         // Arrange
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 1);
         
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenThrow(new RuntimeException("Amadeus API error"));
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(sabreMockResults);
@@ -125,7 +125,7 @@ class FlightSearchServiceTest {
         // Arrange
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 1);
         
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(amadeusMockResults);
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenThrow(new RuntimeException("Sabre API error"));
@@ -144,7 +144,7 @@ class FlightSearchServiceTest {
     @Test
     void searchFlightsWithSeatmaps_WithBothServicesException_ShouldReturnEmptyResults() throws Exception {
         // Arrange - The service catches exceptions and returns empty lists, doesn't throw
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenThrow(new RuntimeException("Amadeus API error"));
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenThrow(new RuntimeException("Sabre API error"));
@@ -173,7 +173,7 @@ class FlightSearchServiceTest {
         // Copy the itinerary from Amadeus to Sabre to create duplicate
         sabreResult.setItineraries(amadeusResult.getItineraries());
         
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(amadeusMockResults);
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(sabreMockResults);
@@ -195,7 +195,7 @@ class FlightSearchServiceTest {
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 5);
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 5);
         
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 3))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 3))
             .thenReturn(amadeusMockResults);
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 3))
             .thenReturn(sabreMockResults);
@@ -218,7 +218,7 @@ class FlightSearchServiceTest {
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 0);
         
         // Note: The service converts null maxResults to 10 before calling the APIs
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null))
             .thenReturn(amadeusMockResults);
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null))
             .thenReturn(sabreMockResults);
@@ -237,7 +237,7 @@ class FlightSearchServiceTest {
     @Test
     void searchFlightsWithSeatmaps_WithNoResults_ShouldReturnEmptyResponse() throws Exception {
         // Arrange
-        when(mockAmadeusService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(new ArrayList<>());
         when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(new ArrayList<>());
