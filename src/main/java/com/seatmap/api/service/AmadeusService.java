@@ -443,13 +443,16 @@ public class AmadeusService {
     private JsonNode getSeatMapFromOfferInternal(JsonNode flightOffer) throws SeatmapApiException, IOException, InterruptedException {
         String url = "https://" + endpoint + "/v1/shopping/seatmaps";
         
-        // Create request body with flight offer
+        // Enhance flight offer with operating carrier code if missing
+        JsonNode enhancedOffer = enhanceFlightOfferWithOperatingCarrier(flightOffer);
+        
+        // Create request body with enhanced flight offer
         String requestBody = objectMapper.writeValueAsString(
             objectMapper.createObjectNode()
-                .set("data", objectMapper.createArrayNode().add(flightOffer))
+                .set("data", objectMapper.createArrayNode().add(enhancedOffer))
         );
         
-        logger.info("Getting seat map for flight offer: {}", flightOffer.get("id"));
+        logger.info("Getting seat map for flight offer: {}", enhancedOffer.get("id"));
         
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
@@ -473,10 +476,11 @@ public class AmadeusService {
     private JsonNode getBatchSeatMapsFromOffersInternal(List<JsonNode> flightOffers) throws SeatmapApiException, IOException, InterruptedException {
         String url = "https://" + endpoint + "/v1/shopping/seatmaps";
         
-        // Create request body with multiple flight offers
+        // Create request body with enhanced flight offers
         ArrayNode dataArray = objectMapper.createArrayNode();
         for (JsonNode offer : flightOffers) {
-            dataArray.add(offer);
+            JsonNode enhancedOffer = enhanceFlightOfferWithOperatingCarrier(offer);
+            dataArray.add(enhancedOffer);
         }
         
         String requestBody = objectMapper.writeValueAsString(
@@ -572,6 +576,72 @@ public class AmadeusService {
         wrappedResponse.set("data", objectMapper.createArrayNode().add(seatMapData));
         
         return convertToSeatMapData(wrappedResponse);
+    }
+    
+    /**
+     * Enhance flight offer by populating missing operating carrier codes with marketing carrier codes
+     * Returns the same flight offer if no enhancement is needed
+     */
+    private JsonNode enhanceFlightOfferWithOperatingCarrier(JsonNode flightOffer) {
+        try {
+            boolean needsEnhancement = false;
+            ObjectNode enhancedOffer = flightOffer.deepCopy();
+            
+            // Check if itineraries exist
+            if (!enhancedOffer.has("itineraries") || !enhancedOffer.get("itineraries").isArray()) {
+                return flightOffer; // Return original if no itineraries
+            }
+            
+            // Process each itinerary
+            ArrayNode itineraries = (ArrayNode) enhancedOffer.get("itineraries");
+            for (JsonNode itinerary : itineraries) {
+                if (!itinerary.has("segments") || !itinerary.get("segments").isArray()) {
+                    continue;
+                }
+                
+                // Process each segment
+                ArrayNode segments = (ArrayNode) itinerary.get("segments");
+                for (int i = 0; i < segments.size(); i++) {
+                    ObjectNode segment = (ObjectNode) segments.get(i);
+                    
+                    // Check if operating carrier code is missing or empty
+                    boolean operatingMissing = !segment.has("operating") || 
+                                             !segment.get("operating").has("carrierCode") ||
+                                             segment.get("operating").get("carrierCode").asText().trim().isEmpty();
+                    
+                    if (operatingMissing && segment.has("carrierCode")) {
+                        String marketingCarrierCode = segment.get("carrierCode").asText();
+                        
+                        if (!marketingCarrierCode.trim().isEmpty()) {
+                            // Create or update operating object
+                            ObjectNode operating;
+                            if (segment.has("operating")) {
+                                operating = (ObjectNode) segment.get("operating");
+                            } else {
+                                operating = objectMapper.createObjectNode();
+                                segment.set("operating", operating);
+                            }
+                            
+                            operating.put("carrierCode", marketingCarrierCode);
+                            needsEnhancement = true;
+                            
+                            logger.debug("Enhanced segment {} with operating carrier code: {}", i, marketingCarrierCode);
+                        }
+                    }
+                }
+            }
+            
+            if (needsEnhancement) {
+                logger.info("Enhanced flight offer {} with missing operating carrier codes", enhancedOffer.path("id").asText());
+                return enhancedOffer;
+            } else {
+                return flightOffer; // Return original if no changes needed
+            }
+            
+        } catch (Exception e) {
+            logger.warn("Error enhancing flight offer with operating carrier codes: {}", e.getMessage());
+            return flightOffer; // Return original on error
+        }
     }
     
     private void ensureValidToken() throws SeatmapApiException {
