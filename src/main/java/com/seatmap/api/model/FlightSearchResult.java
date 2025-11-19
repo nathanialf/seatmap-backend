@@ -33,11 +33,19 @@ public class FlightSearchResult {
     private boolean seatMapAvailable;
     private String seatMapError;
     
+    // Raw flight offer data (only populated when requested)
+    private JsonNode rawFlightOffer;
+    
     // Default constructor
     public FlightSearchResult() {}
     
-    // Constructor from existing flight offer + seatmap
+    // Constructor from existing flight offer + seatmap (backward compatibility)
     public FlightSearchResult(JsonNode flightOffer, SeatMapData seatMap, boolean seatMapAvailable, String seatMapError) {
+        this(flightOffer, seatMap, seatMapAvailable, seatMapError, false);
+    }
+    
+    // Constructor from existing flight offer + seatmap with optional raw data inclusion
+    public FlightSearchResult(JsonNode flightOffer, SeatMapData seatMap, boolean seatMapAvailable, String seatMapError, boolean includeRawFlightOffer) {
         // Extract flight offer fields
         this.id = flightOffer.path("id").asText();
         
@@ -82,6 +90,11 @@ public class FlightSearchResult {
         this.seatMap = seatMap;
         this.seatMapAvailable = seatMapAvailable;
         this.seatMapError = seatMapError;
+        
+        // Conditionally include raw data
+        if (includeRawFlightOffer) {
+            this.rawFlightOffer = flightOffer.deepCopy();
+        }
     }
     
     // Convert back to JsonNode (for compatibility with existing code)
@@ -120,6 +133,11 @@ public class FlightSearchResult {
         node.put("seatMapAvailable", seatMapAvailable);
         if (seatMapError != null) {
             node.put("seatMapError", seatMapError);
+        }
+        
+        // Add raw flight offer data if available
+        if (rawFlightOffer != null) {
+            node.set("rawFlightOffer", rawFlightOffer);
         }
         
         return node;
@@ -184,4 +202,7 @@ public class FlightSearchResult {
     
     public String getSeatMapError() { return seatMapError; }
     public void setSeatMapError(String seatMapError) { this.seatMapError = seatMapError; }
+    
+    public JsonNode getRawFlightOffer() { return rawFlightOffer; }
+    public void setRawFlightOffer(JsonNode rawFlightOffer) { this.rawFlightOffer = rawFlightOffer; }
 }

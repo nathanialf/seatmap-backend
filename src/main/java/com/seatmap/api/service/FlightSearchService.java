@@ -27,45 +27,42 @@ public class FlightSearchService {
     }
     
     public FlightSearchResponse searchFlightsWithSeatmaps(FlightSearchRequest request) throws SeatmapException {
+        boolean includeRaw = Boolean.TRUE.equals(request.getIncludeRawFlightOffer());
         return searchFlightsWithSeatmaps(
             request.getOrigin(),
             request.getDestination(), 
             request.getDepartureDate(),
             request.getTravelClass(),
             request.getFlightNumber(),
-            request.getMaxResults()
+            request.getMaxResults(),
+            includeRaw
         );
     }
     
     public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
+        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults, false);
+    }
+    
+    public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults, boolean includeRawFlightOffer) throws SeatmapException {
         logger.info("Searching flights with seatmaps from Amadeus and Sabre sources");
         
-        // Search both sources concurrently using batch seat map requests
+        // Search Amadeus only (Sabre temporarily disabled)
         CompletableFuture<List<FlightSearchResult>> amadeusFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                return amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+                List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+                return processResultsForRawData(results, includeRawFlightOffer);
             } catch (Exception e) {
                 logger.error("Error calling Amadeus API for batch flight search with seatmaps", e);
                 return new ArrayList<>();
             }
         });
         
-        CompletableFuture<List<FlightSearchResult>> sabreFuture = CompletableFuture.supplyAsync(() -> {
-            try {
-                return sabreService.searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults);
-            } catch (Exception e) {
-                logger.error("Error calling Sabre API for flight search with seatmaps", e);
-                return new ArrayList<>();
-            }
-        });
-        
         try {
-            // Wait for both API calls to complete
+            // Wait for Amadeus API call to complete
             List<FlightSearchResult> amadeusResults = amadeusFuture.get();
-            List<FlightSearchResult> sabreResults = sabreFuture.get();
             
-            // Mesh the results with Amadeus priority
-            return meshFlightSearchResults(amadeusResults, sabreResults, maxResults);
+            // Return only Amadeus results (Sabre temporarily disabled)
+            return createFlightSearchResponse(amadeusResults, maxResults);
             
         } catch (InterruptedException | ExecutionException e) {
             logger.error("Error executing concurrent API calls", e);
@@ -135,5 +132,56 @@ public class FlightSearchService {
         }
         
         return key.toString();
+    }
+    
+    private List<FlightSearchResult> processResultsForRawData(List<FlightSearchResult> results, boolean includeRawFlightOffer) {
+        if (!includeRawFlightOffer) {
+            return results; // No modification needed if raw data not requested
+        }
+        
+        // Convert each result to include raw flight offer data
+        List<FlightSearchResult> processedResults = new ArrayList<>();
+        for (FlightSearchResult result : results) {
+            try {
+                // Convert back to JsonNode to reconstruct with raw data
+                JsonNode resultAsJson = result.toJsonNode();
+                
+                // Create new FlightSearchResult with raw data included
+                FlightSearchResult newResult = new FlightSearchResult(
+                    resultAsJson, 
+                    result.getSeatMap(), 
+                    result.isSeatMapAvailable(), 
+                    result.getSeatMapError(), 
+                    true
+                );
+                processedResults.add(newResult);
+            } catch (Exception e) {
+                logger.warn("Error processing result for raw data inclusion: {}", e.getMessage());
+                // Fall back to original result without raw data
+                processedResults.add(result);
+            }
+        }
+        
+        return processedResults;
+    }
+    
+    private FlightSearchResponse createFlightSearchResponse(List<FlightSearchResult> results, Integer maxResults) {
+        // Limit results to maxResults
+        int limit = maxResults != null ? maxResults : 10;
+        List<FlightSearchResult> limitedResults = results.subList(0, Math.min(results.size(), limit));
+        
+        // Log if no flights with seatmaps were found
+        if (limitedResults.isEmpty()) {
+            logger.warn("No flights found with available seatmap data");
+        }
+        
+        // Build metadata (only Amadeus for now)
+        FlightSearchResponse.SearchMetadata meta = new FlightSearchResponse.SearchMetadata(
+            limitedResults.size(), 
+            "AMADEUS"
+        );
+        
+        logger.info("Found {} flights with seatmaps from Amadeus", limitedResults.size());
+        return new FlightSearchResponse(limitedResults, meta);
     }
 }

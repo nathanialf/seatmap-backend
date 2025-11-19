@@ -53,35 +53,30 @@ class FlightSearchServiceTest {
         request.setMaxResults(5);
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 2);
-        List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 1);
         
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5))
             .thenReturn(amadeusMockResults);
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5))
-            .thenReturn(sabreMockResults);
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(request);
         
         // Assert
         assertNotNull(response);
-        assertEquals(3, response.getData().size());
-        assertEquals("AMADEUS,SABRE", response.getMeta().getSources());
+        assertEquals(2, response.getData().size()); // Only Amadeus results
+        assertEquals("AMADEUS", response.getMeta().getSources());
         
         verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5);
-        verify(mockSabreService).searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA123", 5);
+        // Sabre is disabled, so no longer called
+        verify(mockSabreService, never()).searchFlightsWithSeatmaps(any(), any(), any(), any(), any(), any());
     }
     
     @Test
     void searchFlightsWithSeatmaps_WithParameters_ShouldReturnMeshedResults() throws Exception {
         // Arrange
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 2);
-        List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 2);
         
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(amadeusMockResults);
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenReturn(sabreMockResults);
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
@@ -90,24 +85,20 @@ class FlightSearchServiceTest {
         
         // Assert
         assertNotNull(response);
-        assertEquals(4, response.getData().size());
-        assertEquals(4, response.getMeta().getCount());
-        assertEquals("AMADEUS,SABRE", response.getMeta().getSources());
+        assertEquals(2, response.getData().size()); // Only Amadeus results
+        assertEquals(2, response.getMeta().getCount());
+        assertEquals("AMADEUS", response.getMeta().getSources());
         
-        // Verify Amadeus results come first (higher priority)
+        // Verify all results are from Amadeus
         assertEquals("AMADEUS", response.getData().get(0).getDataSource());
         assertEquals("AMADEUS", response.getData().get(1).getDataSource());
     }
     
     @Test
-    void searchFlightsWithSeatmaps_WithAmadeusException_ShouldReturnSabreResults() throws Exception {
-        // Arrange
-        List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 1);
-        
+    void searchFlightsWithSeatmaps_WithAmadeusException_ShouldReturnEmptyResults() throws Exception {
+        // Arrange - Since Sabre is disabled, Amadeus errors result in empty results
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenThrow(new RuntimeException("Amadeus API error"));
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenReturn(sabreMockResults);
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
@@ -116,74 +107,43 @@ class FlightSearchServiceTest {
         
         // Assert
         assertNotNull(response);
-        assertEquals(1, response.getData().size());
-        assertEquals("SABRE", response.getData().get(0).getDataSource());
+        assertEquals(0, response.getData().size());
+        assertEquals("AMADEUS", response.getMeta().getSources());
     }
     
-    @Test
-    void searchFlightsWithSeatmaps_WithSabreException_ShouldReturnAmadeusResults() throws Exception {
-        // Arrange
-        List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 1);
-        
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenReturn(amadeusMockResults);
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenThrow(new RuntimeException("Sabre API error"));
-        
-        // Act
-        FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
-            "LAX", "JFK", "2024-06-15", "ECONOMY", null, 10
-        );
-        
-        // Assert
-        assertNotNull(response);
-        assertEquals(1, response.getData().size());
-        assertEquals("AMADEUS", response.getData().get(0).getDataSource());
-    }
     
     @Test
-    void searchFlightsWithSeatmaps_WithBothServicesException_ShouldReturnEmptyResults() throws Exception {
-        // Arrange - The service catches exceptions and returns empty lists, doesn't throw
+    void searchFlightsWithSeatmaps_WithAmadeusServiceException_ShouldReturnEmptyResults() throws Exception {
+        // Arrange - Only Amadeus is used, so when it fails we get empty results
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenThrow(new RuntimeException("Amadeus API error"));
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenThrow(new RuntimeException("Sabre API error"));
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
             "LAX", "JFK", "2024-06-15", "ECONOMY", null, 10
         );
         
-        // Assert - Service returns empty results when both APIs fail, doesn't throw exception
+        // Assert - Service returns empty results when Amadeus API fails, doesn't throw exception
         assertNotNull(response);
         assertEquals(0, response.getData().size());
         assertEquals(0, response.getMeta().getCount());
-        assertEquals("AMADEUS,SABRE", response.getMeta().getSources());
+        assertEquals("AMADEUS", response.getMeta().getSources());
     }
     
     @Test
-    void searchFlightsWithSeatmaps_WithDuplicateFlights_ShouldDeduplicateResults() throws Exception {
-        // Arrange - Create flights with same key (same flight)
+    void searchFlightsWithSeatmaps_WithAmadeusResults_ShouldReturnAmadeusOnly() throws Exception {
+        // Arrange - Only Amadeus is called, no deduplication needed
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 1);
-        List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 1);
-        
-        // Make the Sabre result have the same flight key as Amadeus result
-        FlightSearchResult sabreResult = sabreMockResults.get(0);
-        FlightSearchResult amadeusResult = amadeusMockResults.get(0);
-        // Copy the itinerary from Amadeus to Sabre to create duplicate
-        sabreResult.setItineraries(amadeusResult.getItineraries());
         
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(amadeusMockResults);
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenReturn(sabreMockResults);
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
             "LAX", "JFK", "2024-06-15", "ECONOMY", null, 10
         );
         
-        // Assert - Should only have 1 result (Amadeus preferred)
+        // Assert - Should have 1 result from Amadeus
         assertNotNull(response);
         assertEquals(1, response.getData().size());
         assertEquals("AMADEUS", response.getData().get(0).getDataSource());
@@ -197,8 +157,6 @@ class FlightSearchServiceTest {
         
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 3))
             .thenReturn(amadeusMockResults);
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 3))
-            .thenReturn(sabreMockResults);
         
         // Act - Limit to 3 results
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
@@ -220,8 +178,6 @@ class FlightSearchServiceTest {
         // Note: The service converts null maxResults to 10 before calling the APIs
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null))
             .thenReturn(amadeusMockResults);
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null))
-            .thenReturn(sabreMockResults);
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
@@ -239,8 +195,6 @@ class FlightSearchServiceTest {
         // Arrange
         when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
             .thenReturn(new ArrayList<>());
-        when(mockSabreService.searchFlightsWithSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
-            .thenReturn(new ArrayList<>());
         
         // Act
         FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(
@@ -251,7 +205,7 @@ class FlightSearchServiceTest {
         assertNotNull(response);
         assertEquals(0, response.getData().size());
         assertEquals(0, response.getMeta().getCount());
-        assertEquals("AMADEUS,SABRE", response.getMeta().getSources());
+        assertEquals("AMADEUS", response.getMeta().getSources());
     }
     
     @Test
@@ -355,6 +309,113 @@ class FlightSearchServiceTest {
         return result;
     }
     
+    @Test
+    void searchFlightsWithSeatmaps_WithIncludeRawFlightOfferFalse_ShouldNotIncludeRawData() throws Exception {
+        // Arrange
+        FlightSearchRequest request = new FlightSearchRequest("LAX", "JFK", "2024-06-15", "ECONOMY");
+        request.setIncludeRawFlightOffer(false);
+        
+        List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, false);
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+            .thenReturn(amadeusMockResults);
+        
+        // Act
+        FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(request);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(1, response.getData().size());
+        assertNull(response.getData().get(0).getRawFlightOffer());
+    }
+
+    @Test
+    void searchFlightsWithSeatmaps_WithIncludeRawFlightOfferTrue_ShouldIncludeRawData() throws Exception {
+        // Arrange
+        FlightSearchRequest request = new FlightSearchRequest("LAX", "JFK", "2024-06-15", "ECONOMY");
+        request.setIncludeRawFlightOffer(true);
+        
+        List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, false);
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+            .thenReturn(amadeusMockResults);
+        
+        // Act
+        FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(request);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(1, response.getData().size());
+        assertNotNull(response.getData().get(0).getRawFlightOffer());
+    }
+
+    @Test
+    void searchFlightsWithSeatmaps_WithIncludeRawFlightOfferNull_ShouldDefaultToFalse() throws Exception {
+        // Arrange
+        FlightSearchRequest request = new FlightSearchRequest("LAX", "JFK", "2024-06-15", "ECONOMY");
+        request.setIncludeRawFlightOffer(null);
+        
+        List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, false);
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, 10))
+            .thenReturn(amadeusMockResults);
+        
+        // Act
+        FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(request);
+        
+        // Assert
+        assertNotNull(response);
+        assertEquals(1, response.getData().size());
+        assertNull(response.getData().get(0).getRawFlightOffer());
+    }
+
+    // Helper methods for raw data tests
+    
+    private List<FlightSearchResult> createMockFlightResultsWithRawData(String dataSource, int count, boolean includeRaw) {
+        List<FlightSearchResult> results = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            String carrier = dataSource.equals("AMADEUS") ? "AA" : "DL";
+            String flightNumber = String.valueOf(100 + i);
+            results.add(createMockFlightResultWithRawData(dataSource, carrier, flightNumber, "LAX", "JFK", "2024-06-15T10:00:00", includeRaw));
+        }
+        return results;
+    }
+    
+    private FlightSearchResult createMockFlightResultWithRawData(String dataSource, String carrier, String number, 
+                                                                String origin, String destination, String departureTime, boolean includeRaw) {
+        // Create original flight offer JSON
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", dataSource.toLowerCase() + "-" + carrier + number);
+        flightOffer.put("dataSource", dataSource);
+        flightOffer.put("source", "GDS");
+        flightOffer.put("type", "flight-offer");
+        
+        // Create itinerary
+        ObjectNode itinerary = objectMapper.createObjectNode();
+        ArrayNode segments = objectMapper.createArrayNode();
+        ObjectNode segment = objectMapper.createObjectNode();
+        
+        segment.put("carrierCode", carrier);
+        segment.put("number", number);
+        
+        ObjectNode departure = objectMapper.createObjectNode();
+        departure.put("iataCode", origin);
+        departure.put("at", departureTime);
+        segment.set("departure", departure);
+        
+        ObjectNode arrival = objectMapper.createObjectNode();
+        arrival.put("iataCode", destination);
+        arrival.put("at", departureTime.replace("10:00:00", "13:00:00"));
+        segment.set("arrival", arrival);
+        
+        segments.add(segment);
+        itinerary.set("segments", segments);
+        
+        ArrayNode itineraries = objectMapper.createArrayNode();
+        itineraries.add(itinerary);
+        flightOffer.set("itineraries", itineraries);
+        
+        // Create result using constructor that includes raw data option
+        return new FlightSearchResult(flightOffer, null, false, null, includeRaw);
+    }
+
     // Helper method to invoke private createFlightKey method using reflection
     private String invokeCreateFlightKey(FlightSearchResult result) {
         try {

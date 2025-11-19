@@ -31,6 +31,7 @@ class FlightSearchRequestTest {
         assertNull(request.getTravelClass());
         assertNull(request.getFlightNumber());
         assertEquals(10, request.getMaxResults()); // Default value
+        assertFalse(request.getIncludeRawFlightOffer()); // Default value
     }
 
     @Test
@@ -55,6 +56,7 @@ class FlightSearchRequestTest {
         request.setTravelClass("BUSINESS");
         request.setFlightNumber("UA123");
         request.setMaxResults(20);
+        request.setIncludeRawFlightOffer(true);
 
         assertEquals("JFK", request.getOrigin());
         assertEquals("LAX", request.getDestination());
@@ -62,6 +64,7 @@ class FlightSearchRequestTest {
         assertEquals("BUSINESS", request.getTravelClass());
         assertEquals("UA123", request.getFlightNumber());
         assertEquals(20, request.getMaxResults());
+        assertTrue(request.getIncludeRawFlightOffer());
     }
 
     @Test
@@ -242,5 +245,46 @@ class FlightSearchRequestTest {
 
         // Blank fields trigger both @NotBlank and @Pattern validations, so expect more violations
         assertTrue(violations.size() >= 4); // At least origin blank, destination blank, date blank, invalid travel class
+    }
+
+    @Test
+    void includeRawFlightOffer_DefaultsToFalse() {
+        FlightSearchRequest request = new FlightSearchRequest();
+        
+        assertFalse(request.getIncludeRawFlightOffer());
+    }
+
+    @Test
+    void includeRawFlightOffer_CanBeSetToTrue() {
+        FlightSearchRequest request = new FlightSearchRequest();
+        request.setIncludeRawFlightOffer(true);
+        
+        assertTrue(request.getIncludeRawFlightOffer());
+    }
+
+    @Test
+    void includeRawFlightOffer_CanBeSetToFalse() {
+        FlightSearchRequest request = new FlightSearchRequest();
+        request.setIncludeRawFlightOffer(false);
+        
+        assertFalse(request.getIncludeRawFlightOffer());
+    }
+
+    @Test
+    void includeRawFlightOffer_CanBeSetToNull() {
+        FlightSearchRequest request = new FlightSearchRequest();
+        request.setIncludeRawFlightOffer(null);
+        
+        assertNull(request.getIncludeRawFlightOffer());
+    }
+
+    @Test
+    void includeRawFlightOffer_DoesNotAffectValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setIncludeRawFlightOffer(true);
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
     }
 }

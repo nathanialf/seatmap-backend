@@ -21,6 +21,7 @@ public class FlightSearchRequest {
     
     private String flightNumber; // Optional for filtering specific flights
     private Integer maxResults = 10; // Optional, defaults to 10
+    private Boolean includeRawFlightOffer = false; // Optional, defaults to false for clean response
     
     // Constructors
     public FlightSearchRequest() {}
@@ -79,5 +80,13 @@ public class FlightSearchRequest {
     
     public void setMaxResults(Integer maxResults) {
         this.maxResults = maxResults;
+    }
+    
+    public Boolean getIncludeRawFlightOffer() {
+        return includeRawFlightOffer;
+    }
+    
+    public void setIncludeRawFlightOffer(Boolean includeRawFlightOffer) {
+        this.includeRawFlightOffer = includeRawFlightOffer;
     }
 }

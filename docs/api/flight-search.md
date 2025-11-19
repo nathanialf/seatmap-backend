@@ -2,7 +2,7 @@
 
 ## Overview
 
-Search for flight offers from multiple providers (Amadeus and Sabre) with **integrated seat map data**. Results include flight pricing, details, and embedded seat map availability - providing a complete view for travel planning.
+Search for flight offers from Amadeus with **integrated seat map data**. Results provide a clean, unified format with flight pricing, details, and embedded seat map availability. Raw API data can optionally be included for debugging or advanced use cases.
 
 ---
 
@@ -27,7 +27,8 @@ Content-Type: application/json
   "departureDate": "2025-12-15",
   "travelClass": "ECONOMY",
   "flightNumber": "AA123",
-  "maxResults": 10
+  "maxResults": 10,
+  "includeRawFlightOffer": false
 }
 ```
 
@@ -38,6 +39,7 @@ Content-Type: application/json
 - `travelClass` (optional): Cabin class filter - `ECONOMY`, `PREMIUM_ECONOMY`, `BUSINESS`, `FIRST`
 - `flightNumber` (optional): Specific flight number filter
 - `maxResults` (optional): Maximum results to return (default: 10)
+- `includeRawFlightOffer` (optional): Include raw flight offer data from API (default: false)
 
 **Response**:
 ```json
@@ -78,8 +80,7 @@ Content-Type: application/json
               },
               "duration": "PT5H35M",
               "id": "1",
-              "numberOfStops": 0,
-              "blacklistedInEU": false
+              "numberOfStops": 0
             }
           ]
         }
@@ -95,10 +96,6 @@ Content-Type: application/json
           }
         ],
         "grandTotal": "299.00"
-      },
-      "pricingOptions": {
-        "fareType": ["PUBLISHED"],
-        "includedCheckedBagsOnly": true
       },
       "validatingAirlineCodes": ["AA"],
       "travelerPricings": [
@@ -127,14 +124,18 @@ Content-Type: application/json
       ],
       "seatMapAvailable": true,
       "seatMap": {
-        "source": "AMADEUS"
+        "source": "AMADEUS",
+        "aircraft": {"code": "321", "name": "AIRBUS A321"},
+        "flight": {"number": "123", "carrierCode": "AA"},
+        "decks": [...],
+        "seats": [...]
       },
       "seatMapError": null
     }
   ],
   "meta": {
     "count": 1,
-    "sources": "AMADEUS,SABRE"
+    "sources": "AMADEUS"
   },
   "dictionaries": {
     "locations": {
@@ -174,28 +175,68 @@ curl -X POST {BASE_URL}/flight-search \
 
 ---
 
+## Response Format Options
+
+### Default Unified Format
+
+By default, flight search returns a clean, unified response format with only essential flight information and integrated seat map data. API-specific fields like `pricingOptions` and `blacklistedInEU` are excluded for a cleaner response.
+
+### With Raw Flight Offer Data
+
+When `includeRawFlightOffer: true` is specified in the request, each flight result includes an additional `rawFlightOffer` field containing the complete original API response:
+
+```json
+{
+  "data": [
+    {
+      "id": "amadeus_1",
+      "dataSource": "AMADEUS",
+      // ... unified flight data ...
+      "seatMap": { ... },
+      "rawFlightOffer": {
+        "id": "amadeus_1",
+        "type": "flight-offer",
+        "pricingOptions": {
+          "fareType": ["PUBLISHED"],
+          "includedCheckedBagsOnly": true
+        },
+        "itineraries": [
+          {
+            "segments": [
+              {
+                // ... including blacklistedInEU and other raw fields ...
+                "blacklistedInEU": false
+              }
+            ]
+          }
+        ]
+        // ... complete original API response ...
+      }
+    }
+  ]
+}
+```
+
+---
+
 ## Data Sources
 
-Flight offers are retrieved from multiple providers:
+Flight offers are currently retrieved from Amadeus:
 
-### Amadeus (Primary)
-- **Priority**: Higher priority in results
+### Amadeus
 - **Coverage**: Global flight data
 - **Data Quality**: Comprehensive pricing and availability
-
-### Sabre (Secondary) 
-- **Priority**: Lower priority, supplements Amadeus data
-- **Coverage**: Additional route coverage
-- **Deduplication**: Duplicate flights are automatically removed
+- **Seat Maps**: Integrated seat map data with concurrent API calls
 
 ### Response Fields
 
 **Key Fields for Seat Maps**:
 - `id`: Unique flight offer identifier  
-- `dataSource`: Provider source (`AMADEUS` or `SABRE`)
+- `dataSource`: Provider source (`AMADEUS`)
 - `seatMapAvailable`: Boolean indicating if seat map data was successfully retrieved
 - `seatMap`: Embedded seat map data object with `source` field indicating provider
 - `seatMapError`: Error message if seat map retrieval failed (null on success)
+- `rawFlightOffer`: Complete original API response (only when `includeRawFlightOffer: true`)
 
 **Pricing Information**:
 - `price.total`: Total price including taxes and fees

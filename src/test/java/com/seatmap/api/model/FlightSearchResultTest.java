@@ -173,4 +173,137 @@ class FlightSearchResultTest {
         assertEquals("SABRE", result.getDataSource());
         assertEquals("SABRE", result.getSeatMap().getSource());
     }
+
+    @Test
+    void testConstructorWithIncludeRawFalse() {
+        // Test that rawFlightOffer is not included when includeRaw is false
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", "test-flight-id");
+        flightOffer.put("dataSource", "AMADEUS");
+        flightOffer.put("source", "GDS");
+        
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+
+        FlightSearchResult result = new FlightSearchResult(flightOffer, seatMapData, true, null, false);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getDataSource());
+        assertNull(result.getRawFlightOffer());
+    }
+
+    @Test
+    void testConstructorWithIncludeRawTrue() {
+        // Test that rawFlightOffer is included when includeRaw is true
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", "test-flight-id");
+        flightOffer.put("dataSource", "AMADEUS");
+        flightOffer.put("source", "GDS");
+        flightOffer.put("type", "flight-offer");
+        flightOffer.put("price", objectMapper.createObjectNode().put("total", "299.00"));
+        
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+
+        FlightSearchResult result = new FlightSearchResult(flightOffer, seatMapData, true, null, true);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getDataSource());
+        assertNotNull(result.getRawFlightOffer());
+        
+        // Verify rawFlightOffer contains the original data
+        assertEquals("test-flight-id", result.getRawFlightOffer().path("id").asText());
+        assertEquals("AMADEUS", result.getRawFlightOffer().path("dataSource").asText());
+        assertEquals("flight-offer", result.getRawFlightOffer().path("type").asText());
+    }
+
+    @Test
+    void testBackwardCompatibilityConstructor() {
+        // Test that the original constructor still works and defaults to no raw data
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", "test-flight-id");
+        flightOffer.put("dataSource", "AMADEUS");
+        flightOffer.put("source", "GDS");
+        
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+
+        FlightSearchResult result = new FlightSearchResult(flightOffer, seatMapData, true, null);
+        
+        assertNotNull(result);
+        assertEquals("AMADEUS", result.getDataSource());
+        assertNull(result.getRawFlightOffer());
+    }
+
+    @Test
+    void testRawFlightOfferInToJsonNode() {
+        // Test that rawFlightOffer is included in toJsonNode() when present
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", "test-flight-id");
+        flightOffer.put("dataSource", "AMADEUS");
+        flightOffer.put("source", "GDS");
+        flightOffer.put("type", "flight-offer");
+        
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+
+        FlightSearchResult result = new FlightSearchResult(flightOffer, seatMapData, true, null, true);
+        JsonNode jsonResult = result.toJsonNode();
+        
+        assertTrue(jsonResult.has("rawFlightOffer"));
+        assertEquals("test-flight-id", jsonResult.get("rawFlightOffer").path("id").asText());
+    }
+
+    @Test
+    void testRawFlightOfferNotInToJsonNodeWhenNotIncluded() {
+        // Test that rawFlightOffer is not included in toJsonNode() when not present
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", "test-flight-id");
+        flightOffer.put("dataSource", "AMADEUS");
+        flightOffer.put("source", "GDS");
+        
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+
+        FlightSearchResult result = new FlightSearchResult(flightOffer, seatMapData, true, null, false);
+        JsonNode jsonResult = result.toJsonNode();
+        
+        assertFalse(jsonResult.has("rawFlightOffer"));
+    }
+
+    @Test
+    void testRawFlightOfferGetterSetter() {
+        // Test the getter and setter for rawFlightOffer
+        FlightSearchResult result = new FlightSearchResult();
+        
+        assertNull(result.getRawFlightOffer());
+        
+        ObjectNode rawData = objectMapper.createObjectNode();
+        rawData.put("testField", "testValue");
+        
+        result.setRawFlightOffer(rawData);
+        
+        assertNotNull(result.getRawFlightOffer());
+        assertEquals("testValue", result.getRawFlightOffer().path("testField").asText());
+    }
+
+    @Test
+    void testRawFlightOfferDeepCopy() {
+        // Test that rawFlightOffer is a deep copy, not a reference
+        ObjectNode flightOffer = objectMapper.createObjectNode();
+        flightOffer.put("id", "test-flight-id");
+        flightOffer.put("dataSource", "AMADEUS");
+        flightOffer.put("modifiableField", "original");
+        
+        SeatMapData seatMapData = new SeatMapData();
+        seatMapData.setSource("AMADEUS");
+
+        FlightSearchResult result = new FlightSearchResult(flightOffer, seatMapData, true, null, true);
+        
+        // Modify the original flightOffer
+        flightOffer.put("modifiableField", "modified");
+        
+        // The rawFlightOffer should still have the original value
+        assertEquals("original", result.getRawFlightOffer().path("modifiableField").asText());
+    }
 }
