@@ -104,6 +104,10 @@ pipeline {
                     sh """
                         echo "Running Terraform bootstrap for ${params.ENVIRONMENT}..."
                         
+                        # Clean any existing state files to ensure fresh bootstrap
+                        rm -f terraform.tfstate terraform.tfstate.backup .terraform.lock.hcl
+                        rm -rf .terraform/
+                        
                         # Initialize terraform without backend (local state for bootstrap)
                         terraform init -reconfigure
                         
