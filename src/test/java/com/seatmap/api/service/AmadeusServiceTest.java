@@ -633,36 +633,47 @@ class AmadeusServiceTest {
         when(flightOffersResponse.statusCode()).thenReturn(200);
         when(flightOffersResponse.body()).thenReturn(flightOffersJson);
         
-        // Mock batch seat map response (only 2 out of 3 offers have seat maps)
-        String batchSeatMapJson = """
+        // Mock individual seat map responses (only 2 out of 3 offers have seat maps)
+        String seatMapJson1 = """
         {
-            "data": [
-                {
-                    "type": "seat-map",
-                    "flightOfferId": "offer1", 
-                    "number": "101",
-                    "carrierCode": "AA",
-                    "decks": [{"deckType": "MAIN", "seats": []}]
-                },
-                {
-                    "type": "seat-map",
-                    "flightOfferId": "offer2",
-                    "number": "201", 
-                    "carrierCode": "UA",
-                    "decks": [{"deckType": "MAIN", "seats": []}]
-                }
-            ]
+            "data": [{
+                "type": "seat-map",
+                "number": "101",
+                "carrierCode": "AA",
+                "decks": [{"deckType": "MAIN", "seats": []}]
+            }]
         }
         """;
         
-        HttpResponse<String> seatMapResponse = mock(HttpResponse.class);
-        when(seatMapResponse.statusCode()).thenReturn(200);
-        when(seatMapResponse.body()).thenReturn(batchSeatMapJson);
+        String seatMapJson2 = """
+        {
+            "data": [{
+                "type": "seat-map",
+                "number": "201", 
+                "carrierCode": "UA",
+                "decks": [{"deckType": "MAIN", "seats": []}]
+            }]
+        }
+        """;
+        
+        HttpResponse<String> seatMapResponse1 = mock(HttpResponse.class);
+        when(seatMapResponse1.statusCode()).thenReturn(200);
+        when(seatMapResponse1.body()).thenReturn(seatMapJson1);
+        
+        HttpResponse<String> seatMapResponse2 = mock(HttpResponse.class);
+        when(seatMapResponse2.statusCode()).thenReturn(200);
+        when(seatMapResponse2.body()).thenReturn(seatMapJson2);
+        
+        HttpResponse<String> seatMapResponse3 = mock(HttpResponse.class);
+        when(seatMapResponse3.statusCode()).thenReturn(400);
+        when(seatMapResponse3.body()).thenReturn("{\"error\": \"Seat map not available\"}");
         
         when(mockHttpClient.send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString())))
             .thenReturn(tokenResponse)
             .thenReturn(flightOffersResponse)
-            .thenReturn(seatMapResponse);
+            .thenReturn(seatMapResponse1)  // First seat map call succeeds
+            .thenReturn(seatMapResponse2)  // Second seat map call succeeds
+            .thenReturn(seatMapResponse3); // Third seat map call fails
         
         // Act
         List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(

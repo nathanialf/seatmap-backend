@@ -362,38 +362,34 @@ public class AmadeusService {
                 return new ArrayList<>();
             }
             
-            // 3. Make chunked batch seat map requests in parallel (Amadeus allows max 6 offers per batch)
-            int chunkSize = 2; // Smaller chunks for better parallel performance
-            int numChunks = (offers.size() + chunkSize - 1) / chunkSize;
-            
-            List<CompletableFuture<List<FlightSearchResult>>> futures = IntStream.range(0, numChunks)
-                .mapToObj(chunkIndex -> {
-                    int startIndex = chunkIndex * chunkSize;
-                    int endIndex = Math.min(startIndex + chunkSize, offers.size());
-                    List<JsonNode> chunk = offers.subList(startIndex, endIndex);
-                    
-                    return CompletableFuture.supplyAsync(() -> {
-                        try {
-                            JsonNode batchSeatMapResponse = getBatchSeatMapsFromOffersInternal(chunk);
-                            List<FlightSearchResult> chunkResults = buildFlightSearchResultsFromBatch(chunk, batchSeatMapResponse);
-                            
-                            logger.info("Successfully processed chunk {}-{} with {} flight offers", startIndex, endIndex - 1, chunkResults.size());
-                            return chunkResults;
-                        } catch (Exception e) {
-                            logger.warn("Error processing batch chunk {}-{}: {}", startIndex, endIndex - 1, e.getMessage());
-                            return new ArrayList<FlightSearchResult>(); // Return empty list on error
-                        }
-                    });
-                })
+            // 3. Make individual seat map requests in parallel for each offer
+            List<CompletableFuture<FlightSearchResult>> futures = offers.stream()
+                .map(offer -> CompletableFuture.supplyAsync(() -> {
+                    try {
+                        // Get seatmap data for this offer
+                        JsonNode seatMapResponse = getSeatMapFromOfferInternal(offer);
+                        SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
+                        
+                        // Add dataSource field to identify this as AMADEUS data
+                        ObjectNode offerWithDataSource = offer.deepCopy();
+                        offerWithDataSource.put("dataSource", "AMADEUS");
+                        
+                        return new FlightSearchResult(offerWithDataSource, seatMapData, true, null);
+                        
+                    } catch (Exception e) {
+                        logger.warn("Omitting flight {} - seatmap unavailable: {}", offer.path("id").asText(), e.getMessage());
+                        return null; // Filter out flights without seatmaps
+                    }
+                }))
                 .collect(Collectors.toList());
             
-            // Collect all results from parallel execution
+            // Collect all results from parallel execution, filtering out nulls
             List<FlightSearchResult> results = futures.stream()
                 .map(CompletableFuture::join)
-                .flatMap(List::stream)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
             
-            logger.info("Successfully processed {} flight offers with chunked batch seatmaps from Amadeus (filtered from {} offers)", 
+            logger.info("Successfully processed {} flight offers with individual parallel seatmaps from Amadeus (filtered from {} offers)", 
                 results.size(), offers.size());
             return results;
             
