@@ -24,7 +24,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static java.util.stream.Collectors.toList;
 
@@ -360,25 +362,36 @@ public class AmadeusService {
                 return new ArrayList<>();
             }
             
-            // 3. Make chunked batch seat map requests (Amadeus allows max 6 offers per batch)
-            List<FlightSearchResult> results = new ArrayList<>();
+            // 3. Make chunked batch seat map requests in parallel (Amadeus allows max 6 offers per batch)
             int chunkSize = 6; // Amadeus batch API limit
+            int numChunks = (offers.size() + chunkSize - 1) / chunkSize;
             
-            for (int i = 0; i < offers.size(); i += chunkSize) {
-                int endIndex = Math.min(i + chunkSize, offers.size());
-                List<JsonNode> chunk = offers.subList(i, endIndex);
-                
-                try {
-                    JsonNode batchSeatMapResponse = getBatchSeatMapsFromOffersInternal(chunk);
-                    List<FlightSearchResult> chunkResults = buildFlightSearchResultsFromBatch(chunk, batchSeatMapResponse);
-                    results.addAll(chunkResults);
+            List<CompletableFuture<List<FlightSearchResult>>> futures = IntStream.range(0, numChunks)
+                .mapToObj(chunkIndex -> {
+                    int startIndex = chunkIndex * chunkSize;
+                    int endIndex = Math.min(startIndex + chunkSize, offers.size());
+                    List<JsonNode> chunk = offers.subList(startIndex, endIndex);
                     
-                    logger.info("Successfully processed chunk {}-{} with {} flight offers", i, endIndex - 1, chunkResults.size());
-                } catch (Exception e) {
-                    logger.warn("Error processing batch chunk {}-{}: {}", i, endIndex - 1, e.getMessage());
-                    // Continue with next chunk even if this one fails
-                }
-            }
+                    return CompletableFuture.supplyAsync(() -> {
+                        try {
+                            JsonNode batchSeatMapResponse = getBatchSeatMapsFromOffersInternal(chunk);
+                            List<FlightSearchResult> chunkResults = buildFlightSearchResultsFromBatch(chunk, batchSeatMapResponse);
+                            
+                            logger.info("Successfully processed chunk {}-{} with {} flight offers", startIndex, endIndex - 1, chunkResults.size());
+                            return chunkResults;
+                        } catch (Exception e) {
+                            logger.warn("Error processing batch chunk {}-{}: {}", startIndex, endIndex - 1, e.getMessage());
+                            return new ArrayList<FlightSearchResult>(); // Return empty list on error
+                        }
+                    });
+                })
+                .collect(Collectors.toList());
+            
+            // Collect all results from parallel execution
+            List<FlightSearchResult> results = futures.stream()
+                .map(CompletableFuture::join)
+                .flatMap(List::stream)
+                .collect(Collectors.toList());
             
             logger.info("Successfully processed {} flight offers with chunked batch seatmaps from Amadeus (filtered from {} offers)", 
                 results.size(), offers.size());
