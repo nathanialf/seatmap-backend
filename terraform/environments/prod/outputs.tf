@@ -1,182 +1,17 @@
-# Lambda Function Outputs
-
-output "auth_lambda_function_name" {
-  description = "Name of the Auth Lambda function"
-  value       = aws_lambda_function.auth.function_name
+# Route53 Hosted Zone outputs
+output "myseatmap_hosted_zone_id" {
+  description = "Hosted Zone ID for myseatmap.com"
+  value       = aws_route53_zone.myseatmap.zone_id
 }
 
-output "auth_lambda_function_arn" {
-  description = "ARN of the Auth Lambda function"
-  value       = aws_lambda_function.auth.arn
+output "myseatmap_name_servers" {
+  description = "Name servers for myseatmap.com hosted zone"
+  value       = aws_route53_zone.myseatmap.name_servers
 }
 
-output "auth_lambda_invoke_arn" {
-  description = "Invoke ARN of the Auth Lambda function"
-  value       = aws_lambda_function.auth.invoke_arn
-}
-
-output "tiers_lambda_function_name" {
-  description = "Name of the Tiers Lambda function"
-  value       = aws_lambda_function.tiers.function_name
-}
-
-output "tiers_lambda_function_arn" {
-  description = "ARN of the Tiers Lambda function"
-  value       = aws_lambda_function.tiers.arn
-}
-
-output "tiers_lambda_invoke_arn" {
-  description = "Invoke ARN of the Tiers Lambda function"
-  value       = aws_lambda_function.tiers.invoke_arn
-}
-
-output "flight_search_lambda_function_name" {
-  description = "Name of the Flight Search Lambda function"
-  value       = aws_lambda_function.flight_search.function_name
-}
-
-output "flight_search_lambda_function_arn" {
-  description = "ARN of the Flight Search Lambda function"
-  value       = aws_lambda_function.flight_search.arn
-}
-
-output "flight_search_lambda_invoke_arn" {
-  description = "Invoke ARN of the Flight Search Lambda function"
-  value       = aws_lambda_function.flight_search.invoke_arn
-}
-
-output "seatmap_view_lambda_function_name" {
-  description = "Name of the Seatmap View Lambda function"
-  value       = aws_lambda_function.seatmap_view.function_name
-}
-
-output "seatmap_view_lambda_function_arn" {
-  description = "ARN of the Seatmap View Lambda function"
-  value       = aws_lambda_function.seatmap_view.arn
-}
-
-output "seatmap_view_lambda_invoke_arn" {
-  description = "Invoke ARN of the Seatmap View Lambda function"
-  value       = aws_lambda_function.seatmap_view.invoke_arn
-}
-
-# API Gateway Outputs
-output "api_gateway_id" {
-  description = "ID of the API Gateway"
-  value       = aws_api_gateway_rest_api.seatmap_api.id
-}
-
-output "api_gateway_url" {
-  description = "URL of the API Gateway"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}"
-}
-
-output "api_gateway_stage" {
-  description = "Stage name of the API Gateway deployment"
-  value       = aws_api_gateway_deployment.main.stage_name
-}
-
-
-output "auth_guest_endpoint" {
-  description = "Full URL for the guest authentication endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/guest"
-}
-
-output "auth_login_endpoint" {
-  description = "Full URL for the login authentication endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/login"
-}
-
-output "auth_register_endpoint" {
-  description = "Full URL for the registration authentication endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/auth/register"
-}
-
-output "tiers_endpoint" {
-  description = "Full URL for the tiers endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/tiers"
-}
-
-output "flight_search_endpoint" {
-  description = "Full URL for the flight search endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/flight-search"
-}
-
-output "flight_search_bookmark_endpoint" {
-  description = "Full URL for the flight search bookmark endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/flight-search/bookmark"
-}
-
-output "seatmap_view_endpoint" {
-  description = "Full URL for the seatmap view tracking endpoint"
-  value       = "https://${aws_api_gateway_rest_api.seatmap_api.id}.execute-api.${data.aws_region.current.name}.amazonaws.com/${aws_api_gateway_deployment.main.stage_name}/seatmap/view"
-}
-
-# DynamoDB Outputs
-output "users_table_name" {
-  description = "Name of the users DynamoDB table"
-  value       = aws_dynamodb_table.users.name
-}
-
-output "users_table_arn" {
-  description = "ARN of the users DynamoDB table"
-  value       = aws_dynamodb_table.users.arn
-}
-
-output "sessions_table_name" {
-  description = "Name of the sessions DynamoDB table"
-  value       = aws_dynamodb_table.sessions.name
-}
-
-output "sessions_table_arn" {
-  description = "ARN of the sessions DynamoDB table"
-  value       = aws_dynamodb_table.sessions.arn
-}
-
-output "subscriptions_table_name" {
-  description = "Name of the subscriptions DynamoDB table"
-  value       = aws_dynamodb_table.subscriptions.name
-}
-
-output "subscriptions_table_arn" {
-  description = "ARN of the subscriptions DynamoDB table"
-  value       = aws_dynamodb_table.subscriptions.arn
-}
-
-output "guest_access_table_name" {
-  description = "Name of the guest access DynamoDB table"
-  value       = aws_dynamodb_table.guest_access.name
-}
-
-output "guest_access_table_arn" {
-  description = "ARN of the guest access DynamoDB table"
-  value       = aws_dynamodb_table.guest_access.arn
-}
-
-output "bookmarks_table_name" {
-  description = "Name of the bookmarks DynamoDB table"
-  value       = aws_dynamodb_table.bookmarks.name
-}
-
-output "bookmarks_table_arn" {
-  description = "ARN of the bookmarks DynamoDB table"
-  value       = aws_dynamodb_table.bookmarks.arn
-}
-
-output "account_tiers_table_name" {
-  description = "Name of the account tiers DynamoDB table"
-  value       = aws_dynamodb_table.account_tiers.name
-}
-
-output "account_tiers_table_arn" {
-  description = "ARN of the account tiers DynamoDB table"
-  value       = aws_dynamodb_table.account_tiers.arn
-}
-
-# IAM Outputs
-output "lambda_role_arn" {
-  description = "ARN of the Lambda execution role"
-  value       = aws_iam_role.lambda_role.arn
+output "myseatmap_zone_arn" {
+  description = "ARN of the myseatmap.com hosted zone"
+  value       = aws_route53_zone.myseatmap.arn
 }
 
 # Environment Information
@@ -198,21 +33,4 @@ output "aws_region" {
 output "aws_account_id" {
   description = "AWS account ID"
   value       = data.aws_caller_identity.current.account_id
-}
-
-# API Key Outputs
-output "api_key_id" {
-  description = "API Gateway API key ID"
-  value       = aws_api_gateway_api_key.client_key.id
-}
-
-output "api_key_name" {
-  description = "API Gateway API key name"
-  value       = aws_api_gateway_api_key.client_key.name
-}
-
-output "api_key_value" {
-  description = "API Gateway API key value"
-  value       = aws_api_gateway_api_key.client_key.value
-  sensitive   = true
 }

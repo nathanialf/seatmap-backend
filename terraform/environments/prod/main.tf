@@ -29,7 +29,6 @@ provider "aws" {
   }
 }
 
-
 # Data sources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -39,9 +38,6 @@ locals {
   project_name = "seatmap"
   environment  = "prod"
   
-  # Lambda configuration
-  lambda_jar_path = "../../../build/libs/SEATMAP-Backend-1.0.0.jar"
-  
   common_tags = {
     Project     = local.project_name
     Environment = local.environment
@@ -49,5 +45,3 @@ locals {
     Account     = data.aws_caller_identity.current.account_id
   }
 }
-
-
