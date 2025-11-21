@@ -363,7 +363,7 @@ public class AmadeusService {
             }
             
             // 3. Make chunked batch seat map requests in parallel (Amadeus allows max 6 offers per batch)
-            int chunkSize = 6; // Amadeus batch API limit
+            int chunkSize = 2; // Smaller chunks for better parallel performance
             int numChunks = (offers.size() + chunkSize - 1) / chunkSize;
             
             List<CompletableFuture<List<FlightSearchResult>>> futures = IntStream.range(0, numChunks)
