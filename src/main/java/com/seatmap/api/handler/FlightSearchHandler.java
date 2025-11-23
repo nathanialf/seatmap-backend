@@ -131,6 +131,11 @@ public class FlightSearchHandler implements RequestHandler<APIGatewayProxyReques
                 return createErrorResponse(400, "Validation errors: " + errors.toString());
             }
             
+            // Additional business logic validation
+            if (!request.isValid()) {
+                return createErrorResponse(400, request.getValidationError());
+            }
+            
             // Search for flights with integrated seatmaps from both sources concurrently
             FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(request);
             

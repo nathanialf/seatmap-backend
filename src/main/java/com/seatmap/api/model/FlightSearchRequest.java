@@ -1,26 +1,37 @@
 package com.seatmap.api.model;
 
-import jakarta.validation.constraints.NotBlank;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 public class FlightSearchRequest {
-    @NotBlank(message = "Origin is required")
+    @NotNull(message = "Origin is required")
     @Pattern(regexp = "^[A-Z]{3}$", message = "Origin must be a 3-letter airport code")
     private String origin;
     
-    @NotBlank(message = "Destination is required")
+    @NotNull(message = "Destination is required")
     @Pattern(regexp = "^[A-Z]{3}$", message = "Destination must be a 3-letter airport code")
     private String destination;
     
-    @NotBlank(message = "Departure date is required")
+    @NotNull(message = "Departure date is required")
     @Pattern(regexp = "^\\d{4}-\\d{2}-\\d{2}$", message = "Departure date must be in YYYY-MM-DD format")
     private String departureDate;
     
     @Pattern(regexp = "^(ECONOMY|PREMIUM_ECONOMY|BUSINESS|FIRST)$", message = "Travel class must be ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST")
     private String travelClass; // Optional - minimum cabin quality, searches all classes if not specified
     
-    private String flightNumber; // Optional for filtering specific flights
+    @Pattern(regexp = "^[A-Z]{2,3}$", message = "Airline code must be 2-3 uppercase letters")
+    private String airlineCode; // Optional: "UA", "AA", etc.
+    
+    @Pattern(regexp = "^[0-9]{1,4}$", message = "Flight number must be 1-4 digits")
+    private String flightNumber; // Optional: "1679", "123", etc. (requires airlineCode)
+    
+    @Min(value = 1, message = "Max results must be at least 1")
+    @Max(value = 50, message = "Max results cannot exceed 50")
     private Integer maxResults = 10; // Optional, defaults to 10
+    
     private Boolean includeRawFlightOffer = false; // Optional, defaults to false for clean response
     
     // Constructors
@@ -66,6 +77,14 @@ public class FlightSearchRequest {
         this.travelClass = travelClass;
     }
     
+    public String getAirlineCode() {
+        return airlineCode;
+    }
+    
+    public void setAirlineCode(String airlineCode) {
+        this.airlineCode = airlineCode;
+    }
+    
     public String getFlightNumber() {
         return flightNumber;
     }
@@ -88,5 +107,33 @@ public class FlightSearchRequest {
     
     public void setIncludeRawFlightOffer(Boolean includeRawFlightOffer) {
         this.includeRawFlightOffer = includeRawFlightOffer;
+    }
+    
+    @JsonIgnore
+    public boolean isValid() {
+        // If flightNumber is provided, airlineCode must also be provided
+        if (flightNumber != null && !flightNumber.trim().isEmpty()) {
+            return airlineCode != null && !airlineCode.trim().isEmpty();
+        }
+        return true;
+    }
+    
+    @JsonIgnore
+    public String getValidationError() {
+        if (!isValid()) {
+            return "Flight number can only be provided when airline code is also specified";
+        }
+        return null;
+    }
+    
+    @JsonIgnore
+    public String getCombinedFlightNumber() {
+        if (airlineCode == null || airlineCode.trim().isEmpty()) {
+            return null;
+        }
+        if (flightNumber == null || flightNumber.trim().isEmpty()) {
+            return airlineCode.trim(); // Just "UA"
+        }
+        return airlineCode.trim() + flightNumber.trim(); // "UA1679"
     }
 }

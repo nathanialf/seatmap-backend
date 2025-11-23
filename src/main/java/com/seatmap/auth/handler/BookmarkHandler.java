@@ -8,10 +8,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.api.model.FlightSearchRequest;
-import com.seatmap.api.model.FlightSearchResponse;
-import com.seatmap.api.service.AmadeusService;
-import com.seatmap.api.service.FlightSearchService;
-import com.seatmap.api.service.SabreService;
 import com.seatmap.auth.model.CreateBookmarkRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
@@ -46,7 +42,6 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
     private final BookmarkRepository bookmarkRepository;
     private final AuthService authService;
     private final UserUsageLimitsService usageLimitsService;
-    private final FlightSearchService flightSearchService;
     
     public BookmarkHandler() {
         this.objectMapper = new ObjectMapper();
@@ -83,11 +78,6 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         
         // Initialize UserUsageLimitsService for tier-based limits (reuse the same repository)
         this.usageLimitsService = new UserUsageLimitsService(userUsageRepository, dynamoDbClient);
-        
-        // Initialize FlightSearchService for bookmark execution
-        AmadeusService amadeusService = new AmadeusService();
-        SabreService sabreService = new SabreService();
-        this.flightSearchService = new FlightSearchService(amadeusService, sabreService);
     }
     
     @Override
@@ -110,15 +100,7 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
                 return handleDeleteBookmark(event, bookmarkId);
             } else if ("GET".equals(httpMethod) && path.startsWith("/bookmarks/")) {
                 String pathSuffix = path.substring("/bookmarks/".length());
-                if (pathSuffix.contains("/execute")) {
-                    String bookmarkId = pathSuffix.replace("/execute", "");
-                    return handleExecuteBookmark(event, bookmarkId);
-                } else {
-                    return handleGetBookmark(event, pathSuffix);
-                }
-            } else if ("POST".equals(httpMethod) && path.matches("/bookmarks/[^/]+/execute")) {
-                String bookmarkId = path.split("/")[2]; // Extract ID from /bookmarks/{id}/execute
-                return handleExecuteBookmark(event, bookmarkId);
+                return handleGetBookmark(event, pathSuffix);
             }
             
             // Check if path is valid but method is not allowed
@@ -226,6 +208,14 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
             return createErrorResponse(400, validationError != null ? validationError : "Invalid request data for item type");
         }
         
+        // Additional validation for SAVED_SEARCH items
+        if (request.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
+            FlightSearchRequest searchReq = request.getSearchRequest();
+            if (searchReq != null && !searchReq.isValid()) {
+                return createErrorResponse(400, searchReq.getValidationError());
+            }
+        }
+        
         // Check tier-based bookmark limit and record usage
         try {
             usageLimitsService.recordBookmarkCreation(user);
@@ -240,15 +230,8 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         if (request.getItemType() == Bookmark.ItemType.BOOKMARK) {
             bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), request.getFlightOfferData(), Bookmark.ItemType.BOOKMARK);
         } else if (request.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
-            // Convert FlightSearchRequest object to JSON string
-            String searchRequestJson;
-            try {
-                searchRequestJson = objectMapper.writeValueAsString(request.getSearchRequest());
-            } catch (Exception e) {
-                logger.error("Error serializing search request to JSON", e);
-                return createErrorResponse(400, "Invalid search request format");
-            }
-            bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), searchRequestJson, Bookmark.ItemType.SAVED_SEARCH);
+            // Use the new constructor that populates top-level flight search fields
+            bookmark = new Bookmark(user.getUserId(), bookmarkId, request.getTitle(), request.getSearchRequest(), Bookmark.ItemType.SAVED_SEARCH);
         } else {
             return createErrorResponse(400, "Invalid item type");
         }
@@ -310,60 +293,6 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         return authHeader.substring(7);
     }
     
-    private APIGatewayProxyResponseEvent handleExecuteBookmark(APIGatewayProxyRequestEvent event, String bookmarkId) throws SeatmapException {
-        logger.info("Processing execute bookmark request for ID: {}", bookmarkId);
-        
-        String userId = extractUserIdFromToken(event);
-        if (userId == null) {
-            return createErrorResponse(401, "Invalid or missing authentication token");
-        }
-        
-        Optional<Bookmark> bookmark = bookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId);
-        if (bookmark.isEmpty()) {
-            return createErrorResponse(404, "Bookmark not found");
-        }
-        
-        // Only saved searches can be executed
-        if (bookmark.get().getItemType() != Bookmark.ItemType.SAVED_SEARCH) {
-            return createErrorResponse(400, "Only saved search items can be executed");
-        }
-        
-        // Parse stored search request JSON
-        FlightSearchRequest searchRequest;
-        try {
-            searchRequest = objectMapper.readValue(
-                bookmark.get().getSearchRequest(), 
-                FlightSearchRequest.class
-            );
-        } catch (Exception e) {
-            logger.error("Error parsing stored search request", e);
-            return createErrorResponse(400, "Invalid stored search data - unable to parse search parameters");
-        }
-        
-        // Validate parsed request
-        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(searchRequest);
-        if (!violations.isEmpty()) {
-            StringBuilder errors = new StringBuilder();
-            for (ConstraintViolation<FlightSearchRequest> violation : violations) {
-                errors.append(violation.getMessage()).append("; ");
-            }
-            return createErrorResponse(400, "Invalid search parameters in bookmark: " + errors.toString());
-        }
-        
-        // Execute flight search  
-        try {
-            FlightSearchResponse response = flightSearchService.searchFlightsWithSeatmaps(searchRequest);
-            
-            // Update last accessed time
-            bookmark.get().updateLastAccessed();
-            bookmarkRepository.saveBookmark(bookmark.get());
-            
-            return createSuccessResponse(response);
-        } catch (SeatmapException e) {
-            logger.error("Error executing saved search", e);
-            return createErrorResponse(e.getHttpStatus(), e.getMessage());
-        }
-    }
     
     private String extractUserIdFromToken(APIGatewayProxyRequestEvent event) {
         String token = extractTokenFromEvent(event);

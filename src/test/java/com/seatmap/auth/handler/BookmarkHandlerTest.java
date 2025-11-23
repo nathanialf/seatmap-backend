@@ -6,8 +6,6 @@ import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.api.model.FlightSearchRequest;
-import com.seatmap.api.model.FlightSearchResponse;
-import com.seatmap.api.service.FlightSearchService;
 import com.seatmap.auth.model.CreateBookmarkRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.service.AuthService;
@@ -45,8 +43,6 @@ class BookmarkHandlerTest {
     @Mock
     private UserUsageLimitsService mockUsageLimitsService;
     
-    @Mock
-    private FlightSearchService mockFlightSearchService;
     
     @Mock
     private Context mockContext;
@@ -74,9 +70,7 @@ class BookmarkHandlerTest {
         usageLimitsServiceField.setAccessible(true);
         usageLimitsServiceField.set(handler, mockUsageLimitsService);
         
-        Field flightSearchServiceField = BookmarkHandler.class.getDeclaredField("flightSearchService");
-        flightSearchServiceField.setAccessible(true);
-        flightSearchServiceField.set(handler, mockFlightSearchService);
+        // flightSearchService field removed from BookmarkHandler
     }
     
     private APIGatewayProxyRequestEvent createRequestEvent(String method, String path, String authToken, String body) {
@@ -619,80 +613,13 @@ class BookmarkHandlerTest {
         verify(mockBookmarkRepository, never()).findByUserIdAndItemType(anyString(), any());
     }
     
-    // SAVED SEARCH EXECUTION TESTS
-    
     private Bookmark createTestSavedSearch() throws Exception {
-        String searchRequestJson = "{\"origin\":\"LAX\",\"destination\":\"JFK\",\"departureDate\":\"2024-06-15\",\"travelClass\":\"ECONOMY\",\"maxResults\":10}";
+        FlightSearchRequest searchRequest = new FlightSearchRequest("LAX", "JFK", "2024-06-15", "ECONOMY");
+        searchRequest.setMaxResults(10);
         
-        Bookmark savedSearch = new Bookmark(testUserId, testBookmarkId, "Test Saved Search", searchRequestJson, Bookmark.ItemType.SAVED_SEARCH);
+        Bookmark savedSearch = new Bookmark(testUserId, testBookmarkId, "Test Saved Search", searchRequest, Bookmark.ItemType.SAVED_SEARCH);
         savedSearch.setExpiresAt(Instant.now().plusSeconds(30 * 24 * 60 * 60)); // 30 days
         return savedSearch;
     }
     
-    @Test
-    void testExecuteBookmark_ValidSavedSearch_ReturnsExecutionResult() throws Exception {
-        // Arrange
-        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks/" + testBookmarkId + "/execute", "valid-token", null);
-        User testUser = createTestUser();
-        Bookmark savedSearch = createTestSavedSearch();
-        
-        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
-            .thenReturn(Optional.of(savedSearch));
-        
-        // Mock the flight search service to return a response
-        FlightSearchResponse mockResponse = new FlightSearchResponse(new ArrayList<>(), new FlightSearchResponse.SearchMetadata(0, "AMADEUS,SABRE"));
-        when(mockFlightSearchService.searchFlightsWithSeatmaps(any(FlightSearchRequest.class))).thenReturn(mockResponse);
-        
-        // Act
-        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
-        
-        // Assert
-        assertEquals(200, response.getStatusCode());
-        assertTrue(response.getBody().contains("data"));
-        verify(mockAuthService).validateToken("valid-token");
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
-        verify(mockFlightSearchService).searchFlightsWithSeatmaps(any(FlightSearchRequest.class));
-    }
-    
-    @Test
-    void testExecuteBookmark_RegularBookmark_ReturnsBadRequest() throws Exception {
-        // Arrange
-        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks/" + testBookmarkId + "/execute", "valid-token", null);
-        User testUser = createTestUser();
-        Bookmark regularBookmark = createTestBookmark(); // This is a regular bookmark, not saved search
-        
-        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
-            .thenReturn(Optional.of(regularBookmark));
-        
-        // Act
-        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
-        
-        // Assert
-        assertEquals(400, response.getStatusCode());
-        assertTrue(response.getBody().contains("Only saved search items can be executed"));
-        verify(mockAuthService).validateToken("valid-token");
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
-    }
-    
-    @Test
-    void testExecuteBookmark_NotFound_ReturnsNotFound() throws Exception {
-        // Arrange
-        APIGatewayProxyRequestEvent event = createRequestEvent("POST", "/bookmarks/" + testBookmarkId + "/execute", "valid-token", null);
-        User testUser = createTestUser();
-        
-        when(mockAuthService.validateToken("valid-token")).thenReturn(testUser);
-        when(mockBookmarkRepository.findByUserIdAndBookmarkId(testUserId, testBookmarkId))
-            .thenReturn(Optional.empty());
-        
-        // Act
-        APIGatewayProxyResponseEvent response = handler.handleRequest(event, mockContext);
-        
-        // Assert
-        assertEquals(404, response.getStatusCode());
-        assertTrue(response.getBody().contains("Bookmark not found"));
-        verify(mockAuthService).validateToken("valid-token");
-        verify(mockBookmarkRepository).findByUserIdAndBookmarkId(testUserId, testBookmarkId);
-    }
 }

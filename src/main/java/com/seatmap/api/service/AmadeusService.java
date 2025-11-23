@@ -57,12 +57,12 @@ public class AmadeusService {
         this.objectMapper = new ObjectMapper();
     }
     
-    public JsonNode getSeatMap(String flightNumber, String departureDate, String origin, String destination) throws SeatmapApiException {
+    public JsonNode getSeatMap(String airlineCode, String flightNumber, String departureDate, String origin, String destination) throws SeatmapApiException {
         try {
             ensureValidToken();
             
             // Step 1: Search for flight offers using Flight Offers Search API (any travel class)
-            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, null, flightNumber, 10);
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, null, airlineCode, flightNumber, 10);
             
             if (flightOffers == null || !flightOffers.has("data") || flightOffers.get("data").size() == 0) {
                 throw new SeatmapApiException("No flight offers found for the specified criteria");
@@ -78,10 +78,10 @@ public class AmadeusService {
         }
     }
     
-    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
+    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
         try {
             ensureValidToken();
-            return searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+            return searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
             throw new SeatmapApiException("Network error calling Amadeus API", e);
@@ -91,12 +91,12 @@ public class AmadeusService {
     /**
      * Search flight offers with integrated seatmap data
      */
-    public List<FlightSearchResult> searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
+    public List<FlightSearchResult> searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
         try {
             ensureValidToken();
             
             // 1. Get flight offers
-            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
             
             if (flightOffers == null || !flightOffers.has("data")) {
                 return new ArrayList<>();
@@ -344,12 +344,12 @@ public class AmadeusService {
     /**
      * Enhanced search method that uses batch seat map requests for better performance
      */
-    public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException {
+    public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
         try {
             ensureValidToken();
             
             // 1. Get flight offers
-            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
             
             if (flightOffers == null || !flightOffers.has("data")) {
                 return new ArrayList<>();
@@ -399,7 +399,7 @@ public class AmadeusService {
         }
     }
     
-    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapApiException, IOException, InterruptedException {
+    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException, IOException, InterruptedException {
         int max = maxResults != null ? maxResults : 10;
         
         // Build base URL - only include travelClass if specified (minimum cabin quality)
@@ -419,13 +419,9 @@ public class AmadeusService {
         
         String url = urlBuilder.toString();
         
-        // Add flight number filter if specified
-        if (flightNumber != null && !flightNumber.trim().isEmpty()) {
-            // Extract carrier code (first 2-3 characters) and flight number
-            String carrierCode = flightNumber.replaceAll("\\d", "").trim();
-            if (!carrierCode.isEmpty()) {
-                url += "&includedAirlineCodes=" + URLEncoder.encode(carrierCode, StandardCharsets.UTF_8);
-            }
+        // Add airline code filter if specified
+        if (airlineCode != null && !airlineCode.trim().isEmpty()) {
+            url += "&includedAirlineCodes=" + URLEncoder.encode(airlineCode, StandardCharsets.UTF_8);
         }
         
         logger.info("Searching flight offers: {}", url);

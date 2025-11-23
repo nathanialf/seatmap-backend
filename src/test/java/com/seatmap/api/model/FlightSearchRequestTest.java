@@ -29,6 +29,7 @@ class FlightSearchRequestTest {
         assertNull(request.getDestination());
         assertNull(request.getDepartureDate());
         assertNull(request.getTravelClass());
+        assertNull(request.getAirlineCode());
         assertNull(request.getFlightNumber());
         assertEquals(10, request.getMaxResults()); // Default value
         assertFalse(request.getIncludeRawFlightOffer()); // Default value
@@ -62,7 +63,10 @@ class FlightSearchRequestTest {
         assertEquals("LAX", request.getDestination());
         assertEquals("2025-02-01", request.getDepartureDate());
         assertEquals("BUSINESS", request.getTravelClass());
-        assertEquals("UA123", request.getFlightNumber());
+        request.setAirlineCode("UA");
+        request.setFlightNumber("123");
+        assertEquals("UA", request.getAirlineCode());
+        assertEquals("123", request.getFlightNumber());
         assertEquals(20, request.getMaxResults());
         assertTrue(request.getIncludeRawFlightOffer());
     }
@@ -82,14 +86,9 @@ class FlightSearchRequestTest {
 
         Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
 
-        assertEquals(2, violations.size()); // Both @NotBlank and @Pattern trigger for blank strings
-        boolean hasNotBlankViolation = violations.stream()
-            .anyMatch(v -> "Origin is required".equals(v.getMessage()));
-        boolean hasPatternViolation = violations.stream()
-            .anyMatch(v -> "Origin must be a 3-letter airport code".equals(v.getMessage()));
-        
-        assertTrue(hasNotBlankViolation, "Should have NotBlank violation");
-        assertTrue(hasPatternViolation, "Should have Pattern violation");
+        assertEquals(1, violations.size()); // Only @Pattern triggers for blank strings with @NotNull
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Origin must be a 3-letter airport code", violation.getMessage());
     }
 
     @Test
@@ -120,14 +119,9 @@ class FlightSearchRequestTest {
 
         Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
 
-        assertEquals(2, violations.size()); // Both @NotBlank and @Pattern trigger for blank strings
-        boolean hasNotBlankViolation = violations.stream()
-            .anyMatch(v -> "Destination is required".equals(v.getMessage()));
-        boolean hasPatternViolation = violations.stream()
-            .anyMatch(v -> "Destination must be a 3-letter airport code".equals(v.getMessage()));
-        
-        assertTrue(hasNotBlankViolation, "Should have NotBlank violation");
-        assertTrue(hasPatternViolation, "Should have Pattern violation");
+        assertEquals(1, violations.size()); // Only @Pattern triggers for blank strings with @NotNull
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Destination must be a 3-letter airport code", violation.getMessage());
     }
 
     @Test
@@ -147,14 +141,9 @@ class FlightSearchRequestTest {
 
         Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
 
-        assertEquals(2, violations.size()); // Both @NotBlank and @Pattern trigger for blank strings
-        boolean hasNotBlankViolation = violations.stream()
-            .anyMatch(v -> "Departure date is required".equals(v.getMessage()));
-        boolean hasPatternViolation = violations.stream()
-            .anyMatch(v -> "Departure date must be in YYYY-MM-DD format".equals(v.getMessage()));
-        
-        assertTrue(hasNotBlankViolation, "Should have NotBlank violation");
-        assertTrue(hasPatternViolation, "Should have Pattern violation");
+        assertEquals(1, violations.size()); // Only @Pattern triggers for blank strings with @NotNull
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Departure date must be in YYYY-MM-DD format", violation.getMessage());
     }
 
     @Test
@@ -286,5 +275,126 @@ class FlightSearchRequestTest {
         Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
 
         assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void validation_ValidAirlineCode_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void validation_InvalidAirlineCode_FailsValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("INVALID");
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertEquals(1, violations.size());
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Airline code must be 2-3 uppercase letters", violation.getMessage());
+    }
+
+    @Test
+    void validation_ValidFlightNumber_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+        request.setFlightNumber("123");
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void validation_InvalidFlightNumber_FailsValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+        request.setFlightNumber("INVALID");
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertEquals(1, violations.size());
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Flight number must be 1-4 digits", violation.getMessage());
+    }
+
+    @Test
+    void businessLogicValidation_FlightNumberWithoutAirlineCode_FailsValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setFlightNumber("123");
+        // No airline code set
+
+        assertFalse(request.isValid());
+        assertEquals("Flight number can only be provided when airline code is also specified", request.getValidationError());
+    }
+
+    @Test
+    void businessLogicValidation_AirlineCodeWithoutFlightNumber_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+        // No flight number set
+
+        assertTrue(request.isValid());
+        assertNull(request.getValidationError());
+    }
+
+    @Test
+    void businessLogicValidation_BothAirlineCodeAndFlightNumber_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+        request.setFlightNumber("123");
+
+        assertTrue(request.isValid());
+        assertNull(request.getValidationError());
+    }
+
+    @Test
+    void getCombinedFlightNumber_AirlineCodeOnly_ReturnsAirlineCode() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+
+        assertEquals("UA", request.getCombinedFlightNumber());
+    }
+
+    @Test
+    void getCombinedFlightNumber_BothFields_ReturnsCombined() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setAirlineCode("UA");
+        request.setFlightNumber("123");
+
+        assertEquals("UA123", request.getCombinedFlightNumber());
+    }
+
+    @Test
+    void getCombinedFlightNumber_NoAirlineCode_ReturnsNull() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setFlightNumber("123");
+
+        assertNull(request.getCombinedFlightNumber());
+    }
+
+    @Test
+    void validation_MaxResultsOutOfRange_FailsValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setMaxResults(0); // Below minimum
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertEquals(1, violations.size());
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Max results must be at least 1", violation.getMessage());
+
+        // Test maximum
+        request.setMaxResults(100); // Above maximum
+        violations = validator.validate(request);
+
+        assertEquals(1, violations.size());
+        violation = violations.iterator().next();
+        assertEquals("Max results cannot exceed 50", violation.getMessage());
     }
 }

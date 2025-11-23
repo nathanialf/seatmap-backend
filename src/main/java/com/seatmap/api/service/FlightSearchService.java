@@ -33,23 +33,24 @@ public class FlightSearchService {
             request.getDestination(), 
             request.getDepartureDate(),
             request.getTravelClass(),
+            request.getAirlineCode(),
             request.getFlightNumber(),
             request.getMaxResults(),
             includeRaw
         );
     }
     
-    public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults) throws SeatmapException {
-        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults, false);
+    public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapException {
+        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, false);
     }
     
-    public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String flightNumber, Integer maxResults, boolean includeRawFlightOffer) throws SeatmapException {
+    public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, boolean includeRawFlightOffer) throws SeatmapException {
         logger.info("Searching flights with seatmaps from Amadeus and Sabre sources");
         
         // Search Amadeus only (Sabre temporarily disabled)
         CompletableFuture<List<FlightSearchResult>> amadeusFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, flightNumber, maxResults);
+                List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
                 return processResultsForRawData(results, includeRawFlightOffer);
             } catch (Exception e) {
                 logger.error("Error calling Amadeus API for batch flight search with seatmaps", e);

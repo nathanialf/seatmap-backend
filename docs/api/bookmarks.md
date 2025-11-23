@@ -51,7 +51,8 @@ Content-Type: application/json
     "destination": "JFK",
     "departureDate": "2025-12-15",
     "travelClass": "ECONOMY",
-    "flightNumber": null,
+    "airlineCode": "AA",
+    "flightNumber": "123",
     "maxResults": 10
   }
 }
@@ -60,7 +61,7 @@ Content-Type: application/json
 **Parameters**:
 - `itemType` (required): Must be `"SAVED_SEARCH"`
 - `title` (required): Descriptive name for the saved search
-- `searchRequest` (required): Flight search parameters object
+- `searchRequest` (required): Flight search parameters object with separated airline/flight fields
 
 **Response** (same for both types):
 ```json
@@ -104,7 +105,9 @@ curl -X POST {BASE_URL}/bookmarks \
       "origin": "LAX",
       "destination": "JFK",
       "departureDate": "2025-12-15",
-      "travelClass": "ECONOMY"
+      "travelClass": "ECONOMY",
+      "airlineCode": "AA",
+      "flightNumber": "123"
     }
   }'
 ```
@@ -150,13 +153,13 @@ Authorization: Bearer your_user_jwt_token
         "userId": "user_456def",
         "itemType": "SAVED_SEARCH",
         "title": "Weekly LAX to JFK search",
-        "searchRequest": {
-          "origin": "LAX",
-          "destination": "JFK",
-          "departureDate": "2025-12-15",
-          "travelClass": "ECONOMY",
-          "maxResults": 10
-        },
+        "origin": "LAX",
+        "destination": "JFK",
+        "departureDate": "2025-12-15",
+        "travelClass": "ECONOMY",
+        "airlineCode": "AA",
+        "flightNumber": "123",
+        "maxResults": 10,
         "createdAt": "2025-10-30T10:30:00Z",
         "expiresAt": "2025-11-29T10:30:00Z"
       }
@@ -210,13 +213,13 @@ Authorization: Bearer your_user_jwt_token
         "userId": "user_456def",
         "itemType": "SAVED_SEARCH",
         "title": "Weekly LAX to JFK search",
-        "searchRequest": {
-          "origin": "LAX",
-          "destination": "JFK",
-          "departureDate": "2025-12-15",
-          "travelClass": "ECONOMY",
-          "maxResults": 10
-        },
+        "origin": "LAX",
+        "destination": "JFK",
+        "departureDate": "2025-12-15",
+        "travelClass": "ECONOMY",
+        "airlineCode": "AA",
+        "flightNumber": "123",
+        "maxResults": 10,
         "createdAt": "2025-10-30T10:30:00Z",
         "expiresAt": "2025-11-29T10:30:00Z"
       }
@@ -245,51 +248,6 @@ curl -X GET {BASE_URL}/bookmarks?type=SAVED_SEARCH \
   -H "X-API-Key: {YOUR_API_KEY}" \
   -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
 ```
-
----
-
-## Execute Saved Search
-
-Execute a saved search to get current flight results.
-
-**Endpoint**: `POST /bookmarks/{bookmarkId}/execute`
-
-**Headers**:
-```
-X-API-Key: your_api_key
-Authorization: Bearer your_user_jwt_token
-```
-
-**Path Parameters**:
-- `bookmarkId` (required): Unique identifier of the saved search item
-
-**Response**:
-```json
-{
-  "success": true,
-  "data": {
-    "searchRequest": {
-      "origin": "LAX",
-      "destination": "JFK",
-      "departureDate": "2025-12-15",
-      "travelClass": "ECONOMY",
-      "maxResults": 10
-    },
-    "title": "Weekly LAX to JFK search",
-    "searchId": "bm_def456uvw",
-    "message": "Search request ready for execution"
-  }
-}
-```
-
-**Example cURL**:
-```bash
-curl -X POST {BASE_URL}/bookmarks/bm_def456uvw/execute \
-  -H "X-API-Key: {YOUR_API_KEY}" \
-  -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
-```
-
-**Note**: This endpoint only works with saved searches (`itemType: "SAVED_SEARCH"`). Attempting to execute a regular bookmark will return a 400 error.
 
 ---
 
@@ -378,7 +336,13 @@ curl -X DELETE {BASE_URL}/bookmarks/bm_abc123xyz \
 - `flightOfferData`: Complete flight offer object as JSON string
 
 **For Saved Searches** (`itemType: "SAVED_SEARCH"`):
-- `searchRequest`: Flight search parameters object
+- `origin`: 3-letter airport code for departure
+- `destination`: 3-letter airport code for arrival
+- `departureDate`: Date in YYYY-MM-DD format
+- `travelClass`: Optional cabin class filter
+- `airlineCode`: Optional 2-3 letter airline code
+- `flightNumber`: Optional 1-4 digit flight number
+- `maxResults`: Optional maximum results (1-50)
 
 ### Automatic Expiration
 
@@ -404,36 +368,32 @@ When creating saved searches, the `searchRequest` object supports these fields:
   "destination": "JFK",               // Required: 3-letter airport code  
   "departureDate": "2025-12-15",      // Required: YYYY-MM-DD format
   "travelClass": "ECONOMY",           // Optional: ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST
-  "flightNumber": "AA123",            // Optional: Filter for specific flight
-  "maxResults": 10                    // Optional: Maximum results, defaults to 10
+  "airlineCode": "AA",                // Optional: 2-3 letter airline code  
+  "flightNumber": "123",              // Optional: 1-4 digit flight number (requires airlineCode)
+  "maxResults": 10                    // Optional: Maximum results (1-50), defaults to 10
 }
 ```
+
+**Validation Rules**:
+- `flightNumber` can only be provided when `airlineCode` is also specified
+- `airlineCode` can be provided alone to search all flights for that airline
+- `maxResults` must be between 1-50
 
 **Important**: Only these fields are supported. The system does not support `returnDate`, `adults`, `children`, `infants`, `includeCarriers`, `excludeCarriers`, `directFlights`, or `currencyCode`.
 
 ---
 
-## Integration with Seat Maps
-
-Both bookmarks and saved searches provide paths to seat maps:
-
-**Direct Seat Map Access from Bookmark**:
-```bash
-# Get seat map directly from bookmark (via integrated flight search)
-curl -X GET {BASE_URL}/flight-search/bookmark/{bookmarkId} \
-  -H "X-API-Key: {YOUR_API_KEY}" \
-  -H "Authorization: Bearer {YOUR_USER_JWT_TOKEN}"
-```
+## Integration with Flight Search
 
 **Saved Search Workflow**:
-1. **Execute Saved Search**: Use `/bookmarks/{id}/execute` to get search parameters
-2. **Run Flight Search**: Use returned search parameters with `/flight-search` endpoint
-3. **Get Seat Maps**: Use flight search results for seat map access
+1. **Get Saved Search**: Use `GET /bookmarks/{id}` to retrieve saved search parameters
+2. **Run Flight Search**: Use the returned individual fields with `/flight-search` endpoint
+3. **Get Seat Maps**: Flight search results include integrated seat map data
 
-**Integrated Workflow**:
+**Workflow Example**:
 1. **Create Items**: Save flight offers as bookmarks OR search parameters as saved searches
 2. **List Items**: Retrieve user's saved bookmarks and searches (optionally filtered)
-3. **Execute/Access**: Use bookmarks for direct seat maps, or execute saved searches for new results
+3. **Use Saved Searches**: Extract individual search fields and use with flight search API
 
 ---
 
@@ -506,13 +466,6 @@ This is a significant improvement from the old cumulative system where deletions
 }
 ```
 
-**400 Bad Request** (Execute non-saved search):
-```json
-{
-  "success": false,
-  "message": "Only saved search items can be executed"
-}
-```
 
 **401 Unauthorized**:
 ```json
@@ -588,15 +541,19 @@ This is a significant improvement from the old cumulative system where deletions
 - **Required Field**: `itemType` is now required for all creation requests
 - **Unified Endpoint**: Both bookmarks and saved searches use `/bookmarks` endpoint
 - **Type Filtering**: Use `?type=` parameter instead of separate endpoints
-- **Execute Endpoint**: Moved from `/saved-searches/{id}/execute` to `/bookmarks/{id}/execute`
+- **Field Structure**: Saved searches now store individual fields instead of JSON objects
+- **Separated Flight Fields**: `flightNumber` split into `airlineCode` and `flightNumber`
+- **Execute Endpoint**: Removed - users must manually use saved search parameters
 - **Real-Time Counting**: Usage limits now reflect active items, not cumulative creation
 
 ### Migration Guide
 1. **Update Creation Calls**: Add `"itemType": "BOOKMARK"` or `"itemType": "SAVED_SEARCH"` to all creation requests
-2. **Update List Calls**: Use `GET /bookmarks?type=BOOKMARK` instead of `GET /bookmarks` for bookmarks only
-3. **Update Saved Search Lists**: Use `GET /bookmarks?type=SAVED_SEARCH` instead of `GET /saved-searches`
-4. **Update Execute Calls**: Use `POST /bookmarks/{id}/execute` instead of `POST /saved-searches/{id}/execute`
-5. **Update Error Handling**: Review new error messages and status codes
+2. **Update Flight Search Calls**: Separate `flightNumber` into `airlineCode` and `flightNumber` fields
+3. **Update List Calls**: Use `GET /bookmarks?type=BOOKMARK` instead of `GET /bookmarks` for bookmarks only
+4. **Update Saved Search Lists**: Use `GET /bookmarks?type=SAVED_SEARCH` instead of `GET /saved-searches`
+5. **Remove Execute Calls**: Replace execute functionality with manual parameter extraction and flight search
+6. **Update Response Parsing**: Saved searches now return individual fields instead of nested `searchRequest` object
+7. **Update Error Handling**: Review new error messages and status codes
 
 ### Backward Compatibility
 **None**: This is a clean breaking change with no backward compatibility. All clients must be updated to use the new unified API.

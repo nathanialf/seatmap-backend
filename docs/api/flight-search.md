@@ -26,7 +26,8 @@ Content-Type: application/json
   "destination": "JFK", 
   "departureDate": "2025-12-15",
   "travelClass": "ECONOMY",
-  "flightNumber": "AA123",
+  "airlineCode": "AA",
+  "flightNumber": "123",
   "maxResults": 10,
   "includeRawFlightOffer": false
 }
@@ -37,8 +38,9 @@ Content-Type: application/json
 - `destination` (required): 3-letter IATA airport code for arrival  
 - `departureDate` (required): Date in YYYY-MM-DD format
 - `travelClass` (optional): Cabin class filter - `ECONOMY`, `PREMIUM_ECONOMY`, `BUSINESS`, `FIRST`
-- `flightNumber` (optional): Specific flight number filter
-- `maxResults` (optional): Maximum results to return (default: 10)
+- `airlineCode` (optional): 2-3 letter airline code (e.g., "AA", "UA", "DL")
+- `flightNumber` (optional): 1-4 digit flight number (e.g., "123", "1679") - requires `airlineCode`
+- `maxResults` (optional): Maximum results to return (1-50, default: 10)
 - `includeRawFlightOffer` (optional): Include raw flight offer data from API (default: false)
 
 **Response**:
@@ -169,6 +171,8 @@ curl -X POST {BASE_URL}/flight-search \
     "destination": "JFK",
     "departureDate": "2025-12-15",
     "travelClass": "ECONOMY",
+    "airlineCode": "AA",
+    "flightNumber": "123",
     "maxResults": 5
   }'
 ```
@@ -261,6 +265,50 @@ When `travelClass` is specified, results show flights with that minimum cabin qu
 - `FIRST`: First class only
 
 If not specified, all cabin classes are included in results.
+
+---
+
+## Flight Number Filtering
+
+### Field Separation
+
+Flight number filtering now uses two separate fields for better API integration:
+
+- `airlineCode`: 2-3 letter airline code (e.g., "AA", "UA", "DL")  
+- `flightNumber`: 1-4 digit flight number (e.g., "123", "1679")
+
+### Validation Rules
+
+1. **Airline Code Only**: ✅ Valid
+   ```json
+   {
+     "airlineCode": "UA"
+   }
+   ```
+   → Searches for all United Airlines flights
+
+2. **Both Fields**: ✅ Valid  
+   ```json
+   {
+     "airlineCode": "UA",
+     "flightNumber": "1679"
+   }
+   ```
+   → Searches for specific flight UA1679
+
+3. **Flight Number Only**: ❌ Invalid
+   ```json
+   {
+     "flightNumber": "1679"
+   }
+   ```
+   → Returns validation error: "Flight number can only be provided when airline code is also specified"
+
+### Field Formats
+
+- **airlineCode**: Must match pattern `^[A-Z]{2,3}$`
+- **flightNumber**: Must match pattern `^[0-9]{1,4}$`
+- **maxResults**: Must be between 1-50
 
 ---
 

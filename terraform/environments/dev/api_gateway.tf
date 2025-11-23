@@ -334,13 +334,6 @@ resource "aws_api_gateway_resource" "bookmark_id" {
   path_part   = "{id}"
 }
 
-# Bookmark Execute Resource (for executing saved searches)
-resource "aws_api_gateway_resource" "bookmark_execute" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  parent_id   = aws_api_gateway_resource.bookmark_id.id
-  path_part   = "execute"
-}
-
 
 # Bookmarks Methods
 resource "aws_api_gateway_method" "bookmarks_get" {
@@ -371,14 +364,6 @@ resource "aws_api_gateway_method" "bookmark_delete" {
   rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
   resource_id   = aws_api_gateway_resource.bookmark_id.id
   http_method   = "DELETE"
-  authorization = "NONE"
-  api_key_required = true
-}
-
-resource "aws_api_gateway_method" "bookmark_execute" {
-  rest_api_id   = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id   = aws_api_gateway_resource.bookmark_execute.id
-  http_method   = "POST"
   authorization = "NONE"
   api_key_required = true
 }
@@ -419,16 +404,6 @@ resource "aws_api_gateway_integration" "bookmark_delete_integration" {
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
   resource_id = aws_api_gateway_resource.bookmark_id.id
   http_method = aws_api_gateway_method.bookmark_delete.http_method
-
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.bookmarks.invoke_arn
-}
-
-resource "aws_api_gateway_integration" "bookmark_execute_integration" {
-  rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
-  resource_id = aws_api_gateway_resource.bookmark_execute.id
-  http_method = aws_api_gateway_method.bookmark_execute.http_method
 
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
@@ -522,7 +497,6 @@ resource "aws_api_gateway_deployment" "main" {
     aws_api_gateway_integration.bookmarks_post_integration,
     aws_api_gateway_integration.bookmark_get_integration,
     aws_api_gateway_integration.bookmark_delete_integration,
-    aws_api_gateway_integration.bookmark_execute_integration,
   ]
 
   rest_api_id = aws_api_gateway_rest_api.seatmap_api.id
@@ -564,17 +538,14 @@ resource "aws_api_gateway_deployment" "main" {
       aws_api_gateway_integration.seatmap_view_integration.id,
       aws_api_gateway_resource.bookmarks.id,
       aws_api_gateway_resource.bookmark_id.id,
-      aws_api_gateway_resource.bookmark_execute.id,
       aws_api_gateway_method.bookmarks_get.id,
       aws_api_gateway_method.bookmarks_post.id,
       aws_api_gateway_method.bookmark_get.id,
       aws_api_gateway_method.bookmark_delete.id,
-      aws_api_gateway_method.bookmark_execute.id,
       aws_api_gateway_integration.bookmarks_get_integration.id,
       aws_api_gateway_integration.bookmarks_post_integration.id,
       aws_api_gateway_integration.bookmark_get_integration.id,
       aws_api_gateway_integration.bookmark_delete_integration.id,
-      aws_api_gateway_integration.bookmark_execute_integration.id,
       aws_api_gateway_resource.tiers.id,
       aws_api_gateway_resource.tier_name.id,
       aws_api_gateway_method.tiers_get.id,

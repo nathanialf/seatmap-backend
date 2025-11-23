@@ -75,7 +75,7 @@ class AmadeusServiceTest {
             .thenReturn(flightOffersResponse) // Second call for flight offers
             .thenReturn(seatMapResponse); // Third call for seat map
         
-        JsonNode result = amadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK");
+        JsonNode result = amadeusService.getSeatMap("AA", "123", "2024-12-01", "LAX", "JFK");
         
         assertNotNull(result);
         assertTrue(result.has("data"));
@@ -99,7 +99,7 @@ class AmadeusServiceTest {
             .thenReturn(errorResponse);
         
         assertThrows(SeatmapApiException.class, () -> 
-            amadeusService.getSeatMap("INVALID", "2024-12-01", "LAX", "JFK"));
+            amadeusService.getSeatMap("IN", "VALID", "2024-12-01", "LAX", "JFK"));
     }
     
     @Test
@@ -108,7 +108,7 @@ class AmadeusServiceTest {
             .thenThrow(new IOException("Network error"));
         
         assertThrows(SeatmapApiException.class, () -> 
-            amadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"));
+            amadeusService.getSeatMap("AA", "123", "2024-12-01", "LAX", "JFK"));
     }
     
     @Test
@@ -122,7 +122,7 @@ class AmadeusServiceTest {
             .thenReturn(tokenResponse);
         
         assertThrows(SeatmapApiException.class, () -> 
-            amadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK"));
+            amadeusService.getSeatMap("AA", "123", "2024-12-01", "LAX", "JFK"));
     }
     
     @Test
@@ -150,7 +150,7 @@ class AmadeusServiceTest {
         
         // Test with special characters that need URL encoding
         assertDoesNotThrow(() -> 
-            amadeusService.getSeatMap("AA 123", "2024-12-01", "LAX", "JFK"));
+            amadeusService.getSeatMap("AA", " 123", "2024-12-01", "LAX", "JFK"));
     }
     
     @Test
@@ -185,11 +185,11 @@ class AmadeusServiceTest {
             .thenReturn(seatMapResponse);
         
         // First call
-        amadeusService.getSeatMap("AA123", "2024-12-01", "LAX", "JFK");
+        amadeusService.getSeatMap("AA", "123", "2024-12-01", "LAX", "JFK");
         
         // Wait for token to expire and make second call
         Thread.sleep(1100);
-        amadeusService.getSeatMap("AA124", "2024-12-01", "LAX", "JFK");
+        amadeusService.getSeatMap("AA", "124", "2024-12-01", "LAX", "JFK");
         
         // Should have made 6 HTTP calls total (2 tokens + 2 flight offers + 2 seat maps)
         verify(mockHttpClient, times(6)).send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
@@ -677,7 +677,7 @@ class AmadeusServiceTest {
         
         // Act
         List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(
-            "LAX", "JFK", "2024-12-15", "ECONOMY", null, 10
+            "LAX", "JFK", "2024-12-15", "ECONOMY", null, null, 10
         );
         
         // Assert

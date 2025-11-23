@@ -102,7 +102,7 @@ public class BookmarkRepositoryIntegrationTest {
         bookmark.setTitle("Test Bookmark");
         bookmark.setItemType(Bookmark.ItemType.BOOKMARK);
         bookmark.setFlightOfferData("{\"test\": \"data\"}");
-        bookmark.setSearchRequest(null); // This should not cause NPE
+        // searchRequest field removed - using top-level fields now
         bookmark.setCreatedAt(Instant.now());
         bookmark.setExpiresAt(Instant.now().plusSeconds(3600));
 
@@ -189,7 +189,7 @@ public class BookmarkRepositoryIntegrationTest {
         bookmark.setTitle("Test Bookmark");
         bookmark.setItemType(Bookmark.ItemType.BOOKMARK);
         bookmark.setFlightOfferData("{\"test\": \"data\"}");
-        bookmark.setSearchRequest(null); // Null field
+        // searchRequest field removed - using top-level fields now
         bookmark.setCreatedAt(Instant.now());
         bookmark.setUpdatedAt(null); // Another null field
         bookmark.setExpiresAt(Instant.now().plusSeconds(3600));
