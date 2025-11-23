@@ -143,10 +143,12 @@ public class AmadeusService {
      * Convert Amadeus seatmap response to SeatMapData model
      */
     public SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
+        logger.debug("Converting Amadeus seat map response to SeatMapData");
         SeatMapData seatMapData = new SeatMapData();
         seatMapData.setSource("AMADEUS");
         
         if (seatMapResponse == null || !seatMapResponse.has("data")) {
+            logger.debug("Seat map response is null or missing data field, returning empty SeatMapData");
             return seatMapData;
         }
         
@@ -281,9 +283,15 @@ public class AmadeusService {
             }
             
         } catch (Exception e) {
-            logger.warn("Error converting Amadeus seat map response: {}", e.getMessage());
+            logger.error("Error converting Amadeus seat map response: {}", e.getMessage(), e);
+            logger.error("Response structure: {}", seatMapResponse != null ? seatMapResponse.toPrettyString() : "null");
             // Return basic seat map data with source only if conversion fails
         }
+        
+        logger.debug("Conversion complete. SeatMapData has {} decks, {} seats, flight: {}", 
+                    seatMapData.getDecks() != null ? seatMapData.getDecks().size() : 0,
+                    seatMapData.getSeats() != null ? seatMapData.getSeats().size() : 0,
+                    seatMapData.getFlight() != null ? seatMapData.getFlight().getNumber() : "null");
         
         return seatMapData;
     }
