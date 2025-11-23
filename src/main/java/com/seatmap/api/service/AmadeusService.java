@@ -268,11 +268,15 @@ public class AmadeusService {
                                 
                                 // Extract characteristics codes
                                 if (seatNode.has("characteristicsCodes")) {
-                                    List<String> characteristics = new ArrayList<>();
+                                    List<String> characteristicCodes = new ArrayList<>();
                                     for (JsonNode code : seatNode.get("characteristicsCodes")) {
-                                        characteristics.add(code.asText());
+                                        characteristicCodes.add(code.asText());
                                     }
-                                    seat.setCharacteristicsCodes(characteristics);
+                                    seat.setCharacteristicsCodes(characteristicCodes);
+                                    
+                                    // Map to normalized characteristics
+                                    List<SeatMapData.SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(characteristicCodes);
+                                    seat.setCharacteristics(characteristics);
                                 }
                                 
                                 // Extract coordinates
@@ -280,13 +284,37 @@ public class AmadeusService {
                                     seat.setCoordinates(seatNode.get("coordinates"));
                                 }
                                 
-                                // Extract traveler pricing (availability and pricing info)
-                                if (seatNode.has("travelerPricing")) {
-                                    List<JsonNode> travelerPricing = new ArrayList<>();
-                                    for (JsonNode pricing : seatNode.get("travelerPricing")) {
-                                        travelerPricing.add(pricing);
+                                // Extract availability status and pricing (single traveler)
+                                if (seatNode.has("travelerPricing") && seatNode.get("travelerPricing").isArray() && seatNode.get("travelerPricing").size() > 0) {
+                                    JsonNode firstTraveler = seatNode.get("travelerPricing").get(0);
+                                    
+                                    // Extract availability status
+                                    if (firstTraveler.has("seatAvailabilityStatus")) {
+                                        seat.setAvailabilityStatus(firstTraveler.get("seatAvailabilityStatus").asText());
                                     }
-                                    seat.setTravelerPricing(travelerPricing);
+                                    
+                                    // Extract pricing information
+                                    if (firstTraveler.has("price")) {
+                                        JsonNode priceNode = firstTraveler.get("price");
+                                        SeatMapData.SeatPricing pricing = new SeatMapData.SeatPricing();
+                                        pricing.setCurrency(priceNode.path("currency").asText(null));
+                                        pricing.setTotal(priceNode.path("total").asText(null));
+                                        pricing.setBase(priceNode.path("base").asText(null));
+                                        
+                                        // Extract taxes if present
+                                        if (priceNode.has("taxes") && priceNode.get("taxes").isArray()) {
+                                            List<SeatMapData.SeatPricing.Tax> taxes = new ArrayList<>();
+                                            for (JsonNode taxNode : priceNode.get("taxes")) {
+                                                SeatMapData.SeatPricing.Tax tax = new SeatMapData.SeatPricing.Tax();
+                                                tax.setAmount(taxNode.path("amount").asText(null));
+                                                tax.setCode(taxNode.path("code").asText(null));
+                                                taxes.add(tax);
+                                            }
+                                            pricing.setTaxes(taxes);
+                                        }
+                                        
+                                        seat.setPricing(pricing);
+                                    }
                                 }
                                 
                                 deckSeats.add(seat);

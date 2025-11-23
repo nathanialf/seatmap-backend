@@ -2,6 +2,8 @@ package com.seatmap.api.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.util.List;
 
 public class SeatMapData {
@@ -171,9 +173,11 @@ public class SeatMapData {
     public static class Seat {
         private String number;
         private String cabin;
-        private List<String> characteristicsCodes;
+        private List<String> characteristicsCodes; // Raw codes for backward compatibility
+        private List<SeatCharacteristic> characteristics; // Expanded, normalized characteristics
         private JsonNode coordinates;
-        private List<JsonNode> travelerPricing;
+        private String availabilityStatus; // AVAILABLE, OCCUPIED, BLOCKED, etc.
+        private SeatPricing pricing; // Simplified single traveler pricing
         
         // Default constructor
         public Seat() {}
@@ -190,11 +194,130 @@ public class SeatMapData {
             this.characteristicsCodes = characteristicsCodes; 
         }
         
+        public List<SeatCharacteristic> getCharacteristics() { return characteristics; }
+        public void setCharacteristics(List<SeatCharacteristic> characteristics) { this.characteristics = characteristics; }
+        
         public JsonNode getCoordinates() { return coordinates; }
         public void setCoordinates(JsonNode coordinates) { this.coordinates = coordinates; }
         
-        public List<JsonNode> getTravelerPricing() { return travelerPricing; }
-        public void setTravelerPricing(List<JsonNode> travelerPricing) { this.travelerPricing = travelerPricing; }
+        public String getAvailabilityStatus() { return availabilityStatus; }
+        public void setAvailabilityStatus(String availabilityStatus) { this.availabilityStatus = availabilityStatus; }
+        
+        public SeatPricing getPricing() { return pricing; }
+        public void setPricing(SeatPricing pricing) { this.pricing = pricing; }
+        
+        // Legacy support for existing travelerPricing field
+        @Deprecated
+        public List<JsonNode> getTravelerPricing() {
+            if (pricing != null) {
+                List<JsonNode> legacy = new ArrayList<>();
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    legacy.add(mapper.valueToTree(pricing));
+                } catch (Exception e) {
+                    // Fallback to empty list
+                }
+                return legacy;
+            }
+            return new ArrayList<>();
+        }
+        
+        @Deprecated
+        public void setTravelerPricing(List<JsonNode> travelerPricing) {
+            if (travelerPricing != null && !travelerPricing.isEmpty()) {
+                JsonNode firstPricing = travelerPricing.get(0);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    // Extract availability status
+                    this.availabilityStatus = firstPricing.path("seatAvailabilityStatus").asText(null);
+                    
+                    // Extract pricing information
+                    if (firstPricing.has("price")) {
+                        JsonNode priceNode = firstPricing.get("price");
+                        SeatPricing seatPricing = new SeatPricing();
+                        seatPricing.setCurrency(priceNode.path("currency").asText(null));
+                        seatPricing.setTotal(priceNode.path("total").asText(null));
+                        seatPricing.setBase(priceNode.path("base").asText(null));
+                        this.pricing = seatPricing;
+                    }
+                } catch (Exception e) {
+                    // Ignore conversion errors for legacy compatibility
+                }
+            }
+        }
+    }
+    
+    public static class SeatPricing {
+        private String currency;
+        private String total;
+        private String base;
+        private List<Tax> taxes;
+        
+        public SeatPricing() {}
+        
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        
+        public String getTotal() { return total; }
+        public void setTotal(String total) { this.total = total; }
+        
+        public String getBase() { return base; }
+        public void setBase(String base) { this.base = base; }
+        
+        public List<Tax> getTaxes() { return taxes; }
+        public void setTaxes(List<Tax> taxes) { this.taxes = taxes; }
+        
+        public static class Tax {
+            private String amount;
+            private String code;
+            
+            public Tax() {}
+            
+            public String getAmount() { return amount; }
+            public void setAmount(String amount) { this.amount = amount; }
+            
+            public String getCode() { return code; }
+            public void setCode(String code) { this.code = code; }
+        }
+    }
+    
+    public static class SeatCharacteristic {
+        private String code; // Original code (e.g., "W", "A", "CH")
+        private String category; // POSITION, RESTRICTION, AMENITY, etc.
+        private String description; // Human-readable description
+        private boolean isRestriction; // Whether this limits seat selection
+        private boolean isPremium; // Whether this is a premium feature
+        
+        public SeatCharacteristic() {}
+        
+        public SeatCharacteristic(String code, String category, String description) {
+            this.code = code;
+            this.category = category;
+            this.description = description;
+        }
+        
+        public SeatCharacteristic(String code, String category, String description, boolean isRestriction, boolean isPremium) {
+            this.code = code;
+            this.category = category;
+            this.description = description;
+            this.isRestriction = isRestriction;
+            this.isPremium = isPremium;
+        }
+        
+        public String getCode() { return code; }
+        public void setCode(String code) { this.code = code; }
+        
+        public String getCategory() { return category; }
+        public void setCategory(String category) { this.category = category; }
+        
+        public String getDescription() { return description; }
+        public void setDescription(String description) { this.description = description; }
+        
+        public boolean isRestriction() { return isRestriction; }
+        public void setRestriction(boolean isRestriction) { this.isRestriction = isRestriction; }
+        
+        public boolean isPremium() { return isPremium; }
+        public void setPremium(boolean isPremium) { this.isPremium = isPremium; }
     }
     
     public static class LayoutInfo {

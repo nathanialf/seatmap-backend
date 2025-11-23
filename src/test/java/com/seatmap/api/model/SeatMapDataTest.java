@@ -2,6 +2,7 @@ package com.seatmap.api.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -221,7 +222,10 @@ class SeatMapDataTest {
         assertNull(seat.getCabin());
         assertNull(seat.getCharacteristicsCodes());
         assertNull(seat.getCoordinates());
-        assertNull(seat.getTravelerPricing());
+        assertNull(seat.getAvailabilityStatus());
+        assertNull(seat.getPricing());
+        // getTravelerPricing() now returns empty list for backward compatibility, not null
+        assertEquals(0, seat.getTravelerPricing().size());
     }
 
     @Test
@@ -229,19 +233,49 @@ class SeatMapDataTest {
         SeatMapData.Seat seat = new SeatMapData.Seat();
         List<String> characteristics = Arrays.asList("WINDOW", "AISLE");
         JsonNode coordinates = objectMapper.createObjectNode();
-        List<JsonNode> pricing = Arrays.asList(objectMapper.createObjectNode());
+        
+        // Test new seat structure
+        SeatMapData.SeatPricing pricing = new SeatMapData.SeatPricing();
+        pricing.setCurrency("USD");
+        pricing.setTotal("15.00");
+        pricing.setBase("15.00");
 
         seat.setNumber("1A");
         seat.setCabin("ECONOMY");
         seat.setCharacteristicsCodes(characteristics);
         seat.setCoordinates(coordinates);
-        seat.setTravelerPricing(pricing);
+        seat.setAvailabilityStatus("AVAILABLE");
+        seat.setPricing(pricing);
 
         assertEquals("1A", seat.getNumber());
         assertEquals("ECONOMY", seat.getCabin());
         assertEquals(characteristics, seat.getCharacteristicsCodes());
         assertEquals(coordinates, seat.getCoordinates());
-        assertEquals(pricing, seat.getTravelerPricing());
+        assertEquals("AVAILABLE", seat.getAvailabilityStatus());
+        assertEquals(pricing, seat.getPricing());
+        
+        // Test legacy compatibility - getTravelerPricing should work with new structure
+        List<JsonNode> legacyPricing = seat.getTravelerPricing();
+        assertNotNull(legacyPricing);
+        assertEquals(1, legacyPricing.size());
+        
+        // Test legacy setter compatibility
+        ObjectNode legacyNode = objectMapper.createObjectNode();
+        legacyNode.put("seatAvailabilityStatus", "OCCUPIED");
+        ObjectNode priceNode = objectMapper.createObjectNode();
+        priceNode.put("currency", "EUR");
+        priceNode.put("total", "20.00");
+        priceNode.put("base", "18.00");
+        legacyNode.set("price", priceNode);
+        
+        List<JsonNode> legacyList = Arrays.asList(legacyNode);
+        seat.setTravelerPricing(legacyList);
+        
+        assertEquals("OCCUPIED", seat.getAvailabilityStatus());
+        assertNotNull(seat.getPricing());
+        assertEquals("EUR", seat.getPricing().getCurrency());
+        assertEquals("20.00", seat.getPricing().getTotal());
+        assertEquals("18.00", seat.getPricing().getBase());
     }
 
     @Test
