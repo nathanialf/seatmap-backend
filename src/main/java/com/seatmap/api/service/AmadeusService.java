@@ -147,8 +147,25 @@ public class AmadeusService {
         SeatMapData seatMapData = new SeatMapData();
         seatMapData.setSource("AMADEUS");
         
-        if (seatMapResponse == null || !seatMapResponse.has("data")) {
-            logger.info("Seat map response is null or missing data field, returning empty SeatMapData");
+        if (seatMapResponse == null) {
+            logger.warn("Seat map response is null, returning empty SeatMapData");
+            return seatMapData;
+        }
+        
+        // Enhanced logging for debugging Alaska Airlines and other problematic responses
+        logger.info("Seat map response structure: {}", seatMapResponse.has("data") ? "has data field" : "missing data field");
+        if (seatMapResponse.has("data")) {
+            JsonNode data = seatMapResponse.get("data");
+            logger.info("Data field type: {}, size: {}", data.getNodeType(), data.isArray() ? data.size() : "not array");
+        } else {
+            // Log available field names for debugging
+            StringBuilder fieldNames = new StringBuilder();
+            if (seatMapResponse.fieldNames().hasNext()) {
+                seatMapResponse.fieldNames().forEachRemaining(name -> fieldNames.append(name).append(", "));
+                if (fieldNames.length() > 2) fieldNames.setLength(fieldNames.length() - 2); // Remove trailing ", "
+            }
+            logger.warn("Missing 'data' field in seat map response. Available fields: {}", 
+                       fieldNames.length() > 0 ? fieldNames.toString() : "none");
             return seatMapData;
         }
         
@@ -179,8 +196,11 @@ public class AmadeusService {
             // Iterate through ALL segments (handles both single and multi-segment)
             for (int segmentIndex = 0; segmentIndex < data.size(); segmentIndex++) {
                 JsonNode segment = data.get(segmentIndex);
-                logger.info("Processing segment {}: flight {}", segmentIndex + 1, 
-                          segment.path("number").asText("unknown"));
+                String segmentFlightNumber = segment.path("number").asText("unknown");
+                String segmentCarrierCode = segment.path("carrierCode").asText("unknown");
+                logger.info("Processing segment {}: flight {} {}, has decks: {}, has aircraft: {}", 
+                          segmentIndex + 1, segmentCarrierCode, segmentFlightNumber, 
+                          segment.has("decks"), segment.has("aircraft"));
                 
                 // Extract flight info from first segment with complete data
                 if (flightInfo == null) {
@@ -347,7 +367,17 @@ public class AmadeusService {
             
         } catch (Exception e) {
             logger.error("Error converting Amadeus seat map response: {}", e.getMessage(), e);
-            logger.error("Response structure: {}", seatMapResponse != null ? seatMapResponse.toPrettyString() : "null");
+            
+            // Special logging for Alaska Airlines debugging
+            boolean isAlaskaFlight = seatMapResponse != null && 
+                seatMapResponse.toString().contains("\"carrierCode\":\"AS\"") || 
+                seatMapResponse.toString().contains("Alaska");
+            if (isAlaskaFlight) {
+                logger.error("ALASKA AIRLINES DEBUG - Full response structure: {}", 
+                           seatMapResponse.toPrettyString());
+            } else {
+                logger.error("Response structure: {}", seatMapResponse != null ? seatMapResponse.toPrettyString() : "null");
+            }
             // Return basic seat map data with source only if conversion fails
         }
         
