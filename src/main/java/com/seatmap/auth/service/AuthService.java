@@ -345,7 +345,7 @@ public class AuthService {
         String userId = jwtService.getUserIdFromToken(token);
         
         // For now, we don't maintain a blacklist of tokens
-        // JWT tokens will expire naturally after 24 hours
+        // JWT tokens will expire naturally after 30 days
         // In the future, we could maintain a blacklist in Redis/DynamoDB
         
         logger.info("User logged out: {}", userId);

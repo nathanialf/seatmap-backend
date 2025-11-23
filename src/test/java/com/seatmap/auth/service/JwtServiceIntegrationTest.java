@@ -278,7 +278,7 @@ class JwtServiceIntegrationTest {
     @Test
     void getTokenExpirationSeconds_ReturnsCorrectValue() {
         int expirationSeconds = jwtService.getTokenExpirationSeconds();
-        assertEquals(86400, expirationSeconds); // 24 hours
+        assertEquals(2592000, expirationSeconds); // 30 days
     }
     
     @Test

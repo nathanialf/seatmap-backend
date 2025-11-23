@@ -20,8 +20,8 @@ public class Session {
     public Session() {
         this.createdAt = Instant.now();
         this.guestFlightsViewed = 0;
-        // Set expiration to 24 hours from creation
-        this.expiresAt = Instant.now().plusSeconds(24 * 60 * 60);
+        // Set expiration to 30 days from creation
+        this.expiresAt = Instant.now().plusSeconds(30 * 24 * 60 * 60);
     }
 
     public Session(String sessionId, String userId, UserType userType) {

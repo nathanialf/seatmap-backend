@@ -17,7 +17,7 @@ import java.util.Map;
 
 public class JwtService {
     private static final Logger logger = LoggerFactory.getLogger(JwtService.class);
-    private static final int TOKEN_EXPIRATION_SECONDS = 24 * 60 * 60; // 24 hours
+    private static final int TOKEN_EXPIRATION_SECONDS = 30 * 24 * 60 * 60; // 30 days
     // Timestamp investigation: Force rebuild for cold start testing
     
     private final SecretKey secretKey;

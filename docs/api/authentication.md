@@ -292,12 +292,12 @@ Guest usage is transferred only when:
 
 ### Guest Tokens
 - **Scope**: Limited flight search and seat map access
-- **Duration**: 24 hours
+- **Duration**: 30 days
 - **Limitations**: IP-based rate limiting, restricted features
 
 ### User Tokens  
 - **Scope**: Full API access based on user tier (FREE, PRO, BUSINESS, DEV)
-- **Duration**: 24 hours
+- **Duration**: 30 days
 - **Features**: Tier-based bookmarks, enhanced rate limits, priority access
 
 ### Token Headers

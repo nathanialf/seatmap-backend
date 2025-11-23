@@ -180,7 +180,7 @@ class JwtServiceTest {
     @Test
     @DisplayName("Should return correct expiration time")
     void shouldReturnCorrectExpirationTime() {
-        int expectedExpiration = 24 * 60 * 60; // 24 hours in seconds
+        int expectedExpiration = 30 * 24 * 60 * 60; // 30 days in seconds
         
         assertEquals(expectedExpiration, jwtService.getTokenExpirationSeconds());
     }

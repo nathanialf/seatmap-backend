@@ -232,7 +232,7 @@ class JwtServiceSecurityTest {
         // Verify token expiration is configured properly
         int expirationSeconds = jwtService.getTokenExpirationSeconds();
         assertTrue(expirationSeconds > 0, "Token should have positive expiration time");
-        assertTrue(expirationSeconds <= 86400, "Token expiration should be reasonable (≤24 hours)");
+        assertTrue(expirationSeconds <= 2592000, "Token expiration should be reasonable (≤30 days)");
         assertTrue(expirationSeconds >= 3600, "Token expiration should be at least 1 hour for usability");
     }
 
