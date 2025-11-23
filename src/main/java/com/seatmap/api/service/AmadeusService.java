@@ -142,7 +142,7 @@ public class AmadeusService {
     /**
      * Convert Amadeus seatmap response to SeatMapData model
      */
-    public SeatMapData convertToSeatMapData(JsonNode seatMapResponse) {
+    public SeatMapData convertToSeatMapData(JsonNode seatMapResponse) throws SeatmapApiException {
         logger.info("Converting Amadeus seat map response to SeatMapData");
         SeatMapData seatMapData = new SeatMapData();
         seatMapData.setSource("AMADEUS");
@@ -180,7 +180,7 @@ public class AmadeusService {
             
             if (data.size() == 0) {
                 logger.info("No seat map segments found in response");
-                return seatMapData;
+                throw new SeatmapApiException("No seat map data available for flight");
             }
             
             logger.info("Processing {} seat map segments", data.size());
@@ -365,6 +365,9 @@ public class AmadeusService {
                 seatMapData.setLayout(layout);
             }
             
+        } catch (SeatmapApiException e) {
+            // Re-throw SeatmapApiException to trigger flight filtering
+            throw e;
         } catch (Exception e) {
             logger.error("Error converting Amadeus seat map response: {}", e.getMessage(), e);
             
@@ -676,7 +679,7 @@ public class AmadeusService {
         return null;
     }
     
-    private SeatMapData convertSeatMapDataFromBatchResponse(JsonNode seatMapData) {
+    private SeatMapData convertSeatMapDataFromBatchResponse(JsonNode seatMapData) throws SeatmapApiException {
         // Wrap the individual seat map in the expected structure for conversion
         ObjectNode wrappedResponse = objectMapper.createObjectNode();
         wrappedResponse.set("data", objectMapper.createArrayNode().add(seatMapData));

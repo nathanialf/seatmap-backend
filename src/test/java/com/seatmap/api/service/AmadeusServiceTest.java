@@ -296,7 +296,7 @@ class AmadeusServiceTest {
     }
     
     @Test
-    void convertToSeatMapData_WithNullResponse_ReturnsEmptyData() {
+    void convertToSeatMapData_WithNullResponse_ReturnsEmptyData() throws Exception {
         SeatMapData result = amadeusService.convertToSeatMapData(null);
         
         assertNotNull(result);
@@ -738,7 +738,28 @@ class AmadeusServiceTest {
         });
     }
     
-    // Helper methods for batch tests
+        @Test
+    void convertToSeatMapData_WithEmptyDataArray_ThrowsException() throws Exception {
+        String emptyDataJson = """
+        {
+            "data": [],
+            "meta": {
+                "count": 0
+            }
+        }
+        """;
+        
+        JsonNode emptyDataResponse = objectMapper.readTree(emptyDataJson);
+        
+        // Should throw SeatmapApiException when data array is empty
+        SeatmapApiException exception = assertThrows(SeatmapApiException.class, () -> {
+            amadeusService.convertToSeatMapData(emptyDataResponse);
+        });
+        
+        assertEquals("No seat map data available for flight", exception.getMessage());
+    }
+
+// Helper methods for batch tests
     
     private List<JsonNode> createMockFlightOffers() {
         List<JsonNode> offers = new ArrayList<>();
