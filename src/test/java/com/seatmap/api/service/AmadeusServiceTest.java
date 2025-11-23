@@ -486,8 +486,9 @@ class AmadeusServiceTest {
         assertEquals("73H", result.getAircraft().getCode());
         
         assertNotNull(result.getDecks());
-        assertEquals(1, result.getDecks().size());
+        assertEquals(2, result.getDecks().size()); // Now includes both segments
         assertEquals("12A", result.getDecks().get(0).getSeats().get(0).getNumber());
+        assertEquals("15F", result.getDecks().get(1).getSeats().get(0).getNumber());
     }
     
     @Test
@@ -522,7 +523,8 @@ class AmadeusServiceTest {
         
         // Missing data should be null but not cause errors
         assertNull(result.getAircraft());
-        assertNull(result.getDecks());
+        assertNotNull(result.getDecks()); // Now returns empty list instead of null
+        assertTrue(result.getDecks().isEmpty());
     }
     
     @Test 
