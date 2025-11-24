@@ -172,6 +172,14 @@ public class AmadeusService {
         try {
             JsonNode data = seatMapResponse.get("data");
             
+            // Extract dictionaries for characteristic mapping
+            JsonNode dictionaries = seatMapResponse.get("dictionaries");
+            if (dictionaries != null) {
+                logger.info("Found dictionaries in seat map response");
+            } else {
+                logger.info("No dictionaries found in seat map response");
+            }
+            
             // Handle both single segment and multi-segment responses
             if (!data.isArray()) {
                 // Single segment response - convert to array for uniform processing
@@ -269,15 +277,6 @@ public class AmadeusService {
                             totalRows = Math.max(totalRows, deckConfig.path("length").asInt(0));
                         }
                         
-                        // Store facilities
-                        if (deckNode.has("facilities")) {
-                            List<JsonNode> facilities = new ArrayList<>();
-                            for (JsonNode facility : deckNode.get("facilities")) {
-                                facilities.add(facility);
-                            }
-                            deck.setFacilities(facilities);
-                        }
-                        
                         // Extract seats from this deck
                         List<SeatMapData.Seat> deckSeats = new ArrayList<>();
                         if (deckNode.has("seats")) {
@@ -292,10 +291,8 @@ public class AmadeusService {
                                     for (JsonNode code : seatNode.get("characteristicsCodes")) {
                                         characteristicCodes.add(code.asText());
                                     }
-                                    seat.setCharacteristicsCodes(characteristicCodes);
-                                    
-                                    // Map to normalized characteristics
-                                    List<SeatMapData.SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(characteristicCodes);
+                                    // Map to normalized characteristics using response dictionaries
+                                    List<SeatMapData.SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(characteristicCodes, dictionaries);
                                     seat.setCharacteristics(characteristics);
                                 }
                                 

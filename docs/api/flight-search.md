@@ -129,8 +129,32 @@ Content-Type: application/json
         "source": "AMADEUS",
         "aircraft": {"code": "321", "name": "AIRBUS A321"},
         "flight": {"number": "123", "carrierCode": "AA"},
-        "decks": [...],
-        "seats": [...]
+        "decks": [
+          {
+            "deckType": "MAIN",
+            "seats": [
+              {
+                "number": "12A",
+                "cabin": "ECONOMY",
+                "availabilityStatus": "AVAILABLE",
+                "pricing": {
+                  "currency": "USD",
+                  "total": "25.00",
+                  "base": "22.00"
+                },
+                "characteristics": [
+                  {
+                    "code": "W",
+                    "category": "POSITION",
+                    "description": "Window seat",
+                    "isRestriction": false,
+                    "isPremium": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "seatMapError": null
     }
@@ -155,6 +179,16 @@ Content-Type: application/json
     },
     "carriers": {
       "AA": "AMERICAN AIRLINES"
+    },
+    "seatCharacteristics": {
+      "W": "Window seat",
+      "A": "Aisle seat", 
+      "9": "Center seat (not window, not aisle)",
+      "E": "Exit row seat",
+      "CH": "Chargeable seats",
+      "L": "Leg space seat",
+      "K": "Bulkhead seat",
+      "O": "Preferential seat"
     }
   }
 }
@@ -320,6 +354,74 @@ Flight search results now include embedded seat map availability:
 2. **No Separate Requests**: Seat map data is fetched concurrently during flight search
 3. **Provider Routing**: Seat map requests are automatically routed to correct provider based on flight `dataSource`
 4. **Error Handling**: Flights without available seat maps are filtered out; remaining flights guaranteed to have seat map data
+
+---
+
+## Seat Characteristics and Dictionaries
+
+### Dynamic Seat Characteristics
+
+Seat characteristics are now dynamically mapped using the `seatCharacteristics` dictionary from the API response. This provides accurate, airline-specific characteristic definitions.
+
+**Key Features:**
+- **Dynamic mapping**: Uses characteristic definitions from API response dictionaries when available
+- **Fallback system**: Falls back to hardcoded mappings for characteristics not in response dictionary
+- **Rich metadata**: Each characteristic includes category, description, and flags
+- **Automatic categorization**: Characteristics are categorized based on their descriptions
+
+**Seat Characteristic Structure:**
+```json
+{
+  "characteristics": [
+    {
+      "code": "W",
+      "category": "POSITION", 
+      "description": "Window seat",
+      "isRestriction": false,
+      "isPremium": false
+    },
+    {
+      "code": "CH",
+      "category": "PREMIUM",
+      "description": "Chargeable seats", 
+      "isRestriction": false,
+      "isPremium": true
+    }
+  ]
+}
+```
+
+**Categories:**
+- **POSITION**: Window (W), Aisle (A), Center (9) seats
+- **SPECIAL**: Exit row (E), Bulkhead (K), Leg space (L), Front of cabin (FC)
+- **PREMIUM**: Chargeable (CH), Premium (1A_AQC_PREMIUM_SEAT), Preferential (O) seats
+- **RESTRICTION**: Not allowed for infant (1A), medical restrictions (1B), deportee (DE), crew (C)
+- **GENERAL**: Other standard characteristics
+- **UNKNOWN**: Unmapped characteristics (creates generic mapping with logging)
+
+### Dictionaries Response
+
+The `dictionaries` object contains reference data for locations, aircraft, carriers, and **seat characteristics**:
+
+```json
+{
+  "dictionaries": {
+    "seatCharacteristics": {
+      "W": "Window seat",
+      "A": "Aisle seat",
+      "E": "Exit row seat",
+      "CH": "Chargeable seats",
+      "H": "High-traffic area seat"
+    }
+  }
+}
+```
+
+**Usage:**
+- Seat characteristics in the response use these dictionary definitions when available
+- Provides airline-specific characteristic descriptions
+- Automatically handles new or custom characteristic codes
+- Eliminates "unmapped characteristic" errors for codes present in dictionary
 
 ---
 

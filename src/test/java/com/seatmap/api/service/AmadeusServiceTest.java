@@ -274,25 +274,21 @@ class AmadeusServiceTest {
         assertEquals("MAIN", deck.getDeckType());
         assertNotNull(deck.getDeckConfiguration());
         
-        // Verify facilities
-        assertNotNull(deck.getFacilities());
-        assertEquals(1, deck.getFacilities().size());
-        // Facilities are stored as JsonNode
-        assertNotNull(deck.getFacilities().get(0));
-        
         // Verify seats
         assertNotNull(deck.getSeats());
         assertEquals(1, deck.getSeats().size());
         SeatMapData.Seat seat = deck.getSeats().get(0);
         assertEquals("12A", seat.getNumber());
-        assertNotNull(seat.getCharacteristicsCodes());
-        assertEquals(8, seat.getCharacteristicsCodes().size());
-        assertTrue(seat.getCharacteristicsCodes().contains("9"));
-        assertTrue(seat.getCharacteristicsCodes().contains("W"));
+        assertNotNull(seat.getCharacteristics());
+        assertEquals(8, seat.getCharacteristics().size());
+        // Verify characteristics contain expected codes
+        assertTrue(seat.getCharacteristics().stream().anyMatch(c -> "9".equals(c.getCode())));
+        assertTrue(seat.getCharacteristics().stream().anyMatch(c -> "W".equals(c.getCode())));
         
-        // Verify seat pricing (stored as JsonNode in the model)
-        assertNotNull(seat.getTravelerPricing());
-        assertEquals(1, seat.getTravelerPricing().size());
+        // Verify seat pricing 
+        assertNotNull(seat.getPricing());
+        assertEquals("USD", seat.getPricing().getCurrency());
+        assertEquals("25.00", seat.getPricing().getTotal());
     }
     
     @Test

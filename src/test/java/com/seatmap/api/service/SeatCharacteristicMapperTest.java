@@ -1,5 +1,7 @@
 package com.seatmap.api.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatmap.api.model.SeatMapData.SeatCharacteristic;
 import org.junit.jupiter.api.Test;
 
@@ -14,7 +16,7 @@ class SeatCharacteristicMapperTest {
     void mapAmadeusCharacteristics_WithKnownCodes_ReturnsCorrectMappings() {
         List<String> codes = Arrays.asList("W", "CH", "1A_AQC_PREMIUM_SEAT");
         
-        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes);
+        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes, null);
         
         assertEquals(3, characteristics.size());
         
@@ -47,7 +49,7 @@ class SeatCharacteristicMapperTest {
     void mapAmadeusCharacteristics_WithRestrictionCodes_MarksRestrictions() {
         List<String> codes = Arrays.asList("1", "DE", "1A");
         
-        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes);
+        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes, null);
         
         assertEquals(3, characteristics.size());
         
@@ -63,7 +65,7 @@ class SeatCharacteristicMapperTest {
     void mapAmadeusCharacteristics_WithUnknownCode_CreatesGenericMapping() {
         List<String> codes = Arrays.asList("UNKNOWN_CODE");
         
-        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes);
+        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes, null);
         
         assertEquals(1, characteristics.size());
         
@@ -77,8 +79,8 @@ class SeatCharacteristicMapperTest {
 
     @Test
     void mapAmadeusCharacteristics_WithNullOrEmpty_ReturnsEmptyList() {
-        assertTrue(SeatCharacteristicMapper.mapAmadeusCharacteristics(null).isEmpty());
-        assertTrue(SeatCharacteristicMapper.mapAmadeusCharacteristics(Arrays.asList()).isEmpty());
+        assertTrue(SeatCharacteristicMapper.mapAmadeusCharacteristics(null, null).isEmpty());
+        assertTrue(SeatCharacteristicMapper.mapAmadeusCharacteristics(Arrays.asList(), null).isEmpty());
     }
 
     @Test
@@ -100,5 +102,54 @@ class SeatCharacteristicMapperTest {
         assertTrue(mappings.containsKey("W"));
         assertTrue(mappings.containsKey("CH"));
         assertTrue(mappings.containsKey("1"));
+    }
+
+    @Test
+    void mapAmadeusCharacteristics_WithResponseDictionary_UsesResponseDefinitions() throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        
+        // Create a mock response with dictionaries including 'H' characteristic
+        String dictionariesJson = """
+        {
+            "seatCharacteristics": {
+                "H": "High-traffic area seat",
+                "W": "Window seat override from response",
+                "CUSTOM": "Custom airline-specific seat feature"
+            }
+        }
+        """;
+        
+        JsonNode dictionaries = objectMapper.readTree(dictionariesJson);
+        List<String> codes = Arrays.asList("H", "W", "CUSTOM", "UNKNOWN_CODE");
+        
+        List<SeatCharacteristic> characteristics = SeatCharacteristicMapper.mapAmadeusCharacteristics(codes, dictionaries);
+        
+        assertEquals(4, characteristics.size());
+        
+        // Check 'H' characteristic from response dictionary
+        SeatCharacteristic hCharacteristic = characteristics.get(0);
+        assertEquals("H", hCharacteristic.getCode());
+        assertEquals("GENERAL", hCharacteristic.getCategory());
+        assertEquals("High-traffic area seat", hCharacteristic.getDescription());
+        assertFalse(hCharacteristic.isRestriction());
+        assertFalse(hCharacteristic.isPremium());
+        
+        // Check that response dictionary overrides hardcoded mapping for 'W'
+        SeatCharacteristic wCharacteristic = characteristics.get(1);
+        assertEquals("W", wCharacteristic.getCode());
+        assertEquals("POSITION", wCharacteristic.getCategory());
+        assertEquals("Window seat override from response", wCharacteristic.getDescription());
+        
+        // Check custom characteristic from response
+        SeatCharacteristic customCharacteristic = characteristics.get(2);
+        assertEquals("CUSTOM", customCharacteristic.getCode());
+        assertEquals("GENERAL", customCharacteristic.getCategory());
+        assertEquals("Custom airline-specific seat feature", customCharacteristic.getDescription());
+        
+        // Check that unmapped codes still create generic mappings
+        SeatCharacteristic unknownCharacteristic = characteristics.get(3);
+        assertEquals("UNKNOWN_CODE", unknownCharacteristic.getCode());
+        assertEquals("UNKNOWN", unknownCharacteristic.getCategory());
+        assertTrue(unknownCharacteristic.getDescription().contains("Unmapped characteristic"));
     }
 }

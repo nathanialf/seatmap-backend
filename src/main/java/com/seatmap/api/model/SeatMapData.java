@@ -206,45 +206,6 @@ public class SeatMapData {
         public SeatPricing getPricing() { return pricing; }
         public void setPricing(SeatPricing pricing) { this.pricing = pricing; }
         
-        // Legacy support for existing travelerPricing field
-        @Deprecated
-        public List<JsonNode> getTravelerPricing() {
-            if (pricing != null) {
-                List<JsonNode> legacy = new ArrayList<>();
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    legacy.add(mapper.valueToTree(pricing));
-                } catch (Exception e) {
-                    // Fallback to empty list
-                }
-                return legacy;
-            }
-            return new ArrayList<>();
-        }
-        
-        @Deprecated
-        public void setTravelerPricing(List<JsonNode> travelerPricing) {
-            if (travelerPricing != null && !travelerPricing.isEmpty()) {
-                JsonNode firstPricing = travelerPricing.get(0);
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    // Extract availability status
-                    this.availabilityStatus = firstPricing.path("seatAvailabilityStatus").asText(null);
-                    
-                    // Extract pricing information
-                    if (firstPricing.has("price")) {
-                        JsonNode priceNode = firstPricing.get("price");
-                        SeatPricing seatPricing = new SeatPricing();
-                        seatPricing.setCurrency(priceNode.path("currency").asText(null));
-                        seatPricing.setTotal(priceNode.path("total").asText(null));
-                        seatPricing.setBase(priceNode.path("base").asText(null));
-                        this.pricing = seatPricing;
-                    }
-                } catch (Exception e) {
-                    // Ignore conversion errors for legacy compatibility
-                }
-            }
-        }
     }
     
     public static class SeatPricing {

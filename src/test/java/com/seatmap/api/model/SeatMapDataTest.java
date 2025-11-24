@@ -224,8 +224,6 @@ class SeatMapDataTest {
         assertNull(seat.getCoordinates());
         assertNull(seat.getAvailabilityStatus());
         assertNull(seat.getPricing());
-        // getTravelerPricing() now returns empty list for backward compatibility, not null
-        assertEquals(0, seat.getTravelerPricing().size());
     }
 
     @Test
@@ -253,29 +251,10 @@ class SeatMapDataTest {
         assertEquals(coordinates, seat.getCoordinates());
         assertEquals("AVAILABLE", seat.getAvailabilityStatus());
         assertEquals(pricing, seat.getPricing());
-        
-        // Test legacy compatibility - getTravelerPricing should work with new structure
-        List<JsonNode> legacyPricing = seat.getTravelerPricing();
-        assertNotNull(legacyPricing);
-        assertEquals(1, legacyPricing.size());
-        
-        // Test legacy setter compatibility
-        ObjectNode legacyNode = objectMapper.createObjectNode();
-        legacyNode.put("seatAvailabilityStatus", "OCCUPIED");
-        ObjectNode priceNode = objectMapper.createObjectNode();
-        priceNode.put("currency", "EUR");
-        priceNode.put("total", "20.00");
-        priceNode.put("base", "18.00");
-        legacyNode.set("price", priceNode);
-        
-        List<JsonNode> legacyList = Arrays.asList(legacyNode);
-        seat.setTravelerPricing(legacyList);
-        
-        assertEquals("OCCUPIED", seat.getAvailabilityStatus());
         assertNotNull(seat.getPricing());
-        assertEquals("EUR", seat.getPricing().getCurrency());
-        assertEquals("20.00", seat.getPricing().getTotal());
-        assertEquals("18.00", seat.getPricing().getBase());
+        assertEquals("USD", seat.getPricing().getCurrency());
+        assertEquals("15.00", seat.getPricing().getTotal());
+        assertEquals("15.00", seat.getPricing().getBase());
     }
 
     @Test

@@ -255,28 +255,92 @@ JsonNode seatMap = sabreService.getSeatMapFromFlight(
                 "width": 6,
                 "length": 33
             },
-            "facilities": [
+            "seats": [
                 {
-                    "code": "1A",
-                    "type": "SEAT",
+                    "number": "1A",
+                    "availabilityStatus": "AVAILABLE",
                     "coordinates": {
                         "x": 1,
                         "y": 1
                     },
-                    "travelerPricing": [{
-                        "travelerId": "1",
-                        "seatAvailabilityStatus": "AVAILABLE",
-                        "price": {
-                            "currency": "USD",
-                            "total": "0.00",
-                            "base": "0.00"
+                    "pricing": {
+                        "currency": "USD",
+                        "total": "0.00",
+                        "base": "0.00"
+                    },
+                    "characteristics": [
+                        {
+                            "code": "W",
+                            "category": "POSITION", 
+                            "description": "Window seat",
+                            "isRestriction": false,
+                            "isPremium": false
                         }
-                    }],
-                    "characteristicsCodes": ["W"]
+                    ]
                 }
             ]
         }
     }
+}
+```
+
+## Seat Map Data Structure Updates
+
+### Dynamic Seat Characteristics
+
+The seat map response now includes enhanced characteristic mapping with dynamic definitions from API response dictionaries:
+
+**Key Changes:**
+- **Removed `characteristicsCodes`**: Raw code arrays no longer included
+- **Enhanced `characteristics`**: Full objects with normalized data
+- **Dynamic mapping**: Uses seat characteristic definitions from API response dictionaries
+- **Removed `facilities`**: No longer includes lavatory/galley locations in deck data
+- **Simplified pricing**: Single `pricing` object instead of `travelerPricing` array
+
+**Seat Characteristics Structure:**
+```json
+{
+  "characteristics": [
+    {
+      "code": "W",
+      "category": "POSITION",
+      "description": "Window seat", 
+      "isRestriction": false,
+      "isPremium": false
+    },
+    {
+      "code": "CH", 
+      "category": "PREMIUM",
+      "description": "Chargeable seats",
+      "isRestriction": false,
+      "isPremium": true
+    }
+  ]
+}
+```
+
+**Categories:**
+- `POSITION`: Window, aisle, center seats
+- `SPECIAL`: Bulkhead, exit row, leg space
+- `PREMIUM`: Chargeable, preferential seats 
+- `RESTRICTION`: Not allowed for certain passengers
+- `GENERAL`: Other characteristics
+- `UNKNOWN`: Unmapped characteristics
+
+**Pricing Structure:**
+```json
+{
+  "pricing": {
+    "currency": "USD",
+    "total": "25.00",
+    "base": "22.00", 
+    "taxes": [
+      {
+        "amount": "3.00",
+        "code": "YQ"
+      }
+    ]
+  }
 }
 ```
 
