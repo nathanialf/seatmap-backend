@@ -314,9 +314,23 @@ public class AmadeusService {
                                     if (firstTraveler.has("price")) {
                                         JsonNode priceNode = firstTraveler.get("price");
                                         SeatMapData.SeatPricing pricing = new SeatMapData.SeatPricing();
-                                        pricing.setCurrency(priceNode.path("currency").asText(null));
-                                        pricing.setTotal(priceNode.path("total").asText(null));
-                                        pricing.setBase(priceNode.path("base").asText(null));
+                                        
+                                        String currency = priceNode.path("currency").asText(null);
+                                        String total = priceNode.path("total").asText(null);
+                                        String base = priceNode.path("base").asText(null);
+                                        
+                                        pricing.setCurrency(currency);
+                                        pricing.setTotal(total);
+                                        pricing.setBase(base);
+                                        
+                                        // Log pricing data issues
+                                        if (currency == null || total == null || base == null) {
+                                            logger.warn("Seat {} pricing data incomplete - currency: {}, total: {}, base: {}, priceNode: {}", 
+                                                seat.getNumber(), currency, total, base, priceNode.toPrettyString());
+                                        } else {
+                                            logger.debug("Seat {} pricing extracted - currency: {}, total: {}, base: {}", 
+                                                seat.getNumber(), currency, total, base);
+                                        }
                                         
                                         // Extract taxes if present
                                         if (priceNode.has("taxes") && priceNode.get("taxes").isArray()) {
@@ -328,10 +342,23 @@ public class AmadeusService {
                                                 taxes.add(tax);
                                             }
                                             pricing.setTaxes(taxes);
+                                            logger.debug("Seat {} has {} tax entries", seat.getNumber(), taxes.size());
                                         }
                                         
                                         seat.setPricing(pricing);
+                                    } else {
+                                        logger.warn("Seat {} missing price field in travelerPricing, firstTraveler: {}", 
+                                            seat.getNumber(), firstTraveler.toPrettyString());
                                     }
+                                } else {
+                                    String reason = !seatNode.has("travelerPricing") ? "missing travelerPricing field" :
+                                                   !seatNode.get("travelerPricing").isArray() ? "travelerPricing is not array" :
+                                                   "travelerPricing array is empty";
+                                    List<String> fieldNames = new ArrayList<>();
+                                    seatNode.fieldNames().forEachRemaining(fieldNames::add);
+                                    logger.warn("Seat {} has no pricing data - {}, seatNode keys: {}", 
+                                        seat.getNumber(), reason, 
+                                        String.join(", ", fieldNames));
                                 }
                                 
                                 deckSeats.add(seat);
@@ -343,6 +370,7 @@ public class AmadeusService {
                         deck.setSeats(deckSeats);
                         allDecks.add(deck);
                     }
+                    
                     logger.info("Segment {} contributed {} seats", segmentIndex + 1, segmentSeatCount);
                 }
             }
@@ -381,10 +409,21 @@ public class AmadeusService {
             // Return basic seat map data with source only if conversion fails
         }
         
-        logger.info("Conversion complete. SeatMapData has {} decks, {} seats, flight: {}", 
-                    seatMapData.getDecks() != null ? seatMapData.getDecks().size() : 0,
-                    seatMapData.getSeats() != null ? seatMapData.getSeats().size() : 0,
-                    seatMapData.getFlight() != null ? seatMapData.getFlight().getNumber() : "null");
+        // Final pricing statistics summary
+        if (seatMapData.getSeats() != null) {
+            long totalSeatsWithPricing = seatMapData.getSeats().stream().filter(seat -> seat.getPricing() != null).count();
+            long totalSeats = seatMapData.getSeats().size();
+            long totalSeatsWithoutPricing = totalSeats - totalSeatsWithPricing;
+            
+            logger.info("Conversion complete. SeatMapData has {} decks, {} seats (pricing: {} with, {} without), flight: {}", 
+                        seatMapData.getDecks() != null ? seatMapData.getDecks().size() : 0,
+                        totalSeats, totalSeatsWithPricing, totalSeatsWithoutPricing,
+                        seatMapData.getFlight() != null ? seatMapData.getFlight().getNumber() : "null");
+        } else {
+            logger.info("Conversion complete. SeatMapData has {} decks, no seats, flight: {}", 
+                        seatMapData.getDecks() != null ? seatMapData.getDecks().size() : 0,
+                        seatMapData.getFlight() != null ? seatMapData.getFlight().getNumber() : "null");
+        }
         
         return seatMapData;
     }

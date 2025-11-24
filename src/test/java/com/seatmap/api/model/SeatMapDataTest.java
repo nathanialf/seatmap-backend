@@ -90,7 +90,6 @@ class SeatMapDataTest {
 
         assertNull(deck.getDeckType());
         assertNull(deck.getDeckConfiguration());
-        assertNull(deck.getFacilities());
         assertNull(deck.getSeats());
     }
 
@@ -98,17 +97,14 @@ class SeatMapDataTest {
     void seatMapDeck_SettersAndGetters_WorkCorrectly() throws Exception {
         SeatMapData.SeatMapDeck deck = new SeatMapData.SeatMapDeck();
         JsonNode config = objectMapper.createObjectNode();
-        List<JsonNode> facilities = Arrays.asList(objectMapper.createObjectNode());
         List<SeatMapData.Seat> seats = Arrays.asList(new SeatMapData.Seat());
 
         deck.setDeckType("MAIN");
         deck.setDeckConfiguration(config);
-        deck.setFacilities(facilities);
         deck.setSeats(seats);
 
         assertEquals("MAIN", deck.getDeckType());
         assertEquals(config, deck.getDeckConfiguration());
-        assertEquals(facilities, deck.getFacilities());
         assertEquals(seats, deck.getSeats());
     }
 

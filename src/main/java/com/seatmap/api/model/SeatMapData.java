@@ -64,7 +64,6 @@ public class SeatMapData {
     public static class SeatMapDeck {
         private String deckType;
         private JsonNode deckConfiguration;
-        private List<JsonNode> facilities;
         private List<Seat> seats;
         
         // Default constructor
@@ -76,9 +75,6 @@ public class SeatMapData {
         
         public JsonNode getDeckConfiguration() { return deckConfiguration; }
         public void setDeckConfiguration(JsonNode deckConfiguration) { this.deckConfiguration = deckConfiguration; }
-        
-        public List<JsonNode> getFacilities() { return facilities; }
-        public void setFacilities(List<JsonNode> facilities) { this.facilities = facilities; }
         
         public List<Seat> getSeats() { return seats; }
         public void setSeats(List<Seat> seats) { this.seats = seats; }
