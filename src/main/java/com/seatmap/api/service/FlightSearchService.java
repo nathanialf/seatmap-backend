@@ -36,21 +36,29 @@ public class FlightSearchService {
             request.getAirlineCode(),
             request.getFlightNumber(),
             request.getMaxResults(),
+            request.getOffset(),
             includeRaw
         );
     }
     
     public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapException {
-        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, false);
+        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0, false);
     }
     
     public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, boolean includeRawFlightOffer) throws SeatmapException {
+        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0, includeRawFlightOffer);
+    }
+    
+    public FlightSearchResponse searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset, boolean includeRawFlightOffer) throws SeatmapException {
         logger.info("Searching flights with seatmaps from Amadeus and Sabre sources");
+        
+        // Normalize offset (ensure null is converted to 0)
+        Integer normalizedOffset = offset != null ? offset : 0;
         
         // Search Amadeus only (Sabre temporarily disabled)
         CompletableFuture<List<FlightSearchResult>> amadeusFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
+                List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, normalizedOffset);
                 return processResultsForRawData(results, includeRawFlightOffer);
             } catch (Exception e) {
                 logger.error("Error calling Amadeus API for batch flight search with seatmaps", e);
@@ -63,7 +71,7 @@ public class FlightSearchService {
             List<FlightSearchResult> amadeusResults = amadeusFuture.get();
             
             // Return only Amadeus results (Sabre temporarily disabled)
-            return createFlightSearchResponse(amadeusResults, maxResults);
+            return createFlightSearchResponse(amadeusResults, maxResults, normalizedOffset);
             
         } catch (InterruptedException | ExecutionException e) {
             logger.error("Error executing concurrent API calls", e);
@@ -167,22 +175,37 @@ public class FlightSearchService {
     }
     
     private FlightSearchResponse createFlightSearchResponse(List<FlightSearchResult> results, Integer maxResults) {
-        // Limit results to maxResults
+        return createFlightSearchResponse(results, maxResults, 0);
+    }
+    
+    private FlightSearchResponse createFlightSearchResponse(List<FlightSearchResult> results, Integer maxResults, Integer offset) {
+        // Don't limit results here - they're already limited by the API call
         int limit = maxResults != null ? maxResults : 10;
-        List<FlightSearchResult> limitedResults = results.subList(0, Math.min(results.size(), limit));
+        int pageOffset = offset != null ? offset : 0;
         
         // Log if no flights with seatmaps were found
-        if (limitedResults.isEmpty()) {
+        if (results.isEmpty()) {
             logger.warn("No flights found with available seatmap data");
         }
         
-        // Build metadata (only Amadeus for now)
-        FlightSearchResponse.SearchMetadata meta = new FlightSearchResponse.SearchMetadata(
-            limitedResults.size(), 
-            "AMADEUS"
+        // Create pagination metadata
+        FlightSearchResponse.PaginationInfo pagination = new FlightSearchResponse.PaginationInfo(
+            pageOffset,
+            limit,
+            -1, // Total unknown from Amadeus API
+            results.size() >= limit, // hasNext: true if we got a full page
+            pageOffset > 0 // hasPrevious: true if offset > 0
         );
         
-        logger.info("Found {} flights with seatmaps from Amadeus", limitedResults.size());
-        return new FlightSearchResponse(limitedResults, meta);
+        // Build metadata (only Amadeus for now)
+        FlightSearchResponse.SearchMetadata meta = new FlightSearchResponse.SearchMetadata(
+            results.size(), 
+            "AMADEUS",
+            null,
+            pagination
+        );
+        
+        logger.info("Found {} flights with seatmaps from Amadeus (offset: {}, limit: {})", results.size(), pageOffset, limit);
+        return new FlightSearchResponse(results, meta);
     }
 }

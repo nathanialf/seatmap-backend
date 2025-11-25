@@ -29,6 +29,7 @@ Content-Type: application/json
   "airlineCode": "AA",
   "flightNumber": "123",
   "maxResults": 10,
+  "offset": 0,
   "includeRawFlightOffer": false
 }
 ```
@@ -40,7 +41,8 @@ Content-Type: application/json
 - `travelClass` (optional): Cabin class filter - `ECONOMY`, `PREMIUM_ECONOMY`, `BUSINESS`, `FIRST`
 - `airlineCode` (optional): 2-3 letter airline code (e.g., "AA", "UA", "DL")
 - `flightNumber` (optional): 1-4 digit flight number (e.g., "123", "1679") - requires `airlineCode`
-- `maxResults` (optional): Maximum results to return (1-50, default: 10)
+- `maxResults` (optional): Results per page (1-20, default: 10)
+- `offset` (optional): Starting point for pagination (0-100, default: 0)
 - `includeRawFlightOffer` (optional): Include raw flight offer data from API (default: false)
 
 **Response**:
@@ -161,7 +163,14 @@ Content-Type: application/json
   ],
   "meta": {
     "count": 1,
-    "sources": "AMADEUS"
+    "sources": "AMADEUS",
+    "pagination": {
+      "offset": 0,
+      "limit": 10,
+      "total": -1,
+      "hasNext": false,
+      "hasPrevious": false
+    }
   },
   "dictionaries": {
     "locations": {
@@ -207,7 +216,8 @@ curl -X POST {BASE_URL}/flight-search \
     "travelClass": "ECONOMY",
     "airlineCode": "AA",
     "flightNumber": "123",
-    "maxResults": 5
+    "maxResults": 5,
+    "offset": 0
   }'
 ```
 
@@ -342,7 +352,112 @@ Flight number filtering now uses two separate fields for better API integration:
 
 - **airlineCode**: Must match pattern `^[A-Z]{2,3}$`
 - **flightNumber**: Must match pattern `^[0-9]{1,4}$`
-- **maxResults**: Must be between 1-50
+- **maxResults**: Must be between 1-20
+- **offset**: Must be between 0-100 (supports up to 5 pages)
+
+---
+
+## Pagination Support
+
+The flight search API supports offset-based pagination to retrieve large result sets efficiently.
+
+### Pagination Parameters
+
+- **maxResults**: Number of results per page (1-20, default: 10)
+- **offset**: Starting point for results (0-100, default: 0)
+
+### Pagination Metadata
+
+All responses include pagination information in the `meta.pagination` object:
+
+```json
+{
+  "meta": {
+    "pagination": {
+      "offset": 20,
+      "limit": 10,
+      "total": -1,
+      "hasNext": true,
+      "hasPrevious": true
+    }
+  }
+}
+```
+
+**Fields**:
+- `offset`: Current starting position
+- `limit`: Results per page (same as maxResults)
+- `total`: Total available results (-1 when unknown from API)
+- `hasNext`: Whether more results are available 
+- `hasPrevious`: Whether previous pages exist
+
+### Pagination Examples
+
+**First page (default)**:
+```json
+{
+  "origin": "LAX",
+  "destination": "JFK", 
+  "departureDate": "2025-12-15",
+  "maxResults": 10,
+  "offset": 0
+}
+```
+
+**Second page**:
+```json
+{
+  "origin": "LAX",
+  "destination": "JFK", 
+  "departureDate": "2025-12-15", 
+  "maxResults": 10,
+  "offset": 10
+}
+```
+
+**Custom page size**:
+```json
+{
+  "origin": "LAX",
+  "destination": "JFK", 
+  "departureDate": "2025-12-15",
+  "maxResults": 5,
+  "offset": 15
+}
+```
+
+### Pagination Limits
+
+- **Maximum pages**: 5 pages (offset cannot exceed 100)
+- **Page size**: 1-20 results per page
+- **Performance**: Smaller page sizes (10-15) provide better response times
+
+### Backward Compatibility
+
+Pagination is fully backward compatible. Existing requests without `offset` work unchanged:
+
+**Legacy request (still supported)**:
+```json
+{
+  "origin": "LAX",
+  "destination": "JFK",
+  "departureDate": "2025-12-15",
+  "maxResults": 10
+}
+```
+
+**New paginated request**:
+```json
+{
+  "origin": "LAX",
+  "destination": "JFK", 
+  "departureDate": "2025-12-15",
+  "maxResults": 10,
+  "offset": 10
+}
+```
+
+Both requests return identical response structures, with pagination metadata included in all responses.
 
 ---
 

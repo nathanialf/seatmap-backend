@@ -32,6 +32,7 @@ class FlightSearchRequestTest {
         assertNull(request.getAirlineCode());
         assertNull(request.getFlightNumber());
         assertEquals(10, request.getMaxResults()); // Default value
+        assertEquals(0, request.getOffset()); // Default value
         assertFalse(request.getIncludeRawFlightOffer()); // Default value
     }
 
@@ -395,6 +396,110 @@ class FlightSearchRequestTest {
 
         assertEquals(1, violations.size());
         violation = violations.iterator().next();
-        assertEquals("Max results cannot exceed 50", violation.getMessage());
+        assertEquals("Max results cannot exceed 20", violation.getMessage());
+    }
+
+    // Pagination Tests
+    @Test
+    void offset_DefaultsToZero() {
+        FlightSearchRequest request = new FlightSearchRequest();
+        
+        assertEquals(0, request.getOffset());
+    }
+
+    @Test
+    void offset_CanBeSetAndRetrieved() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(20);
+        
+        assertEquals(20, request.getOffset());
+    }
+
+    @Test
+    void validation_ValidOffset_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(50);
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void validation_OffsetAtMinimum_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(0);
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void validation_OffsetAtMaximum_PassesValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(100);
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertTrue(violations.isEmpty());
+    }
+
+    @Test
+    void validation_OffsetBelowMinimum_FailsValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(-1);
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertEquals(1, violations.size());
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Offset must be 0 or greater", violation.getMessage());
+    }
+
+    @Test
+    void validation_OffsetAboveMaximum_FailsValidation() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(101);
+
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+        assertEquals(1, violations.size());
+        ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
+        assertEquals("Offset cannot exceed 100 (5 pages × 20 max results)", violation.getMessage());
+    }
+
+    @Test
+    void validation_OffsetBoundaryValues_ValidateCorrectly() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        
+        // Test common pagination values
+        int[] validOffsets = {0, 10, 20, 40, 60, 80, 100};
+        for (int offset : validOffsets) {
+            request.setOffset(offset);
+            Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+            assertTrue(violations.isEmpty(), "Offset " + offset + " should be valid");
+        }
+    }
+
+    @Test
+    void offset_CanBeSetToNull() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setOffset(null);
+        
+        assertNull(request.getOffset());
+    }
+
+    @Test
+    void pagination_CompleteParameterSet_WorksTogether() {
+        FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+        request.setMaxResults(15);
+        request.setOffset(45); // Page 4 with 15 results per page
+        
+        assertEquals(15, request.getMaxResults());
+        assertEquals(45, request.getOffset());
+        
+        Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+        assertTrue(violations.isEmpty());
     }
 }

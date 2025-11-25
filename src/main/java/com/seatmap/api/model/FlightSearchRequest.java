@@ -29,8 +29,12 @@ public class FlightSearchRequest {
     private String flightNumber; // Optional: "1679", "123", etc. (requires airlineCode)
     
     @Min(value = 1, message = "Max results must be at least 1")
-    @Max(value = 50, message = "Max results cannot exceed 50")
+    @Max(value = 20, message = "Max results cannot exceed 20")
     private Integer maxResults = 10; // Optional, defaults to 10
+    
+    @Min(value = 0, message = "Offset must be 0 or greater")
+    @Max(value = 100, message = "Offset cannot exceed 100 (5 pages × 20 max results)")
+    private Integer offset = 0; // Optional, defaults to 0 for pagination
     
     private Boolean includeRawFlightOffer = false; // Optional, defaults to false for clean response
     
@@ -99,6 +103,14 @@ public class FlightSearchRequest {
     
     public void setMaxResults(Integer maxResults) {
         this.maxResults = maxResults;
+    }
+    
+    public Integer getOffset() {
+        return offset;
+    }
+    
+    public void setOffset(Integer offset) {
+        this.offset = offset;
     }
     
     public Boolean getIncludeRawFlightOffer() {

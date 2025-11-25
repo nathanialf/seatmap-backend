@@ -17,7 +17,8 @@ import java.util.Map;
 
 public class JwtService {
     private static final Logger logger = LoggerFactory.getLogger(JwtService.class);
-    private static final int TOKEN_EXPIRATION_SECONDS = 30 * 24 * 60 * 60; // 30 days
+    private static final int USER_TOKEN_EXPIRATION_SECONDS = 30 * 24 * 60 * 60; // 30 days
+    private static final int GUEST_TOKEN_EXPIRATION_SECONDS = 24 * 60 * 60; // 24 hours
     // Timestamp investigation: Force rebuild for cold start testing
     
     private final SecretKey secretKey;
@@ -36,7 +37,7 @@ public class JwtService {
         claims.put("role", "user");
         claims.put("provider", user.getAuthProvider().name().toLowerCase());
         
-        return createToken(claims, user.getUserId());
+        return createToken(claims, user.getUserId(), USER_TOKEN_EXPIRATION_SECONDS);
     }
 
     public String generateGuestToken(String sessionId, int flightsViewed) {
@@ -49,12 +50,12 @@ public class JwtService {
         guestLimits.put("maxFlights", 2);
         claims.put("guestLimits", guestLimits);
         
-        return createToken(claims, sessionId);
+        return createToken(claims, sessionId, GUEST_TOKEN_EXPIRATION_SECONDS);
     }
 
-    private String createToken(Map<String, Object> claims, String subject) {
+    private String createToken(Map<String, Object> claims, String subject, int expirationSeconds) {
         Instant now = Instant.now();
-        Instant expiration = now.plusSeconds(TOKEN_EXPIRATION_SECONDS);
+        Instant expiration = now.plusSeconds(expirationSeconds);
 
         return Jwts.builder()
                 .setClaims(claims)
@@ -118,7 +119,11 @@ public class JwtService {
     }
 
     public int getTokenExpirationSeconds() {
-        return TOKEN_EXPIRATION_SECONDS;
+        return USER_TOKEN_EXPIRATION_SECONDS;
+    }
+    
+    public int getGuestTokenExpirationSeconds() {
+        return GUEST_TOKEN_EXPIRATION_SECONDS;
     }
 
     public String refreshToken(String oldToken) throws SeatmapException {
@@ -130,12 +135,15 @@ public class JwtService {
         newClaims.put("role", role);
         newClaims.put("provider", claims.get("provider"));
 
+        int expirationSeconds;
         if ("guest".equals(role)) {
             newClaims.put("guestLimits", claims.get("guestLimits"));
+            expirationSeconds = GUEST_TOKEN_EXPIRATION_SECONDS;
         } else {
             newClaims.put("email", claims.get("email"));
+            expirationSeconds = USER_TOKEN_EXPIRATION_SECONDS;
         }
 
-        return createToken(newClaims, subject);
+        return createToken(newClaims, subject, expirationSeconds);
     }
 }

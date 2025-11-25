@@ -79,9 +79,13 @@ public class AmadeusService {
     }
     
     public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
+        return searchFlightOffers(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0);
+    }
+    
+    public JsonNode searchFlightOffers(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset) throws SeatmapApiException {
         try {
             ensureValidToken();
-            return searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
+            return searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, offset);
         } catch (IOException | InterruptedException e) {
             logger.error("Error calling Amadeus API", e);
             throw new SeatmapApiException("Network error calling Amadeus API", e);
@@ -92,11 +96,15 @@ public class AmadeusService {
      * Search flight offers with integrated seatmap data
      */
     public List<FlightSearchResult> searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
+        return searchFlightsWithSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0);
+    }
+    
+    public List<FlightSearchResult> searchFlightsWithSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset) throws SeatmapApiException {
         try {
             ensureValidToken();
             
             // 1. Get flight offers
-            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, offset);
             
             if (flightOffers == null || !flightOffers.has("data")) {
                 return new ArrayList<>();
@@ -485,11 +493,15 @@ public class AmadeusService {
      * Enhanced search method that uses batch seat map requests for better performance
      */
     public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
+        return searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0);
+    }
+    
+    public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset) throws SeatmapApiException {
         try {
             ensureValidToken();
             
             // 1. Get flight offers
-            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults);
+            JsonNode flightOffers = searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, offset);
             
             if (flightOffers == null || !flightOffers.has("data")) {
                 return new ArrayList<>();
@@ -540,7 +552,12 @@ public class AmadeusService {
     }
     
     private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException, IOException, InterruptedException {
+        return searchFlightOffersInternal(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0);
+    }
+    
+    private JsonNode searchFlightOffersInternal(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset) throws SeatmapApiException, IOException, InterruptedException {
         int max = maxResults != null ? maxResults : 10;
+        int pageOffset = offset != null ? offset : 0;
         
         // Build base URL - only include travelClass if specified (minimum cabin quality)
         StringBuilder urlBuilder = new StringBuilder();
@@ -551,6 +568,11 @@ public class AmadeusService {
             URLEncoder.encode(departureDate, StandardCharsets.UTF_8),
             max
         ));
+        
+        // Add offset parameter for pagination
+        if (pageOffset > 0) {
+            urlBuilder.append("&offset=").append(pageOffset);
+        }
         
         // Add travelClass parameter only if specified (searches minimum quality or higher)
         if (travelClass != null && !travelClass.trim().isEmpty()) {
