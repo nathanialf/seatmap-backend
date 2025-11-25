@@ -78,6 +78,8 @@ public class Bookmark {
         
         if (itemType == ItemType.BOOKMARK) {
             this.flightOfferData = flightOfferData;
+            // Set expiration to 1 day after flight departure time
+            this.expiresAt = extractFlightDepartureTime(flightOfferData);
         }
     }
     
@@ -97,7 +99,8 @@ public class Bookmark {
             this.airlineCode = searchRequest.getAirlineCode();
             this.flightNumber = searchRequest.getFlightNumber();
             this.maxResults = searchRequest.getMaxResults();
-            this.expiresAt = Instant.now().plusSeconds(30 * 24 * 60 * 60);
+            // Set expiration to 1 day after departure date
+            this.expiresAt = parseDepartureDateExpiration(searchRequest.getDepartureDate());
         }
     }
 
@@ -270,6 +273,79 @@ public class Bookmark {
         request.setFlightNumber(this.flightNumber);
         request.setMaxResults(this.maxResults);
         return request;
+    }
+    
+    /**
+     * Extract flight departure time from flight offer data and add 1 day for expiration
+     */
+    private Instant extractFlightDepartureTime(String flightOfferData) {
+        try {
+            if (flightOfferData == null || flightOfferData.trim().isEmpty()) {
+                // Fallback: expire in 7 days if we can't parse flight data
+                return Instant.now().plusSeconds(7 * 24 * 60 * 60);
+            }
+            
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode flightData = mapper.readTree(flightOfferData);
+            
+            com.fasterxml.jackson.databind.JsonNode itineraries = flightData.get("itineraries");
+            if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+                com.fasterxml.jackson.databind.JsonNode firstItinerary = itineraries.get(0);
+                com.fasterxml.jackson.databind.JsonNode segments = firstItinerary.get("segments");
+                if (segments != null && segments.isArray() && segments.size() > 0) {
+                    com.fasterxml.jackson.databind.JsonNode firstSegment = segments.get(0);
+                    com.fasterxml.jackson.databind.JsonNode departure = firstSegment.get("departure");
+                    if (departure != null) {
+                        com.fasterxml.jackson.databind.JsonNode atNode = departure.get("at");
+                        if (atNode != null) {
+                            String departureTimeStr = atNode.asText();
+                            
+                            // Parse the departure time and add 1 day
+                            if (departureTimeStr.endsWith("Z")) {
+                                // ISO format with Z
+                                Instant departureTime = Instant.parse(departureTimeStr);
+                                return departureTime.plusSeconds(24 * 60 * 60); // Add 1 day
+                            } else if (departureTimeStr.length() >= 19) {
+                                // ISO format without Z, add Z for parsing
+                                if (!departureTimeStr.contains("Z") && !departureTimeStr.contains("+")) {
+                                    departureTimeStr += "Z";
+                                }
+                                Instant departureTime = Instant.parse(departureTimeStr);
+                                return departureTime.plusSeconds(24 * 60 * 60); // Add 1 day
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Log the error but don't fail - use fallback expiration
+            System.err.println("Error parsing flight departure time: " + e.getMessage());
+        }
+        
+        // Fallback: expire in 7 days if we can't parse the flight data
+        return Instant.now().plusSeconds(7 * 24 * 60 * 60);
+    }
+    
+    /**
+     * Parse departure date string (YYYY-MM-DD) and add 1 day for expiration
+     */
+    private Instant parseDepartureDateExpiration(String departureDate) {
+        try {
+            if (departureDate == null || !departureDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                // Fallback: expire in 30 days if invalid date format
+                return Instant.now().plusSeconds(30 * 24 * 60 * 60);
+            }
+            
+            // Parse YYYY-MM-DD and set to end of next day (departure date + 1 day)
+            java.time.LocalDate date = java.time.LocalDate.parse(departureDate);
+            java.time.LocalDateTime endOfNextDay = date.plusDays(1).atTime(23, 59, 59);
+            return endOfNextDay.atZone(java.time.ZoneOffset.UTC).toInstant();
+            
+        } catch (Exception e) {
+            System.err.println("Error parsing departure date: " + e.getMessage());
+            // Fallback: expire in 30 days
+            return Instant.now().plusSeconds(30 * 24 * 60 * 60);
+        }
     }
 
     @Override

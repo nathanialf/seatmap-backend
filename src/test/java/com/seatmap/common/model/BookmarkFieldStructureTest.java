@@ -26,7 +26,7 @@ class BookmarkFieldStructureTest {
     @Test
     void savedSearchBookmark_WithValidFields_PassesValidation() {
         // Arrange
-        FlightSearchRequest searchRequest = new FlightSearchRequest("LAX", "JFK", "2025-01-15", "ECONOMY");
+        FlightSearchRequest searchRequest = new FlightSearchRequest("LAX", "JFK", "2025-12-15", "ECONOMY");
         searchRequest.setAirlineCode("AA");
         searchRequest.setFlightNumber("123");
         searchRequest.setMaxResults(10);
@@ -43,7 +43,7 @@ class BookmarkFieldStructureTest {
         // Check individual fields are populated
         assertEquals("LAX", bookmark.getOrigin());
         assertEquals("JFK", bookmark.getDestination());
-        assertEquals("2025-01-15", bookmark.getDepartureDate());
+        assertEquals("2025-12-15", bookmark.getDepartureDate());
         assertEquals("ECONOMY", bookmark.getTravelClass());
         assertEquals("AA", bookmark.getAirlineCode());
         assertEquals("123", bookmark.getFlightNumber());
@@ -57,7 +57,7 @@ class BookmarkFieldStructureTest {
     @Test
     void savedSearchBookmark_WithOptionalFieldsNull_PassesValidation() {
         // Arrange
-        FlightSearchRequest searchRequest = new FlightSearchRequest("LAX", "JFK", "2025-01-15", null);
+        FlightSearchRequest searchRequest = new FlightSearchRequest("LAX", "JFK", "2025-12-15", null);
         // No airline code, flight number, or max results set
 
         // Act
@@ -66,7 +66,7 @@ class BookmarkFieldStructureTest {
         // Assert
         assertEquals("LAX", bookmark.getOrigin());
         assertEquals("JFK", bookmark.getDestination());
-        assertEquals("2025-01-15", bookmark.getDepartureDate());
+        assertEquals("2025-12-15", bookmark.getDepartureDate());
         assertNull(bookmark.getTravelClass());
         assertNull(bookmark.getAirlineCode());
         assertNull(bookmark.getFlightNumber());
@@ -76,7 +76,7 @@ class BookmarkFieldStructureTest {
     @Test
     void savedSearchBookmark_ToFlightSearchRequest_ReconstructsCorrectly() {
         // Arrange
-        FlightSearchRequest originalRequest = new FlightSearchRequest("SFO", "LAX", "2025-02-01", "BUSINESS");
+        FlightSearchRequest originalRequest = new FlightSearchRequest("SFO", "LAX", "2025-12-01", "BUSINESS");
         originalRequest.setAirlineCode("UA");
         originalRequest.setFlightNumber("456");
         originalRequest.setMaxResults(5);
@@ -90,7 +90,7 @@ class BookmarkFieldStructureTest {
         assertNotNull(reconstructedRequest);
         assertEquals("SFO", reconstructedRequest.getOrigin());
         assertEquals("LAX", reconstructedRequest.getDestination());
-        assertEquals("2025-02-01", reconstructedRequest.getDepartureDate());
+        assertEquals("2025-12-01", reconstructedRequest.getDepartureDate());
         assertEquals("BUSINESS", reconstructedRequest.getTravelClass());
         assertEquals("UA", reconstructedRequest.getAirlineCode());
         assertEquals("456", reconstructedRequest.getFlightNumber());
