@@ -31,7 +31,10 @@ public class EmailService {
     public void sendVerificationEmail(String toEmail, String verificationToken) throws SeatmapException {
         logger.info("Sending verification email to: {}", toEmail);
         
-        String verificationUrl = BASE_URL + "/auth/verify?token=" + verificationToken;
+        // Use frontend verification URL instead of API endpoint
+        String environment = System.getenv("ENVIRONMENT");
+        String frontendUrl = "dev".equals(environment) ? "https://dev.myseatmap.com" : "https://myseatmap.com";
+        String verificationUrl = frontendUrl + "/verify-email?token=" + verificationToken;
         
         String subject = "Verify your Seatmap account";
         String htmlBody = buildVerificationEmailHtml(verificationUrl);
