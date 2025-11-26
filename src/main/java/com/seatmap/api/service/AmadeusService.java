@@ -131,15 +131,18 @@ public class AmadeusService {
      */
     private FlightSearchResult buildFlightSearchResult(JsonNode offer) {
         try {
+            // Get the enhanced offer that will be sent to Amadeus
+            JsonNode enhancedOffer = enhanceFlightOfferWithOperatingCarrier(offer);
+            
             // Get seatmap data for this offer
             JsonNode seatMapResponse = getSeatMapFromOfferInternal(offer);
             SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
             
-            // Add dataSource field to identify this as AMADEUS data
-            ObjectNode offerWithDataSource = offer.deepCopy();
-            offerWithDataSource.put("dataSource", "AMADEUS");
+            // Add dataSource field to the enhanced offer for FlightSearchResult
+            ObjectNode enhancedOfferWithDataSource = enhancedOffer.deepCopy();
+            enhancedOfferWithDataSource.put("dataSource", "AMADEUS");
             
-            return new FlightSearchResult(offerWithDataSource, seatMapData, true, null);
+            return new FlightSearchResult(enhancedOfferWithDataSource, seatMapData, true, null, true);
             
         } catch (Exception e) {
             logger.warn("Omitting flight {} - seatmap unavailable: {}", offer.path("id").asText(), e.getMessage());
