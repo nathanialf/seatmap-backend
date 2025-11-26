@@ -559,6 +559,10 @@ public class AmadeusService {
         int max = maxResults != null ? maxResults : 10;
         int pageOffset = offset != null ? offset : 0;
         
+        // Request offset + max results to implement pagination workaround
+        // Since Amadeus API doesn't support offset parameter, we request more results and filter
+        int totalToRequest = max + pageOffset;
+        
         // Build base URL - only include travelClass if specified (minimum cabin quality)
         StringBuilder urlBuilder = new StringBuilder();
         urlBuilder.append(String.format("https://%s/v2/shopping/flight-offers?originLocationCode=%s&destinationLocationCode=%s&departureDate=%s&adults=1&max=%d",
@@ -566,13 +570,10 @@ public class AmadeusService {
             URLEncoder.encode(origin, StandardCharsets.UTF_8),
             URLEncoder.encode(destination, StandardCharsets.UTF_8),
             URLEncoder.encode(departureDate, StandardCharsets.UTF_8),
-            max
+            totalToRequest
         ));
         
-        // Add offset parameter for pagination
-        if (pageOffset > 0) {
-            urlBuilder.append("&offset=").append(pageOffset);
-        }
+        // Remove offset parameter - Amadeus API doesn't support it
         
         // Add travelClass parameter only if specified (searches minimum quality or higher)
         if (travelClass != null && !travelClass.trim().isEmpty()) {
@@ -599,6 +600,27 @@ public class AmadeusService {
         
         if (response.statusCode() == 200) {
             JsonNode result = objectMapper.readTree(response.body());
+            
+            // Apply pagination filtering if offset > 0
+            if (pageOffset > 0 && result.has("data") && result.get("data").isArray()) {
+                ArrayNode originalData = (ArrayNode) result.get("data");
+                ArrayNode filteredData = objectMapper.createArrayNode();
+                
+                // Skip the first 'pageOffset' results and take up to 'max' results
+                int startIndex = pageOffset;
+                int endIndex = Math.min(pageOffset + max, originalData.size());
+                
+                for (int i = startIndex; i < endIndex; i++) {
+                    filteredData.add(originalData.get(i));
+                }
+                
+                // Replace the data array in the result with filtered data
+                ((ObjectNode) result).set("data", filteredData);
+                
+                logger.info("Applied pagination filter: skipped {} results, returning {} results (requested offset: {}, limit: {})", 
+                    pageOffset, filteredData.size(), pageOffset, max);
+            }
+            
             logger.info("Found {} flight offers", result.has("data") ? result.get("data").size() : 0);
             return result;
         } else {
