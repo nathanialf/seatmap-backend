@@ -496,10 +496,14 @@ public class AmadeusService {
      * Enhanced search method that uses batch seat map requests for better performance
      */
     public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults) throws SeatmapApiException {
-        return searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0);
+        return searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, 0, false);
     }
     
     public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset) throws SeatmapApiException {
+        return searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, offset, false);
+    }
+    
+    public List<FlightSearchResult> searchFlightsWithBatchSeatmaps(String origin, String destination, String departureDate, String travelClass, String airlineCode, String flightNumber, Integer maxResults, Integer offset, boolean includeRawFlightOffer) throws SeatmapApiException {
         try {
             ensureValidToken();
             
@@ -521,15 +525,24 @@ public class AmadeusService {
             List<CompletableFuture<FlightSearchResult>> futures = offers.stream()
                 .map(offer -> CompletableFuture.supplyAsync(() -> {
                     try {
-                        // Get seatmap data for this offer
+                        // Enhance flight offer with operating carrier code if missing (needed for seat map API)
+                        JsonNode enhancedOffer = enhanceFlightOfferWithOperatingCarrier(offer);
+                        
+                        // Get seatmap data using the enhanced offer
                         JsonNode seatMapResponse = getSeatMapFromOfferInternal(offer);
                         SeatMapData seatMapData = convertToSeatMapData(seatMapResponse);
                         
                         // Add dataSource field to identify this as AMADEUS data
-                        ObjectNode offerWithDataSource = offer.deepCopy();
+                        ObjectNode offerWithDataSource = enhancedOffer.deepCopy();
                         offerWithDataSource.put("dataSource", "AMADEUS");
                         
-                        return new FlightSearchResult(offerWithDataSource, seatMapData, true, null);
+                        // Create FlightSearchResult with enhanced offer as raw data if requested
+                        FlightSearchResult result = new FlightSearchResult(offerWithDataSource, seatMapData, true, null, false);
+                        if (includeRawFlightOffer) {
+                            result.setRawFlightOffer(enhancedOffer.deepCopy()); // Use enhanced offer with carrier codes but without dataSource field
+                        }
+                        
+                        return result;
                         
                     } catch (Exception e) {
                         logger.warn("Omitting flight {} - seatmap unavailable: {}", offer.path("id").asText(), e.getMessage());

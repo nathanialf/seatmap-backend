@@ -58,8 +58,7 @@ public class FlightSearchService {
         // Search Amadeus only (Sabre temporarily disabled)
         CompletableFuture<List<FlightSearchResult>> amadeusFuture = CompletableFuture.supplyAsync(() -> {
             try {
-                List<FlightSearchResult> results = amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, normalizedOffset);
-                return processResultsForRawData(results, includeRawFlightOffer);
+                return amadeusService.searchFlightsWithBatchSeatmaps(origin, destination, departureDate, travelClass, airlineCode, flightNumber, maxResults, normalizedOffset, includeRawFlightOffer);
             } catch (Exception e) {
                 logger.error("Error calling Amadeus API for batch flight search with seatmaps", e);
                 return new ArrayList<>();
@@ -143,36 +142,6 @@ public class FlightSearchService {
         return key.toString();
     }
     
-    private List<FlightSearchResult> processResultsForRawData(List<FlightSearchResult> results, boolean includeRawFlightOffer) {
-        if (!includeRawFlightOffer) {
-            return results; // No modification needed if raw data not requested
-        }
-        
-        // Convert each result to include raw flight offer data
-        List<FlightSearchResult> processedResults = new ArrayList<>();
-        for (FlightSearchResult result : results) {
-            try {
-                // Convert back to JsonNode to reconstruct with raw data
-                JsonNode resultAsJson = result.toJsonNode();
-                
-                // Create new FlightSearchResult with raw data included
-                FlightSearchResult newResult = new FlightSearchResult(
-                    resultAsJson, 
-                    result.getSeatMap(), 
-                    result.isSeatMapAvailable(), 
-                    result.getSeatMapError(), 
-                    true
-                );
-                processedResults.add(newResult);
-            } catch (Exception e) {
-                logger.warn("Error processing result for raw data inclusion: {}", e.getMessage());
-                // Fall back to original result without raw data
-                processedResults.add(result);
-            }
-        }
-        
-        return processedResults;
-    }
     
     private FlightSearchResponse createFlightSearchResponse(List<FlightSearchResult> results, Integer maxResults) {
         return createFlightSearchResponse(results, maxResults, 0);

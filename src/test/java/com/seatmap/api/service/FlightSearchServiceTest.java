@@ -55,7 +55,7 @@ class FlightSearchServiceTest {
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 2);
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA", "123", 5, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA", "123", 5, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -66,7 +66,7 @@ class FlightSearchServiceTest {
         assertEquals(2, response.getData().size()); // Only Amadeus results
         assertEquals("AMADEUS", response.getMeta().getSources());
         
-        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA", "123", 5, 0);
+        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", "AA", "123", 5, 0, false);
         // Sabre is disabled, so no longer called
         verify(mockSabreService, never()).searchFlightsWithSeatmaps(any(), any(), any(), any(), any(), any());
     }
@@ -76,7 +76,7 @@ class FlightSearchServiceTest {
         // Arrange
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 2);
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -98,7 +98,7 @@ class FlightSearchServiceTest {
     @Test
     void searchFlightsWithSeatmaps_WithAmadeusException_ShouldReturnEmptyResults() throws Exception {
         // Arrange - Since Sabre is disabled, Amadeus errors result in empty results
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenThrow(new RuntimeException("Amadeus API error"));
         
         // Act
@@ -116,7 +116,7 @@ class FlightSearchServiceTest {
     @Test
     void searchFlightsWithSeatmaps_WithAmadeusServiceException_ShouldReturnEmptyResults() throws Exception {
         // Arrange - Only Amadeus is used, so when it fails we get empty results
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenThrow(new RuntimeException("Amadeus API error"));
         
         // Act
@@ -136,7 +136,7 @@ class FlightSearchServiceTest {
         // Arrange - Only Amadeus is called, no deduplication needed
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 1);
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -156,7 +156,7 @@ class FlightSearchServiceTest {
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 3);
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 5);
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 3, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 3, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act - Limit to 3 results
@@ -177,7 +177,7 @@ class FlightSearchServiceTest {
         List<FlightSearchResult> sabreMockResults = createMockFlightResults("SABRE", 0);
         
         // Note: The service converts null maxResults to 10 before calling the APIs
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, null, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, null, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -194,7 +194,7 @@ class FlightSearchServiceTest {
     @Test
     void searchFlightsWithSeatmaps_WithNoResults_ShouldReturnEmptyResponse() throws Exception {
         // Arrange
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenReturn(new ArrayList<>());
         
         // Act
@@ -317,7 +317,7 @@ class FlightSearchServiceTest {
         request.setIncludeRawFlightOffer(false);
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, false);
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -335,8 +335,8 @@ class FlightSearchServiceTest {
         FlightSearchRequest request = new FlightSearchRequest("LAX", "JFK", "2024-06-15", "ECONOMY");
         request.setIncludeRawFlightOffer(true);
         
-        List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, false);
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, true);
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, true))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -355,7 +355,7 @@ class FlightSearchServiceTest {
         request.setIncludeRawFlightOffer(null);
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResultsWithRawData("AMADEUS", 1, false);
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -427,7 +427,7 @@ class FlightSearchServiceTest {
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 15);
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 15, 30))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 15, 30, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -439,7 +439,7 @@ class FlightSearchServiceTest {
         assertEquals("AMADEUS", response.getMeta().getSources());
         
         // Verify offset was passed to Amadeus service
-        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 15, 30);
+        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 15, 30, false);
     }
 
     @Test
@@ -451,7 +451,7 @@ class FlightSearchServiceTest {
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 10);
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -462,7 +462,7 @@ class FlightSearchServiceTest {
         assertEquals(10, response.getData().size());
         
         // Verify offset defaulted to 0
-        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0);
+        verify(mockAmadeusService).searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 0, false);
     }
 
     @Test
@@ -474,7 +474,7 @@ class FlightSearchServiceTest {
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 10); // Full page
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 20))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 20, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -502,7 +502,7 @@ class FlightSearchServiceTest {
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 5); // Partial page
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 20))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 10, 20, false))
             .thenReturn(amadeusMockResults);
         
         // Act
@@ -526,7 +526,7 @@ class FlightSearchServiceTest {
         
         List<FlightSearchResult> amadeusMockResults = createMockFlightResults("AMADEUS", 15); // Full first page
         
-        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 15, 0))
+        when(mockAmadeusService.searchFlightsWithBatchSeatmaps("LAX", "JFK", "2024-06-15", "ECONOMY", null, null, 15, 0, false))
             .thenReturn(amadeusMockResults);
         
         // Act
