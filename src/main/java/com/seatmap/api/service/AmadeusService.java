@@ -536,10 +536,17 @@ public class AmadeusService {
                         ObjectNode offerWithDataSource = enhancedOffer.deepCopy();
                         offerWithDataSource.put("dataSource", "AMADEUS");
                         
-                        // Create FlightSearchResult with enhanced offer as raw data if requested
+                        // Create enhanced offer for raw flight offer (includes dataSource but no other internal processing)
+                        ObjectNode rawOfferWithDataSource = null;
+                        if (includeRawFlightOffer) {
+                            rawOfferWithDataSource = enhancedOffer.deepCopy();
+                            rawOfferWithDataSource.put("dataSource", "AMADEUS");
+                        }
+                        
+                        // Create FlightSearchResult
                         FlightSearchResult result = new FlightSearchResult(offerWithDataSource, seatMapData, true, null, false);
                         if (includeRawFlightOffer) {
-                            result.setRawFlightOffer(enhancedOffer.deepCopy()); // Use enhanced offer with carrier codes but without dataSource field
+                            result.setRawFlightOffer(rawOfferWithDataSource); // Use enhanced offer with carrier codes AND dataSource field
                         }
                         
                         return result;
