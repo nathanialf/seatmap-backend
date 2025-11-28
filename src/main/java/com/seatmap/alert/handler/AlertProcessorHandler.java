@@ -1,0 +1,291 @@
+package com.seatmap.alert.handler;
+
+import com.amazonaws.services.lambda.runtime.Context;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.ScheduledEvent;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.seatmap.alert.service.AlertEvaluationService;
+import com.seatmap.api.model.FlightSearchRequest;
+import com.seatmap.api.model.FlightSearchResponse;
+import com.seatmap.api.service.AmadeusService;
+import com.seatmap.api.service.FlightSearchService;
+import com.seatmap.api.service.SabreService;
+import com.seatmap.auth.repository.BookmarkRepository;
+import com.seatmap.auth.repository.UserRepository;
+import com.seatmap.common.model.Bookmark;
+import com.seatmap.common.model.User;
+import com.seatmap.email.service.EmailService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+
+import java.time.Instant;
+import java.util.*;
+import java.util.stream.Collectors;
+
+public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, String> {
+    
+    private static final Logger logger = LoggerFactory.getLogger(AlertProcessorHandler.class);
+    
+    private final ObjectMapper objectMapper;
+    private final BookmarkRepository bookmarkRepository;
+    private final UserRepository userRepository;
+    private final FlightSearchService flightSearchService;
+    private final AlertEvaluationService alertEvaluationService;
+    private final EmailService emailService;
+    
+    public AlertProcessorHandler() {
+        this.objectMapper = new ObjectMapper();
+        this.objectMapper.registerModule(new JavaTimeModule());
+        
+        // Initialize AWS services
+        DynamoDbClient dynamoDbClient = DynamoDbClient.builder()
+            .httpClient(UrlConnectionHttpClient.builder().build())
+            .build();
+        
+        // Get environment
+        String environment = System.getenv("ENVIRONMENT");
+        if (environment == null) environment = "dev";
+        
+        // Initialize repositories
+        String bookmarksTable = "seatmap-bookmarks-" + environment;
+        String usersTable = "seatmap-users-" + environment;
+        
+        this.bookmarkRepository = new BookmarkRepository(dynamoDbClient, bookmarksTable);
+        this.userRepository = new UserRepository(dynamoDbClient, usersTable);
+        
+        // Initialize flight search services
+        AmadeusService amadeusService = new AmadeusService();
+        SabreService sabreService = new SabreService();
+        this.flightSearchService = new FlightSearchService(amadeusService, sabreService);
+        
+        // Initialize alert evaluation and email services
+        this.alertEvaluationService = new AlertEvaluationService();
+        this.emailService = new EmailService();
+    }
+    
+    @Override
+    public String handleRequest(ScheduledEvent event, Context context) {
+        logger.info("Starting alert processor batch job");
+        
+        try {
+            // Find all bookmarks with active alerts for upcoming flights
+            List<Bookmark> activeAlerts = bookmarkRepository.findBookmarksWithActiveAlertsForUpcomingFlights();
+            logger.info("Found {} bookmarks with active alerts", activeAlerts.size());
+            
+            if (activeAlerts.isEmpty()) {
+                return "No active alerts to process";
+            }
+            
+            // Group alerts by search criteria for efficient API usage
+            Map<String, List<Bookmark>> groupedAlerts = groupAlertsBySearchCriteria(activeAlerts);
+            logger.info("Grouped alerts into {} unique search criteria", groupedAlerts.size());
+            
+            int processedAlerts = 0;
+            int triggeredAlerts = 0;
+            
+            // Process each group
+            for (Map.Entry<String, List<Bookmark>> entry : groupedAlerts.entrySet()) {
+                try {
+                    String searchKey = entry.getKey();
+                    List<Bookmark> bookmarksForSearch = entry.getValue();
+                    
+                    logger.info("Processing search group: {} with {} bookmarks", searchKey, bookmarksForSearch.size());
+                    
+                    // Execute flight search for this group
+                    FlightSearchResponse searchResponse = executeFlightSearch(bookmarksForSearch.get(0));
+                    
+                    if (searchResponse == null || searchResponse.getData() == null) {
+                        logger.warn("No search results for group: {}", searchKey);
+                        continue;
+                    }
+                    
+                    // Evaluate alerts for each bookmark in this group
+                    for (Bookmark bookmark : bookmarksForSearch) {
+                        try {
+                            processedAlerts++;
+                            
+                            AlertEvaluationService.AlertEvaluationResult result = 
+                                alertEvaluationService.evaluateAlert(bookmark, searchResponse);
+                            
+                            // Update last evaluated timestamp
+                            bookmark.getAlertConfig().updateLastEvaluated();
+                            
+                            if (result.isTriggered()) {
+                                // Check if we should send notification (avoid duplicates)
+                                if (shouldSendNotification(bookmark, result)) {
+                                    sendAlertNotification(bookmark, result);
+                                    triggeredAlerts++;
+                                    
+                                    // Record trigger
+                                    bookmark.getAlertConfig().recordTrigger();
+                                }
+                            }
+                            
+                            // Save updated bookmark
+                            bookmarkRepository.saveBookmark(bookmark);
+                            
+                        } catch (Exception e) {
+                            logger.error("Error processing alert for bookmark {}: {}", 
+                                bookmark.getBookmarkId(), e.getMessage(), e);
+                        }
+                    }
+                    
+                    // Add delay between search groups to respect API rate limits
+                    Thread.sleep(1000);
+                    
+                } catch (Exception e) {
+                    logger.error("Error processing search group {}: {}", entry.getKey(), e.getMessage(), e);
+                }
+            }
+            
+            String result = String.format("Processed %d alerts, triggered %d notifications", 
+                processedAlerts, triggeredAlerts);
+            logger.info("Alert processor completed: {}", result);
+            return result;
+            
+        } catch (Exception e) {
+            logger.error("Error in alert processor batch job", e);
+            return "Error processing alerts: " + e.getMessage();
+        }
+    }
+    
+    /**
+     * Group alerts by search criteria to minimize API calls
+     */
+    private Map<String, List<Bookmark>> groupAlertsBySearchCriteria(List<Bookmark> alerts) {
+        Map<String, List<Bookmark>> groups = new HashMap<>();
+        
+        for (Bookmark bookmark : alerts) {
+            String searchKey = generateSearchKey(bookmark);
+            groups.computeIfAbsent(searchKey, k -> new ArrayList<>()).add(bookmark);
+        }
+        
+        return groups;
+    }
+    
+    /**
+     * Generate a search key for grouping bookmarks with similar search criteria
+     */
+    private String generateSearchKey(Bookmark bookmark) {
+        if (bookmark.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
+            // For saved searches, use the search criteria
+            return String.format("%s-%s-%s-%s-%s", 
+                bookmark.getOrigin() != null ? bookmark.getOrigin() : "",
+                bookmark.getDestination() != null ? bookmark.getDestination() : "",
+                bookmark.getDepartureDate() != null ? bookmark.getDepartureDate() : "",
+                bookmark.getTravelClass() != null ? bookmark.getTravelClass() : "",
+                bookmark.getAirlineCode() != null ? bookmark.getAirlineCode() : "");
+        } else {
+            // For individual bookmarks, try to extract route from flight data
+            try {
+                var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
+                var itineraries = flightData.get("itineraries");
+                if (itineraries != null && itineraries.size() > 0) {
+                    var segments = itineraries.get(0).get("segments");
+                    if (segments != null && segments.size() > 0) {
+                        var firstSegment = segments.get(0);
+                        String origin = firstSegment.get("departure").get("iataCode").asText();
+                        String destination = firstSegment.get("arrival").get("iataCode").asText();
+                        String date = firstSegment.get("departure").get("at").asText().substring(0, 10);
+                        return String.format("%s-%s-%s", origin, destination, date);
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Error extracting search key from bookmark {}: {}", 
+                    bookmark.getBookmarkId(), e.getMessage());
+            }
+            // Fallback to bookmark ID for unique grouping
+            return "bookmark-" + bookmark.getBookmarkId();
+        }
+    }
+    
+    /**
+     * Execute flight search based on bookmark criteria
+     */
+    private FlightSearchResponse executeFlightSearch(Bookmark bookmark) {
+        try {
+            if (bookmark.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
+                // Use saved search criteria
+                FlightSearchRequest request = bookmark.toFlightSearchRequest();
+                return flightSearchService.searchFlightsWithSeatmaps(request);
+            } else {
+                // For bookmarks, extract search criteria from flight data
+                var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
+                var itineraries = flightData.get("itineraries");
+                if (itineraries != null && itineraries.size() > 0) {
+                    var segments = itineraries.get(0).get("segments");
+                    if (segments != null && segments.size() > 0) {
+                        var firstSegment = segments.get(0);
+                        String origin = firstSegment.get("departure").get("iataCode").asText();
+                        String destination = firstSegment.get("arrival").get("iataCode").asText();
+                        String date = firstSegment.get("departure").get("at").asText().substring(0, 10);
+                        
+                        return flightSearchService.searchFlightsWithSeatmaps(
+                            origin, destination, date, null, null, null, 50);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error executing flight search for bookmark {}: {}", 
+                bookmark.getBookmarkId(), e.getMessage(), e);
+        }
+        return null;
+    }
+    
+    /**
+     * Determine if we should send a notification (avoid spam)
+     */
+    private boolean shouldSendNotification(Bookmark bookmark, AlertEvaluationService.AlertEvaluationResult result) {
+        Instant lastTriggered = bookmark.getAlertConfig().getLastTriggered();
+        
+        // If never triggered before, send notification
+        if (lastTriggered == null) {
+            return true;
+        }
+        
+        // Don't send notification if triggered within last 24 hours (avoid spam)
+        Instant twentyFourHoursAgo = Instant.now().minusSeconds(24 * 60 * 60);
+        if (lastTriggered.isAfter(twentyFourHoursAgo)) {
+            logger.debug("Skipping notification for bookmark {} - already notified within 24 hours", 
+                bookmark.getBookmarkId());
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Send alert notification email
+     */
+    private void sendAlertNotification(Bookmark bookmark, AlertEvaluationService.AlertEvaluationResult result) {
+        try {
+            // Get user details
+            Optional<User> userOpt = userRepository.findByKey(bookmark.getUserId());
+            if (userOpt.isEmpty()) {
+                logger.warn("User not found for bookmark {}: {}", 
+                    bookmark.getBookmarkId(), bookmark.getUserId());
+                return;
+            }
+            
+            User user = userOpt.get();
+            
+            // Send alert email
+            emailService.sendSeatAvailabilityAlert(
+                user.getEmail(), 
+                user.getFirstName(), 
+                bookmark, 
+                result
+            );
+            
+            logger.info("Sent alert notification for bookmark {} to user {}", 
+                bookmark.getBookmarkId(), user.getEmail());
+                
+        } catch (Exception e) {
+            logger.error("Error sending alert notification for bookmark {}: {}", 
+                bookmark.getBookmarkId(), e.getMessage(), e);
+        }
+    }
+}

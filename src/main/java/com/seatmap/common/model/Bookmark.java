@@ -61,6 +61,65 @@ public class Bookmark {
     private Instant updatedAt;
     private Instant expiresAt;
     private Instant lastAccessedAt;
+    private AlertConfig alertConfig;
+
+    public static class AlertConfig {
+        private Double alertThreshold; // null = no alert, value = alert enabled
+        private Instant lastEvaluated;
+        private Instant lastTriggered;
+        private String triggerHistory; // JSON string of trigger events
+        
+        public AlertConfig() {}
+        
+        public AlertConfig(Double alertThreshold) {
+            this.alertThreshold = alertThreshold;
+        }
+        
+        public Double getAlertThreshold() {
+            return alertThreshold;
+        }
+        
+        public void setAlertThreshold(Double alertThreshold) {
+            this.alertThreshold = alertThreshold;
+        }
+        
+        public Instant getLastEvaluated() {
+            return lastEvaluated;
+        }
+        
+        public void setLastEvaluated(Instant lastEvaluated) {
+            this.lastEvaluated = lastEvaluated;
+        }
+        
+        public Instant getLastTriggered() {
+            return lastTriggered;
+        }
+        
+        public void setLastTriggered(Instant lastTriggered) {
+            this.lastTriggered = lastTriggered;
+        }
+        
+        public String getTriggerHistory() {
+            return triggerHistory;
+        }
+        
+        public void setTriggerHistory(String triggerHistory) {
+            this.triggerHistory = triggerHistory;
+        }
+        
+        @JsonIgnore
+        public boolean isEnabled() {
+            return alertThreshold != null;
+        }
+        
+        public void updateLastEvaluated() {
+            this.lastEvaluated = Instant.now();
+        }
+        
+        public void recordTrigger() {
+            this.lastTriggered = Instant.now();
+        }
+    }
 
     public Bookmark() {
         this.createdAt = Instant.now();
@@ -256,6 +315,20 @@ public class Bookmark {
 
     public void updateLastAccessed() {
         this.lastAccessedAt = Instant.now();
+    }
+    
+    public AlertConfig getAlertConfig() {
+        return alertConfig;
+    }
+    
+    public void setAlertConfig(AlertConfig alertConfig) {
+        this.alertConfig = alertConfig;
+    }
+    
+    @JsonIgnore
+    @JsonProperty("hasAlert")
+    public boolean hasAlert() {
+        return alertConfig != null && alertConfig.isEnabled();
     }
     
     // Helper method to reconstruct FlightSearchRequest from SAVED_SEARCH fields

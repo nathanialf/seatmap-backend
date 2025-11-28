@@ -127,3 +127,57 @@ resource "aws_lambda_function" "tiers" {
 
   tags = local.common_tags
 }
+
+# Alert Processor Lambda Function (scheduled batch processing)
+resource "aws_lambda_function" "alert_processor" {
+  filename         = local.lambda_jar_path
+  function_name    = "seatmap-alert-processor-${local.environment}"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "com.seatmap.alert.handler.AlertProcessorHandler::handleRequest"
+  runtime         = "java17"
+  memory_size     = 512
+  timeout         = 600   # 10 minutes for batch processing
+  
+  source_code_hash = filebase64sha256(local.lambda_jar_path)
+  
+  environment {
+    variables = {
+      ENVIRONMENT        = local.environment
+      AMADEUS_ENDPOINT   = var.amadeus_endpoint
+      AMADEUS_API_KEY    = var.amadeus_api_key
+      AMADEUS_API_SECRET = var.amadeus_api_secret
+      SABRE_USER_ID      = var.sabre_user_id
+      SABRE_PASSWORD     = var.sabre_password
+      SABRE_ENDPOINT     = var.sabre_endpoint
+      JWT_SECRET         = var.jwt_secret
+      BASE_URL           = "https://${aws_api_gateway_domain_name.api_dev.domain_name}"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# CloudWatch Events rule to trigger alert processor every 3 hours
+resource "aws_cloudwatch_event_rule" "alert_processor_schedule" {
+  name                = "seatmap-alert-processor-schedule-${local.environment}"
+  description         = "Trigger alert processor every 3 hours"
+  schedule_expression = "rate(3 hours)"
+
+  tags = local.common_tags
+}
+
+# CloudWatch Events target for alert processor
+resource "aws_cloudwatch_event_target" "alert_processor_target" {
+  rule      = aws_cloudwatch_event_rule.alert_processor_schedule.name
+  target_id = "AlertProcessorTarget"
+  arn       = aws_lambda_function.alert_processor.arn
+}
+
+# Lambda permission for CloudWatch Events
+resource "aws_lambda_permission" "allow_cloudwatch_alert_processor" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.alert_processor.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.alert_processor_schedule.arn
+}

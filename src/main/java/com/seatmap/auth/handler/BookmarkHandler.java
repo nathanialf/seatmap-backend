@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.api.model.FlightSearchRequest;
 import com.seatmap.auth.model.CreateBookmarkRequest;
+import com.seatmap.auth.model.AlertRequest;
 import com.seatmap.auth.repository.BookmarkRepository;
 import com.seatmap.auth.repository.GuestAccessRepository;
 import com.seatmap.auth.repository.SessionRepository;
@@ -92,6 +93,12 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
                 return handleListBookmarks(event);
             } else if ("POST".equals(httpMethod) && "/bookmarks".equals(path)) {
                 return handleCreateBookmark(event);
+            } else if ("PATCH".equals(httpMethod) && path.matches("/bookmarks/[^/]+/alert")) {
+                String bookmarkId = path.substring("/bookmarks/".length(), path.lastIndexOf("/alert"));
+                return handleCreateOrUpdateAlert(event, bookmarkId);
+            } else if ("DELETE".equals(httpMethod) && path.matches("/bookmarks/[^/]+/alert")) {
+                String bookmarkId = path.substring("/bookmarks/".length(), path.lastIndexOf("/alert"));
+                return handleDeleteAlert(event, bookmarkId);
             } else if ("DELETE".equals(httpMethod) && path.startsWith("/bookmarks/")) {
                 String bookmarkId = path.substring("/bookmarks/".length());
                 if (bookmarkId.contains("/")) {
@@ -236,6 +243,11 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
             return createErrorResponse(400, "Invalid item type");
         }
         
+        // Set alert configuration if provided
+        if (request.getAlertConfig() != null) {
+            bookmark.setAlertConfig(request.getAlertConfig());
+        }
+        
         bookmarkRepository.saveBookmark(bookmark);
         
         logger.info("Created {} {} for user: {} tier: {}", 
@@ -283,6 +295,89 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         }
         
         return createSuccessResponse(bookmark.get());
+    }
+    
+    private APIGatewayProxyResponseEvent handleCreateOrUpdateAlert(APIGatewayProxyRequestEvent event, String bookmarkId) throws SeatmapException {
+        logger.info("Processing create/update alert request for bookmark ID: {}", bookmarkId);
+        
+        String userId = extractUserIdFromToken(event);
+        if (userId == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        // Parse request body
+        AlertRequest alertRequest;
+        try {
+            alertRequest = objectMapper.readValue(event.getBody(), AlertRequest.class);
+        } catch (Exception e) {
+            logger.error("Error parsing alert request body", e);
+            return createErrorResponse(400, "Invalid request format");
+        }
+        
+        // Validate request
+        Set<ConstraintViolation<AlertRequest>> violations = validator.validate(alertRequest);
+        if (!violations.isEmpty()) {
+            StringBuilder errors = new StringBuilder();
+            for (ConstraintViolation<AlertRequest> violation : violations) {
+                errors.append(violation.getMessage()).append("; ");
+            }
+            return createErrorResponse(400, "Validation errors: " + errors.toString());
+        }
+        
+        // Check if bookmark exists and belongs to user
+        Optional<Bookmark> existingBookmark = bookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId);
+        if (existingBookmark.isEmpty()) {
+            return createErrorResponse(404, "Bookmark not found");
+        }
+        
+        if (existingBookmark.get().isExpired()) {
+            return createErrorResponse(410, "Bookmark has expired");
+        }
+        
+        // Create or update alert configuration
+        Bookmark bookmark = existingBookmark.get();
+        Bookmark.AlertConfig alertConfig = new Bookmark.AlertConfig(alertRequest.getAlertThreshold());
+        bookmark.setAlertConfig(alertConfig);
+        bookmark.updateTimestamp();
+        
+        bookmarkRepository.saveBookmark(bookmark);
+        
+        logger.info("Created/updated alert for bookmark {} with threshold: {}", bookmarkId, alertRequest.getAlertThreshold());
+        
+        return createSuccessResponse(Map.of(
+            "message", "Alert configured successfully",
+            "alertConfig", alertConfig
+        ));
+    }
+    
+    private APIGatewayProxyResponseEvent handleDeleteAlert(APIGatewayProxyRequestEvent event, String bookmarkId) throws SeatmapException {
+        logger.info("Processing delete alert request for bookmark ID: {}", bookmarkId);
+        
+        String userId = extractUserIdFromToken(event);
+        if (userId == null) {
+            return createErrorResponse(401, "Invalid or missing authentication token");
+        }
+        
+        // Check if bookmark exists and belongs to user
+        Optional<Bookmark> existingBookmark = bookmarkRepository.findByUserIdAndBookmarkId(userId, bookmarkId);
+        if (existingBookmark.isEmpty()) {
+            return createErrorResponse(404, "Bookmark not found");
+        }
+        
+        Bookmark bookmark = existingBookmark.get();
+        if (bookmark.getAlertConfig() == null || !bookmark.getAlertConfig().isEnabled()) {
+            return createErrorResponse(404, "No alert configured for this bookmark");
+        }
+        
+        // Remove alert configuration
+        bookmark.setAlertConfig(null);
+        bookmark.updateTimestamp();
+        
+        bookmarkRepository.saveBookmark(bookmark);
+        
+        logger.info("Deleted alert for bookmark: {}", bookmarkId);
+        
+        return createSuccessResponse(Map.of("message", "Alert removed successfully"));
     }
     
     private String extractTokenFromEvent(APIGatewayProxyRequestEvent event) {

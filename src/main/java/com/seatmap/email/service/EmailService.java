@@ -1,6 +1,9 @@
 package com.seatmap.email.service;
 
 import com.seatmap.common.exception.SeatmapException;
+import com.seatmap.alert.service.AlertEvaluationService;
+import com.seatmap.api.model.FlightSearchResult;
+import com.seatmap.common.model.Bookmark;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
@@ -65,6 +68,44 @@ public class EmailService {
     }
     
     /**
+     * Send seat availability alert email
+     */
+    public void sendSeatAvailabilityAlert(String toEmail, String firstName, Bookmark bookmark, 
+                                        AlertEvaluationService.AlertEvaluationResult alertResult) throws SeatmapException {
+        logger.info("Sending seat availability alert to: {}", toEmail);
+        
+        // Extract flight details for email
+        FlightDetails flightDetails = extractFlightDetails(bookmark, alertResult);
+        
+        String subject = buildAlertSubject(flightDetails, bookmark.getItemType());
+        String htmlBody = buildAlertEmailHtml(firstName, bookmark, alertResult, flightDetails);
+        String textBody = buildAlertEmailText(firstName, bookmark, alertResult, flightDetails);
+        
+        try {
+            SendEmailRequest emailRequest = SendEmailRequest.builder()
+                .source(FROM_EMAIL)
+                .destination(Destination.builder()
+                    .toAddresses(toEmail)
+                    .build())
+                .message(Message.builder()
+                    .subject(Content.builder().data(subject).build())
+                    .body(Body.builder()
+                        .html(Content.builder().data(htmlBody).build())
+                        .text(Content.builder().data(textBody).build())
+                        .build())
+                    .build())
+                .build();
+            
+            SendEmailResponse response = sesClient.sendEmail(emailRequest);
+            logger.info("Alert email sent successfully. MessageId: {}", response.messageId());
+            
+        } catch (Exception e) {
+            logger.error("Failed to send alert email to: {}", toEmail, e);
+            throw new SeatmapException("EMAIL_SEND_ERROR", "Failed to send alert email", 500, e);
+        }
+    }
+    
+    /**
      * Send welcome email after successful verification
      */
     public void sendWelcomeEmail(String toEmail, String firstName) throws SeatmapException {
@@ -98,6 +139,239 @@ public class EmailService {
         }
     }
     
+    /**
+     * Extract flight details for email templates
+     */
+    private FlightDetails extractFlightDetails(Bookmark bookmark, AlertEvaluationService.AlertEvaluationResult alertResult) {
+        if (bookmark.getItemType() == Bookmark.ItemType.BOOKMARK) {
+            // For individual flight bookmarks, extract details from triggering flight if available
+            FlightSearchResult flight = alertResult.getTriggeringFlight();
+            if (flight != null) {
+                return extractFlightDetailsFromResult(flight);
+            }
+            // Fallback to bookmark title
+            return new FlightDetails(bookmark.getTitle(), "", "", "", "");
+        } else {
+            // For saved searches, use search criteria
+            return new FlightDetails(
+                bookmark.getTitle(),
+                bookmark.getOrigin() != null ? bookmark.getOrigin() : "",
+                bookmark.getDestination() != null ? bookmark.getDestination() : "",
+                bookmark.getDepartureDate() != null ? bookmark.getDepartureDate() : "",
+                ""
+            );
+        }
+    }
+    
+    /**
+     * Extract flight details from FlightSearchResult
+     */
+    private FlightDetails extractFlightDetailsFromResult(FlightSearchResult flight) {
+        try {
+            if (flight.getItineraries() != null && flight.getItineraries().size() > 0) {
+                var itinerary = flight.getItineraries().get(0);
+                var segments = itinerary.get("segments");
+                if (segments != null && segments.size() > 0) {
+                    var firstSegment = segments.get(0);
+                    var departure = firstSegment.get("departure");
+                    var arrival = firstSegment.get("arrival");
+                    var operating = firstSegment.get("operating");
+                    
+                    String carrierCode = operating != null ? operating.get("carrierCode").asText() : 
+                                        firstSegment.get("carrierCode").asText();
+                    String flightNumber = operating != null ? operating.get("number").asText() : 
+                                         firstSegment.get("number").asText();
+                    String origin = departure.get("iataCode").asText();
+                    String destination = arrival.get("iataCode").asText();
+                    String departureDate = departure.get("at").asText().substring(0, 10);
+                    
+                    return new FlightDetails(
+                        carrierCode + flightNumber,
+                        origin,
+                        destination,
+                        departureDate,
+                        carrierCode
+                    );
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Error extracting flight details: {}", e.getMessage());
+        }
+        return new FlightDetails("Flight", "", "", "", "");
+    }
+    
+    /**
+     * Build alert email subject line
+     */
+    private String buildAlertSubject(FlightDetails flight, Bookmark.ItemType itemType) {
+        if (itemType == Bookmark.ItemType.BOOKMARK) {
+            return String.format("Seat Alert: %s→%s %s - %s Availability Changed", 
+                flight.origin, flight.destination, flight.departureDate, flight.flightNumber);
+        } else {
+            return String.format("Seat Alert: %s→%s %s - Flights Available", 
+                flight.origin, flight.destination, flight.departureDate);
+        }
+    }
+    
+    /**
+     * Build alert email HTML body
+     */
+    private String buildAlertEmailHtml(String firstName, Bookmark bookmark, 
+                                     AlertEvaluationService.AlertEvaluationResult alertResult,
+                                     FlightDetails flight) {
+        String environment = System.getenv("ENVIRONMENT");
+        String frontendUrl = "dev".equals(environment) ? "https://dev.myseatmap.com" : "https://myseatmap.com";
+        String bookmarkUrl = frontendUrl + "/bookmarks/" + bookmark.getBookmarkId();
+        String alertSettingsUrl = frontendUrl + "/bookmarks";
+        
+        String alertType = bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? "below" : "above";
+        String thresholdUnit = bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? " seats" : "%";
+        
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Seatmap Alert</title>
+            </head>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #2c3e50;">✈️ Seat Availability Alert</h2>
+                    
+                    <p>Hello %s,</p>
+                    
+                    <p>Your seat availability alert has been triggered:</p>
+                    
+                    <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                        <h3 style="margin-top: 0; color: #2c3e50;">Flight Details</h3>
+                        <p><strong>Bookmark:</strong> %s</p>
+                        <p><strong>Route:</strong> %s → %s</p>
+                        <p><strong>Date:</strong> %s</p>
+                        %s
+                    </div>
+                    
+                    <div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="margin-top: 0; color: #1976d2;">Alert Details</h4>
+                        <p><strong>Alert:</strong> %s</p>
+                        <p><strong>Your Threshold:</strong> %.1f%s</p>
+                        <p><strong>Current Status:</strong> %.0f%s</p>
+                    </div>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="%s" 
+                           style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-right: 10px;">
+                            View Bookmark
+                        </a>
+                        <a href="%s" 
+                           style="background-color: #95a5a6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                            Manage Alerts
+                        </a>
+                    </div>
+                    
+                    <p style="color: #7f8c8d; font-size: 14px; margin-top: 30px;">
+                        This alert was generated based on your bookmark settings. You can modify or disable alerts at any time.
+                    </p>
+                    
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                    <p style="color: #95a5a6; font-size: 12px;">
+                        © 2025 Seatmap. All rights reserved.<br>
+                        Helping airline employees make better standby decisions.
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                firstName != null ? firstName : "there",
+                bookmark.getTitle(),
+                flight.origin,
+                flight.destination,
+                flight.departureDate,
+                flight.flightNumber.isEmpty() ? "" : String.format("<p><strong>Flight:</strong> %s</p>", flight.flightNumber),
+                alertResult.getMessage(),
+                alertResult.getThreshold(),
+                thresholdUnit,
+                alertResult.getCurrentValue(),
+                bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? "" : "%",
+                bookmarkUrl,
+                alertSettingsUrl
+            );
+    }
+    
+    /**
+     * Build alert email text body
+     */
+    private String buildAlertEmailText(String firstName, Bookmark bookmark, 
+                                     AlertEvaluationService.AlertEvaluationResult alertResult,
+                                     FlightDetails flight) {
+        String environment = System.getenv("ENVIRONMENT");
+        String frontendUrl = "dev".equals(environment) ? "https://dev.myseatmap.com" : "https://myseatmap.com";
+        String bookmarkUrl = frontendUrl + "/bookmarks/" + bookmark.getBookmarkId();
+        String alertSettingsUrl = frontendUrl + "/bookmarks";
+        
+        String thresholdUnit = bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? " seats" : "%";
+        
+        return """
+            SEAT AVAILABILITY ALERT
+            
+            Hello %s,
+            
+            Your seat availability alert has been triggered:
+            
+            FLIGHT DETAILS
+            Bookmark: %s
+            Route: %s → %s
+            Date: %s
+            %s
+            
+            ALERT DETAILS
+            Alert: %s
+            Your Threshold: %.1f%s
+            Current Status: %.0f%s
+            
+            ACTIONS
+            View Bookmark: %s
+            Manage Alerts: %s
+            
+            This alert was generated based on your bookmark settings. You can modify or disable alerts at any time.
+            
+            © 2025 Seatmap. All rights reserved.
+            Helping airline employees make better standby decisions.
+            """.formatted(
+                firstName != null ? firstName : "there",
+                bookmark.getTitle(),
+                flight.origin,
+                flight.destination,
+                flight.departureDate,
+                flight.flightNumber.isEmpty() ? "" : String.format("Flight: %s", flight.flightNumber),
+                alertResult.getMessage(),
+                alertResult.getThreshold(),
+                thresholdUnit,
+                alertResult.getCurrentValue(),
+                bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? "" : "%",
+                bookmarkUrl,
+                alertSettingsUrl
+            );
+    }
+    
+    /**
+     * Flight details for email templates
+     */
+    private static class FlightDetails {
+        final String flightNumber;
+        final String origin;
+        final String destination;
+        final String departureDate;
+        final String carrierCode;
+        
+        FlightDetails(String flightNumber, String origin, String destination, String departureDate, String carrierCode) {
+            this.flightNumber = flightNumber != null ? flightNumber : "";
+            this.origin = origin != null ? origin : "";
+            this.destination = destination != null ? destination : "";
+            this.departureDate = departureDate != null ? departureDate : "";
+            this.carrierCode = carrierCode != null ? carrierCode : "";
+        }
+    }
+
     private String buildVerificationEmailHtml(String verificationUrl) {
         return """
             <!DOCTYPE html>

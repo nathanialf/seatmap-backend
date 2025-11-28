@@ -24,6 +24,9 @@ public class CreateBookmarkRequest {
     // Item type - REQUIRED, no default
     @NotNull(message = "Item type is required")
     private Bookmark.ItemType itemType;
+    
+    // Optional alert configuration
+    private Bookmark.AlertConfig alertConfig;
 
     public CreateBookmarkRequest() {}
 
@@ -73,6 +76,14 @@ public class CreateBookmarkRequest {
         this.itemType = itemType;
     }
     
+    public Bookmark.AlertConfig getAlertConfig() {
+        return alertConfig;
+    }
+    
+    public void setAlertConfig(Bookmark.AlertConfig alertConfig) {
+        this.alertConfig = alertConfig;
+    }
+    
     /**
      * Validate that the request has the appropriate data for its item type
      */
@@ -118,6 +129,7 @@ public class CreateBookmarkRequest {
                 ", itemType=" + itemType +
                 ", hasFlightOfferData=" + (flightOfferData != null) +
                 ", hasSearchRequest=" + (searchRequest != null) +
+                ", hasAlertConfig=" + (alertConfig != null) +
                 '}';
     }
 }

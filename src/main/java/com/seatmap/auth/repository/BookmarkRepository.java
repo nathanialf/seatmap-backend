@@ -221,4 +221,57 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
             throw SeatmapException.internalError("Failed to count items by type for user: " + e.getMessage());
         }
     }
+    
+    /**
+     * Find all bookmarks with active alerts across all users for batch processing
+     * This method performs a full table scan with filter for alertConfig.alertThreshold attribute_exists
+     */
+    public List<Bookmark> findBookmarksWithActiveAlerts() throws SeatmapException {
+        try {
+            Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+            expressionAttributeValues.put(":currentTime", AttributeValue.builder().n(String.valueOf(Instant.now().getEpochSecond())).build());
+            
+            ScanRequest request = ScanRequest.builder()
+                    .tableName(tableName)
+                    .filterExpression("attribute_exists(alertConfig.alertThreshold) AND (attribute_not_exists(expiresAt) OR expiresAt > :currentTime)")
+                    .expressionAttributeValues(expressionAttributeValues)
+                    .build();
+                    
+            ScanResponse response = dynamoDbClient.scan(request);
+            
+            return response.items().stream()
+                    .map(item -> {
+                        try {
+                            return fromAttributeValueMap(item);
+                        } catch (SeatmapException e) {
+                            throw new RuntimeException(e);
+                        }
+                    })
+                    .filter(bookmark -> bookmark.getAlertConfig() != null && bookmark.getAlertConfig().isEnabled())
+                    .filter(bookmark -> !bookmark.isExpired())
+                    .collect(Collectors.toList());
+        } catch (DynamoDbException e) {
+            throw SeatmapException.internalError("Failed to find bookmarks with active alerts: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Find bookmarks with active alerts for flights departing within the next 48 hours
+     */
+    public List<Bookmark> findBookmarksWithActiveAlertsForUpcomingFlights() throws SeatmapException {
+        List<Bookmark> allActiveAlerts = findBookmarksWithActiveAlerts();
+        
+        // Filter for flights departing within next 48 hours
+        Instant fortyEightHoursFromNow = Instant.now().plusSeconds(48 * 60 * 60);
+        
+        return allActiveAlerts.stream()
+                .filter(bookmark -> {
+                    if (bookmark.getExpiresAt() == null) {
+                        return true; // No expiration set, include it
+                    }
+                    // Include if expires within next 48 hours (meaning flight is soon)
+                    return bookmark.getExpiresAt().isBefore(fortyEightHoursFromNow);
+                })
+                .collect(Collectors.toList());
+    }
 }
