@@ -21,6 +21,9 @@ public abstract class DynamoDbRepository<T> {
         this.objectMapper = new ObjectMapper();
         this.objectMapper.registerModule(new JavaTimeModule());
         this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        // Accept empty objects as null values to handle DynamoDB NULL conversion issues
+        this.objectMapper.configure(DeserializationFeature.ACCEPT_EMPTY_ARRAY_AS_NULL_OBJECT, true);
+        this.objectMapper.configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
     }
     
     protected abstract Class<T> getEntityClass();
@@ -45,6 +48,8 @@ public abstract class DynamoDbRepository<T> {
         try {
             Map<String, Object> map = convertFromAttributeValueMap(attributeMap);
             String json = objectMapper.writeValueAsString(map);
+            // Clean up empty objects that should be null (DynamoDB NULL conversion issue)
+            json = json.replaceAll("\"(lastEvaluated|lastTriggered|triggerHistory)\":\\{\\}", "\"$1\":null");
             return objectMapper.readValue(json, getEntityClass());
         } catch (JsonProcessingException e) {
             throw SeatmapException.internalError("Failed to deserialize entity: " + e.getMessage());
@@ -115,18 +120,20 @@ public abstract class DynamoDbRepository<T> {
             }
         } else if (attributeValue.bool() != null) {
             return attributeValue.bool();
+        } else if (attributeValue.m() != null) {
+            // Check Map BEFORE List to prevent Maps from being treated as empty Lists
+            Map<String, Object> map = new HashMap<>();
+            for (Map.Entry<String, AttributeValue> entry : attributeValue.m().entrySet()) {
+                Object value = fromAttributeValue(entry.getValue());
+                map.put(entry.getKey(), value);
+            }
+            return map;
         } else if (attributeValue.l() != null) {
             List<Object> list = new ArrayList<>();
             for (AttributeValue item : attributeValue.l()) {
                 list.add(fromAttributeValue(item));
             }
             return list;
-        } else if (attributeValue.m() != null) {
-            Map<String, Object> map = new HashMap<>();
-            for (Map.Entry<String, AttributeValue> entry : attributeValue.m().entrySet()) {
-                map.put(entry.getKey(), fromAttributeValue(entry.getValue()));
-            }
-            return map;
         } else if (attributeValue.nul() != null && attributeValue.nul()) {
             return null;
         } else {

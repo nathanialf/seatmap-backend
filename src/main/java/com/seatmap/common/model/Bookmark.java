@@ -2,6 +2,7 @@ package com.seatmap.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.seatmap.api.model.FlightSearchRequest;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
