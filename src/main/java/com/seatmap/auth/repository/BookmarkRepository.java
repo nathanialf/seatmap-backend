@@ -277,7 +277,7 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
     }
     
     /**
-     * Extract flight departure time from bookmark data
+     * Extract earliest flight departure time from all segments in bookmark data
      */
     private Instant getFlightDepartureTime(Bookmark bookmark) {
         try {
@@ -287,20 +287,34 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
                     return java.time.LocalDate.parse(bookmark.getDepartureDate()).atStartOfDay().atZone(java.time.ZoneOffset.UTC).toInstant();
                 }
             } else if (bookmark.getItemType() == Bookmark.ItemType.BOOKMARK) {
-                // For individual flight bookmarks, parse the flight offer data
+                // For individual flight bookmarks, parse the flight offer data and check ALL segments
                 if (bookmark.getFlightOfferData() != null) {
                     com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                     com.fasterxml.jackson.databind.JsonNode flightData = mapper.readTree(bookmark.getFlightOfferData());
                     com.fasterxml.jackson.databind.JsonNode itineraries = flightData.get("itineraries");
                     if (itineraries != null && itineraries.size() > 0) {
-                        com.fasterxml.jackson.databind.JsonNode segments = itineraries.get(0).get("segments");
-                        if (segments != null && segments.size() > 0) {
-                            com.fasterxml.jackson.databind.JsonNode departure = segments.get(0).get("departure");
-                            if (departure != null && departure.has("at")) {
-                                String departureTime = departure.get("at").asText();
-                                return java.time.Instant.parse(departureTime);
+                        java.time.Instant earliestDeparture = null;
+                        
+                        // Check all itineraries (outbound/return)
+                        for (int i = 0; i < itineraries.size(); i++) {
+                            com.fasterxml.jackson.databind.JsonNode segments = itineraries.get(i).get("segments");
+                            if (segments != null && segments.size() > 0) {
+                                // Check all segments in this itinerary
+                                for (int j = 0; j < segments.size(); j++) {
+                                    com.fasterxml.jackson.databind.JsonNode departure = segments.get(j).get("departure");
+                                    if (departure != null && departure.has("at")) {
+                                        String departureTime = departure.get("at").asText();
+                                        java.time.Instant segmentDeparture = java.time.Instant.parse(departureTime);
+                                        
+                                        // Keep track of earliest departure across all segments
+                                        if (earliestDeparture == null || segmentDeparture.isBefore(earliestDeparture)) {
+                                            earliestDeparture = segmentDeparture;
+                                        }
+                                    }
+                                }
                             }
                         }
+                        return earliestDeparture;
                     }
                 }
             }

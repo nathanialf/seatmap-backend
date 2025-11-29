@@ -8,6 +8,8 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.seatmap.alert.service.AlertEvaluationService;
 import com.seatmap.api.model.FlightSearchRequest;
 import com.seatmap.api.model.FlightSearchResponse;
+import com.seatmap.api.model.FlightSearchResult;
+import com.seatmap.api.model.SeatMapData;
 import com.seatmap.api.service.AmadeusService;
 import com.seatmap.api.service.FlightSearchService;
 import com.seatmap.api.service.SabreService;
@@ -35,6 +37,7 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
     private final FlightSearchService flightSearchService;
     private final AlertEvaluationService alertEvaluationService;
     private final EmailService emailService;
+    private final AmadeusService amadeusService;
     
     public AlertProcessorHandler() {
         this.objectMapper = new ObjectMapper();
@@ -57,7 +60,7 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
         this.userRepository = new UserRepository(dynamoDbClient, usersTable);
         
         // Initialize flight search services
-        AmadeusService amadeusService = new AmadeusService();
+        this.amadeusService = new AmadeusService();
         SabreService sabreService = new SabreService();
         this.flightSearchService = new FlightSearchService(amadeusService, sabreService);
         
@@ -179,18 +182,22 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
                 bookmark.getTravelClass() != null ? bookmark.getTravelClass() : "",
                 bookmark.getAirlineCode() != null ? bookmark.getAirlineCode() : "");
         } else {
-            // For individual bookmarks, try to extract route from flight data
+            // For individual bookmarks, extract full route from flight data (origin → final destination)
             try {
                 var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
                 var itineraries = flightData.get("itineraries");
                 if (itineraries != null && itineraries.size() > 0) {
                     var segments = itineraries.get(0).get("segments");
                     if (segments != null && segments.size() > 0) {
+                        // Get origin from first segment and final destination from last segment
                         var firstSegment = segments.get(0);
+                        var lastSegment = segments.get(segments.size() - 1);
+                        
                         String origin = firstSegment.get("departure").get("iataCode").asText();
-                        String destination = firstSegment.get("arrival").get("iataCode").asText();
+                        String finalDestination = lastSegment.get("arrival").get("iataCode").asText();
                         String date = firstSegment.get("departure").get("at").asText().substring(0, 10);
-                        return String.format("%s-%s-%s", origin, destination, date);
+                        
+                        return String.format("%s-%s-%s", origin, finalDestination, date);
                     }
                 }
             } catch (Exception e) {
@@ -208,24 +215,17 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
     private FlightSearchResponse executeFlightSearch(Bookmark bookmark) {
         try {
             if (bookmark.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
-                // Use saved search criteria
+                // Use saved search criteria - search for multiple flights
                 FlightSearchRequest request = bookmark.toFlightSearchRequest();
                 return flightSearchService.searchFlightsWithSeatmaps(request);
             } else {
-                // For bookmarks, extract search criteria from flight data
-                var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
-                var itineraries = flightData.get("itineraries");
-                if (itineraries != null && itineraries.size() > 0) {
-                    var segments = itineraries.get(0).get("segments");
-                    if (segments != null && segments.size() > 0) {
-                        var firstSegment = segments.get(0);
-                        String origin = firstSegment.get("departure").get("iataCode").asText();
-                        String destination = firstSegment.get("arrival").get("iataCode").asText();
-                        String date = firstSegment.get("departure").get("at").asText().substring(0, 10);
-                        
-                        return flightSearchService.searchFlightsWithSeatmaps(
-                            origin, destination, date, null, null, null, 50);
-                    }
+                // For individual bookmark - get fresh seatmap for the specific flight
+                FlightSearchResult result = getBookmarkFlightWithFreshSeatmap(bookmark);
+                if (result != null) {
+                    // Create a response with single flight
+                    FlightSearchResponse response = new FlightSearchResponse();
+                    response.setData(List.of(result));
+                    return response;
                 }
             }
         } catch (Exception e) {
@@ -234,6 +234,26 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
         }
         return null;
     }
+    
+    /**
+     * Get fresh seatmap data for a specific bookmarked flight (Amadeus only for now)
+     */
+    private FlightSearchResult getBookmarkFlightWithFreshSeatmap(Bookmark bookmark) {
+        try {
+            var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
+            
+            // Use Amadeus service to get fresh seatmap (ignoring data source for now)
+            var seatMapResponse = amadeusService.getSeatMapFromOffer(flightData);
+            SeatMapData seatMapData = amadeusService.convertToSeatMapData(seatMapResponse);
+            return new FlightSearchResult(flightData, seatMapData, true, null);
+            
+        } catch (Exception e) {
+            logger.error("Error getting fresh seatmap for bookmark {}: {}", 
+                bookmark.getBookmarkId(), e.getMessage(), e);
+        }
+        return null;
+    }
+    
     
     /**
      * Determine if we should send a notification (avoid spam)

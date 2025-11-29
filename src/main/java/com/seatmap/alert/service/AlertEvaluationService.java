@@ -214,15 +214,38 @@ public class AlertEvaluationService {
     }
     
     /**
-     * Calculate seat availability percentage (simplified - assumes 150 seat capacity for now)
-     * TODO: Implement proper aircraft capacity lookup
+     * Calculate seat availability percentage using actual seatmap data
      */
     private double calculateSeatPercentage(FlightSearchResult flight) {
-        // Simplified capacity calculation - should be enhanced with actual aircraft data
-        int estimatedCapacity = 150; // Default assumption for economy class
-        int availableSeats = flight.getNumberOfBookableSeats();
+        // Use actual seatmap data if available
+        if (flight.getSeatMap() != null && flight.getSeatMap().getSeats() != null) {
+            var seats = flight.getSeatMap().getSeats();
+            
+            // Count total seats and available seats from seatmap
+            int totalSeats = seats.size();
+            long availableSeats = seats.stream()
+                .filter(seat -> "AVAILABLE".equalsIgnoreCase(seat.getAvailabilityStatus()))
+                .count();
+            
+            if (totalSeats > 0) {
+                return (double) availableSeats / totalSeats * 100.0;
+            }
+        }
         
-        return (double) availableSeats / estimatedCapacity * 100.0;
+        // Fallback: use flight offer numberOfBookableSeats if seatmap unavailable
+        // This is less accurate but better than hardcoded estimates
+        int bookableSeats = flight.getNumberOfBookableSeats();
+        if (bookableSeats > 0) {
+            // Use bookableSeats as both available and total (conservative estimate)
+            // This means we can't calculate percentage properly, so return a flag value
+            logger.warn("Seatmap data unavailable for flight {}, using bookable seats count: {}", 
+                flight.getId(), bookableSeats);
+            // Return the actual count as percentage (will be used as absolute value in evaluation)
+            return bookableSeats;
+        }
+        
+        // No seat data available at all
+        return 0.0;
     }
     
     /**
