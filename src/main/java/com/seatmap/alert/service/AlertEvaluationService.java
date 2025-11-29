@@ -125,27 +125,89 @@ public class AlertEvaluationService {
         try {
             JsonNode itineraries = flightOfferData.get("itineraries");
             if (itineraries == null || !itineraries.isArray() || itineraries.size() == 0) {
+                logger.warn("Missing or invalid itineraries in flight offer data");
                 return null;
             }
             
             JsonNode firstItinerary = itineraries.get(0);
+            if (firstItinerary == null) {
+                logger.warn("First itinerary is null in flight offer data");
+                return null;
+            }
+            
             JsonNode segments = firstItinerary.get("segments");
             if (segments == null || !segments.isArray() || segments.size() == 0) {
+                logger.warn("Missing or invalid segments in first itinerary");
                 return null;
             }
             
             JsonNode firstSegment = segments.get(0);
+            if (firstSegment == null) {
+                logger.warn("First segment is null in flight offer data");
+                return null;
+            }
+            
             JsonNode departure = firstSegment.get("departure");
             JsonNode arrival = firstSegment.get("arrival");
             JsonNode operating = firstSegment.get("operating");
             
-            String carrierCode = operating != null ? operating.get("carrierCode").asText() : 
-                                firstSegment.get("carrierCode").asText();
-            String flightNumber = operating != null ? operating.get("number").asText() : 
-                                 firstSegment.get("number").asText();
-            String departureDate = departure.get("at").asText().substring(0, 10); // Extract date part
-            String origin = departure.get("iataCode").asText();
-            String destination = arrival.get("iataCode").asText();
+            if (departure == null || arrival == null) {
+                logger.warn("Missing departure or arrival information in first segment");
+                return null;
+            }
+            
+            // Extract carrier code with proper null checks
+            String carrierCode = null;
+            if (operating != null && operating.get("carrierCode") != null) {
+                carrierCode = operating.get("carrierCode").asText();
+            } else if (firstSegment.get("carrierCode") != null) {
+                carrierCode = firstSegment.get("carrierCode").asText();
+            }
+            
+            if (carrierCode == null) {
+                logger.warn("Missing carrierCode in flight segment");
+                return null;
+            }
+            
+            // Extract flight number with proper null checks
+            String flightNumber = null;
+            if (operating != null && operating.get("number") != null) {
+                flightNumber = operating.get("number").asText();
+            } else if (firstSegment.get("number") != null) {
+                flightNumber = firstSegment.get("number").asText();
+            }
+            
+            if (flightNumber == null) {
+                logger.warn("Missing flight number in flight segment");
+                return null;
+            }
+            
+            // Extract departure date with proper null checks
+            JsonNode departureAt = departure.get("at");
+            if (departureAt == null) {
+                logger.warn("Missing departure 'at' field in flight segment");
+                return null;
+            }
+            String departureDate = departureAt.asText().substring(0, 10); // Extract date part
+            
+            // Extract origin with proper null checks
+            JsonNode originCode = departure.get("iataCode");
+            if (originCode == null) {
+                logger.warn("Missing departure iataCode in flight segment");
+                return null;
+            }
+            String origin = originCode.asText();
+            
+            // Extract destination with proper null checks
+            JsonNode destinationCode = arrival.get("iataCode");
+            if (destinationCode == null) {
+                logger.warn("Missing arrival iataCode in flight segment");
+                return null;
+            }
+            String destination = destinationCode.asText();
+            
+            logger.debug("Successfully extracted flight identifier: {} {} from {} to {} on {}", 
+                carrierCode, flightNumber, origin, destination, departureDate);
             
             return new FlightIdentifier(carrierCode, flightNumber, departureDate, origin, destination);
         } catch (Exception e) {
@@ -184,12 +246,46 @@ public class AlertEvaluationService {
             JsonNode arrival = firstSegment.get("arrival");
             JsonNode operating = firstSegment.get("operating");
             
-            String carrierCode = operating != null ? operating.get("carrierCode").asText() : 
-                                firstSegment.get("carrierCode").asText();
-            String flightNumber = operating != null ? operating.get("number").asText() : 
-                                 firstSegment.get("number").asText();
+            // Extract carrier code with proper null checks
+            String carrierCode = null;
+            if (operating != null && operating.get("carrierCode") != null) {
+                carrierCode = operating.get("carrierCode").asText();
+            } else if (firstSegment.get("carrierCode") != null) {
+                carrierCode = firstSegment.get("carrierCode").asText();
+            }
+            
+            if (carrierCode == null) {
+                return false;
+            }
+            
+            // Extract flight number with proper null checks
+            String flightNumber = null;
+            if (operating != null && operating.get("number") != null) {
+                flightNumber = operating.get("number").asText();
+            } else if (firstSegment.get("number") != null) {
+                flightNumber = firstSegment.get("number").asText();
+            }
+            
+            if (flightNumber == null) {
+                return false;
+            }
+            
+            // Extract departure date with proper null checks
+            if (departure == null || departure.get("at") == null) {
+                return false;
+            }
             String departureDate = departure.get("at").asText().substring(0, 10);
+            
+            // Extract origin with proper null checks
+            if (departure.get("iataCode") == null) {
+                return false;
+            }
             String origin = departure.get("iataCode").asText();
+            
+            // Extract destination with proper null checks
+            if (arrival == null || arrival.get("iataCode") == null) {
+                return false;
+            }
             String destination = arrival.get("iataCode").asText();
             
             return target.getCarrierCode().equals(carrierCode) &&
@@ -198,6 +294,7 @@ public class AlertEvaluationService {
                    target.getOrigin().equals(origin) &&
                    target.getDestination().equals(destination);
         } catch (Exception e) {
+            logger.debug("Error matching flight: {}", e.getMessage());
             return false;
         }
     }

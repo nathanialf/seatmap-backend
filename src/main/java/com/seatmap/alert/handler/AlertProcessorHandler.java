@@ -254,22 +254,82 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
     }
     
     /**
-     * Get fresh seatmap data for a specific bookmarked flight (Amadeus only for now)
+     * Get fresh seatmap data for a specific bookmarked flight using same logic as FlightSearchHandler
      */
     private FlightSearchResult getBookmarkFlightWithFreshSeatmap(Bookmark bookmark) {
         try {
             var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
             
-            // Use Amadeus service to get fresh seatmap (ignoring data source for now)
-            var seatMapResponse = amadeusService.getSeatMapFromOffer(flightData);
-            SeatMapData seatMapData = amadeusService.convertToSeatMapData(seatMapResponse);
-            return new FlightSearchResult(flightData, seatMapData, true, null);
+            // Determine data source from flight offer structure or default to AMADEUS
+            String dataSource = determineDataSource(flightData);
+            
+            // Get fresh seatmap based on data source
+            return fetchFlightWithFreshSeatmap(flightData, dataSource);
             
         } catch (Exception e) {
             logger.error("Error getting fresh seatmap for bookmark {}: {}", 
                 bookmark.getBookmarkId(), e.getMessage(), e);
         }
         return null;
+    }
+    
+    private FlightSearchResult fetchFlightWithFreshSeatmap(com.fasterxml.jackson.databind.JsonNode flightOffer, String dataSource) throws Exception {
+        try {
+            if ("AMADEUS".equals(dataSource)) {
+                // Use Amadeus service to get fresh seatmap
+                com.fasterxml.jackson.databind.JsonNode seatMapResponse = amadeusService.getSeatMapFromOffer(flightOffer);
+                com.seatmap.api.model.SeatMapData seatMapData = amadeusService.convertToSeatMapData(seatMapResponse);
+                return new FlightSearchResult(flightOffer, seatMapData, true, null);
+            } else if ("SABRE".equals(dataSource)) {
+                // TODO: Add Sabre support for alert processor
+                throw new Exception("Sabre data source not yet supported in alert processor");
+            } else {
+                throw new Exception("Unknown data source: " + dataSource);
+            }
+        } catch (Exception e) {
+            // Since this flight was previously bookmarked with working seatmap,
+            // failure now indicates temporary API issues (not permanent unsupported flight)
+            logger.error("Seatmap temporarily unavailable for bookmarked flight: {}", e.getMessage());
+            throw new com.seatmap.common.exception.SeatmapException(
+                "SEATMAP_TEMPORARILY_UNAVAILABLE", 
+                "Seatmap is temporarily unavailable. Please try again later.", 
+                500, 
+                e
+            );
+        }
+    }
+    
+    private String determineDataSource(com.fasterxml.jackson.databind.JsonNode flightOffer) {
+        try {
+            return flightOffer.path("dataSource").asText("AMADEUS"); // Default to AMADEUS if not found
+        } catch (Exception e) {
+            logger.warn("Error extracting dataSource from flight offer, defaulting to AMADEUS", e);
+            return "AMADEUS";
+        }
+    }
+    
+    private String extractFromFlightOffer(com.fasterxml.jackson.databind.JsonNode flightOffer, String field) {
+        if (flightOffer.has("itineraries") && flightOffer.get("itineraries").isArray() && flightOffer.get("itineraries").size() > 0) {
+            com.fasterxml.jackson.databind.JsonNode firstItinerary = flightOffer.get("itineraries").get(0);
+            if (firstItinerary.has("segments") && firstItinerary.get("segments").isArray() && firstItinerary.get("segments").size() > 0) {
+                com.fasterxml.jackson.databind.JsonNode firstSegment = firstItinerary.get("segments").get(0);
+                
+                switch (field) {
+                    case "carrierCode":
+                        return firstSegment.path("carrierCode").asText("");
+                    case "number":
+                        return firstSegment.path("number").asText("");
+                    case "origin":
+                        return firstSegment.path("departure").path("iataCode").asText("");
+                    case "destination":
+                        return firstSegment.path("arrival").path("iataCode").asText("");
+                    case "departureDate":
+                        String departureAt = firstSegment.path("departure").path("at").asText("");
+                        return departureAt.length() >= 10 ? departureAt.substring(0, 10) : "";
+                }
+            }
+        }
+        return "";
     }
     
     
