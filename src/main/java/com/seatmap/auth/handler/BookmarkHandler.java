@@ -411,10 +411,18 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
     
     private APIGatewayProxyResponseEvent createSuccessResponse(Object data) {
         try {
+            // Log AlertConfig data before API response serialization
+            logApiResponseAlertConfig("BEFORE_API_RESPONSE", data);
+            
+            String responseBody = objectMapper.writeValueAsString(data);
+            
+            // Log the actual JSON that will be sent to client
+            logApiResponseJson("API_RESPONSE_JSON", responseBody);
+            
             return new APIGatewayProxyResponseEvent()
                 .withStatusCode(200)
                 .withHeaders(createCorsHeaders())
-                .withBody(objectMapper.writeValueAsString(data));
+                .withBody(responseBody);
         } catch (Exception e) {
             logger.error("Error creating success response", e);
             return createErrorResponse(500, "Error creating response");
@@ -447,5 +455,169 @@ public class BookmarkHandler implements RequestHandler<APIGatewayProxyRequestEve
         headers.put("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key");
         headers.put("Content-Type", "application/json");
         return headers;
+    }
+    
+    /**
+     * Log AlertConfig data in API responses for debugging
+     */
+    private void logApiResponseAlertConfig(String context, Object data) {
+        try {
+            if (data == null) {
+                logger.debug("[ALERTCONFIG_API_DEBUG] {}: Response data is NULL", context);
+                return;
+            }
+            
+            // Check if data is a Bookmark
+            if (data instanceof Bookmark) {
+                Bookmark bookmark = (Bookmark) data;
+                logSingleBookmarkAlertConfig(context, bookmark);
+                return;
+            }
+            
+            // Check if data is a List of Bookmarks
+            if (data instanceof java.util.List) {
+                @SuppressWarnings("unchecked")
+                java.util.List<Object> list = (java.util.List<Object>) data;
+                for (int i = 0; i < list.size(); i++) {
+                    Object item = list.get(i);
+                    if (item instanceof Bookmark) {
+                        logSingleBookmarkAlertConfig(context + "[" + i + "]", (Bookmark) item);
+                    }
+                }
+                return;
+            }
+            
+            // Check if data is a Map containing bookmarks
+            if (data instanceof java.util.Map) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> map = (java.util.Map<String, Object>) data;
+                
+                // Check for "data" field containing bookmarks
+                Object dataField = map.get("data");
+                if (dataField instanceof java.util.List) {
+                    @SuppressWarnings("unchecked")
+                    java.util.List<Object> list = (java.util.List<Object>) dataField;
+                    for (int i = 0; i < list.size(); i++) {
+                        Object item = list.get(i);
+                        if (item instanceof Bookmark) {
+                            logSingleBookmarkAlertConfig(context + ".data[" + i + "]", (Bookmark) item);
+                        }
+                    }
+                } else if (dataField instanceof Bookmark) {
+                    logSingleBookmarkAlertConfig(context + ".data", (Bookmark) dataField);
+                }
+            }
+            
+        } catch (Exception e) {
+            logger.warn("[ALERTCONFIG_API_DEBUG] Error logging AlertConfig for {}: {}", context, e.getMessage());
+        }
+    }
+    
+    private void logSingleBookmarkAlertConfig(String context, Bookmark bookmark) {
+        if (bookmark == null) {
+            logger.debug("[ALERTCONFIG_API_DEBUG] {}: Bookmark is NULL", context);
+            return;
+        }
+        
+        String bookmarkId = bookmark.getBookmarkId();
+        String userId = bookmark.getUserId();
+        
+        if (bookmark.getAlertConfig() == null) {
+            logger.debug("[ALERTCONFIG_API_DEBUG] {}: BookmarkId={}, UserId={}, AlertConfig=NULL", 
+                context, bookmarkId, userId);
+            return;
+        }
+        
+        Bookmark.AlertConfig alertConfig = bookmark.getAlertConfig();
+        
+        logger.info("[ALERTCONFIG_API_DEBUG] {}: BookmarkId={}, UserId={}, " +
+            "AlertThreshold={}, LastEvaluated={}, LastTriggered={}, TriggerHistory={}", 
+            context, bookmarkId, userId,
+            alertConfig.getAlertThreshold(),
+            alertConfig.getLastEvaluated(),
+            alertConfig.getLastTriggered(),
+            alertConfig.getTriggerHistory() != null ? "[" + alertConfig.getTriggerHistory().length() + " chars]" : "null"
+        );
+    }
+    
+    /**
+     * Log the actual JSON response to check for field presence
+     */
+    private void logApiResponseJson(String context, String responseBody) {
+        try {
+            if (responseBody == null || responseBody.isEmpty()) {
+                logger.debug("[ALERTCONFIG_JSON_DEBUG] {}: Response body is empty", context);
+                return;
+            }
+            
+            // Check for AlertConfig fields in the JSON
+            boolean hasAlertConfig = responseBody.contains("\"alertConfig\":");
+            boolean hasLastEvaluated = responseBody.contains("\"lastEvaluated\":");
+            boolean hasLastTriggered = responseBody.contains("\"lastTriggered\":");
+            boolean hasAlertThreshold = responseBody.contains("\"alertThreshold\":");
+            
+            if (hasAlertConfig) {
+                logger.info("[ALERTCONFIG_JSON_DEBUG] {}: JSON contains AlertConfig fields - " +
+                    "alertThreshold:{}, lastEvaluated:{}, lastTriggered:{}", 
+                    context, hasAlertThreshold, hasLastEvaluated, hasLastTriggered);
+                    
+                // Log a snippet of the alertConfig JSON for inspection
+                int alertConfigStart = responseBody.indexOf("\"alertConfig\":");
+                if (alertConfigStart != -1) {
+                    int alertConfigEnd = findJsonObjectEnd(responseBody, alertConfigStart + 14);
+                    if (alertConfigEnd != -1) {
+                        String alertConfigJson = responseBody.substring(alertConfigStart, alertConfigEnd + 1);
+                        logger.info("[ALERTCONFIG_JSON_DEBUG] {}: AlertConfig JSON snippet: {}", 
+                            context, alertConfigJson);
+                    }
+                }
+            } else {
+                logger.debug("[ALERTCONFIG_JSON_DEBUG] {}: JSON does not contain AlertConfig", context);
+            }
+            
+        } catch (Exception e) {
+            logger.warn("[ALERTCONFIG_JSON_DEBUG] Error analyzing JSON for {}: {}", context, e.getMessage());
+        }
+    }
+    
+    /**
+     * Find the end of a JSON object starting from a given position
+     */
+    private int findJsonObjectEnd(String json, int startPos) {
+        int braceCount = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        
+        for (int i = startPos; i < json.length(); i++) {
+            char c = json.charAt(i);
+            
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            
+            if (c == '\\' && inString) {
+                escaped = true;
+                continue;
+            }
+            
+            if (c == '"') {
+                inString = !inString;
+                continue;
+            }
+            
+            if (!inString) {
+                if (c == '{') {
+                    braceCount++;
+                } else if (c == '}') {
+                    braceCount--;
+                    if (braceCount == 0) {
+                        return i;
+                    }
+                }
+            }
+        }
+        
+        return -1;
     }
 }

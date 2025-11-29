@@ -113,8 +113,14 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
                             AlertEvaluationService.AlertEvaluationResult result = 
                                 alertEvaluationService.evaluateAlert(bookmark, searchResponse);
                             
+                            // Log AlertConfig values before updating timestamp
+                            logAlertConfigValues("BEFORE_UPDATE_TIMESTAMP", bookmark);
+                            
                             // Update last evaluated timestamp
                             bookmark.getAlertConfig().updateLastEvaluated();
+                            
+                            // Log AlertConfig values after updating timestamp
+                            logAlertConfigValues("AFTER_UPDATE_TIMESTAMP", bookmark);
                             
                             if (result.isTriggered()) {
                                 // Check if we should send notification (avoid duplicates)
@@ -122,13 +128,25 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
                                     sendAlertNotification(bookmark, result);
                                     triggeredAlerts++;
                                     
+                                    // Log AlertConfig values before recording trigger
+                                    logAlertConfigValues("BEFORE_RECORD_TRIGGER", bookmark);
+                                    
                                     // Record trigger
                                     bookmark.getAlertConfig().recordTrigger();
+                                    
+                                    // Log AlertConfig values after recording trigger
+                                    logAlertConfigValues("AFTER_RECORD_TRIGGER", bookmark);
                                 }
                             }
                             
+                            // Log AlertConfig values before saving bookmark
+                            logAlertConfigValues("BEFORE_BOOKMARK_SAVE", bookmark);
+                            
                             // Save updated bookmark
                             bookmarkRepository.saveBookmark(bookmark);
+                            
+                            // Log AlertConfig values after saving bookmark
+                            logAlertConfigValues("AFTER_BOOKMARK_SAVE", bookmark);
                             
                         } catch (Exception e) {
                             logger.error("Error processing alert for bookmark {}: {}", 
@@ -307,5 +325,35 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
             logger.error("Error sending alert notification for bookmark {}: {}", 
                 bookmark.getBookmarkId(), e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Log AlertConfig values for debugging in alert processing workflow
+     */
+    private void logAlertConfigValues(String context, com.seatmap.common.model.Bookmark bookmark) {
+        if (bookmark == null) {
+            logger.debug("[ALERTCONFIG_PROCESSOR_DEBUG] {}: Bookmark is NULL", context);
+            return;
+        }
+        
+        String bookmarkId = bookmark.getBookmarkId();
+        String userId = bookmark.getUserId();
+        
+        if (bookmark.getAlertConfig() == null) {
+            logger.debug("[ALERTCONFIG_PROCESSOR_DEBUG] {}: BookmarkId={}, UserId={}, AlertConfig=NULL", 
+                context, bookmarkId, userId);
+            return;
+        }
+        
+        com.seatmap.common.model.Bookmark.AlertConfig alertConfig = bookmark.getAlertConfig();
+        
+        logger.info("[ALERTCONFIG_PROCESSOR_DEBUG] {}: BookmarkId={}, UserId={}, " +
+            "AlertThreshold={}, LastEvaluated={}, LastTriggered={}, TriggerHistory={}", 
+            context, bookmarkId, userId,
+            alertConfig.getAlertThreshold(),
+            alertConfig.getLastEvaluated(),
+            alertConfig.getLastTriggered(),
+            alertConfig.getTriggerHistory() != null ? "[" + alertConfig.getTriggerHistory().length() + " chars]" : "null"
+        );
     }
 }

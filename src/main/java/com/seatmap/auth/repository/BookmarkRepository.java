@@ -5,6 +5,8 @@ import com.seatmap.common.model.Bookmark;
 import com.seatmap.common.repository.DynamoDbRepository;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -14,6 +16,8 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
+    
+    private static final Logger logger = LoggerFactory.getLogger(BookmarkRepository.class);
     
     public BookmarkRepository(DynamoDbClient dynamoDbClient, String tableName) {
         super(dynamoDbClient, tableName);
@@ -53,7 +57,15 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
             return response.items().stream()
                     .map(item -> {
                         try {
-                            return fromAttributeValueMap(item);
+                            // Log DynamoDB raw data before deserialization
+                            logDynamoDbAlertConfig("DYNAMODB_QUERY_LOAD", item);
+                            
+                            Bookmark bookmark = fromAttributeValueMap(item);
+                            
+                            // Log AlertConfig values after loading from DynamoDB
+                            logAlertConfigValues("AFTER_QUERY_LOAD", bookmark);
+                            
+                            return bookmark;
                         } catch (SeatmapException e) {
                             throw new RuntimeException(e);
                         }
@@ -81,7 +93,15 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
             GetItemResponse response = dynamoDbClient.getItem(request);
             
             if (response.hasItem()) {
-                return Optional.of(fromAttributeValueMap(response.item()));
+                // Log DynamoDB raw data before deserialization
+                logDynamoDbAlertConfig("DYNAMODB_LOAD", response.item());
+                
+                Bookmark bookmark = fromAttributeValueMap(response.item());
+                
+                // Log AlertConfig values after loading from DynamoDB
+                logAlertConfigValues("AFTER_LOAD", bookmark);
+                
+                return Optional.of(bookmark);
             } else {
                 return Optional.empty();
             }
@@ -97,7 +117,13 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
         try {
             bookmark.setUpdatedAt(Instant.now());
             
+            // Log AlertConfig values before saving to DynamoDB
+            logAlertConfigValues("BEFORE_SAVE", bookmark);
+            
             Map<String, AttributeValue> item = toAttributeValueMap(bookmark);
+            
+            // Log DynamoDB AttributeValue structure for AlertConfig
+            logDynamoDbAlertConfig("DYNAMODB_SAVE", item);
             
             PutItemRequest request = PutItemRequest.builder()
                     .tableName(tableName)
@@ -105,7 +131,12 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
                     .build();
                     
             dynamoDbClient.putItem(request);
+            
+            logger.info("Successfully saved bookmark {} for user {} with AlertConfig", 
+                bookmark.getBookmarkId(), bookmark.getUserId());
         } catch (DynamoDbException e) {
+            logger.error("Failed to save bookmark {} for user {}: {}", 
+                bookmark.getBookmarkId(), bookmark.getUserId(), e.getMessage());
             throw SeatmapException.internalError("Failed to save bookmark: " + e.getMessage());
         }
     }
@@ -323,5 +354,113 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
             System.err.println("Error extracting departure time from bookmark " + bookmark.getBookmarkId() + ": " + e.getMessage());
         }
         return null;
+    }
+    
+    /**
+     * Log AlertConfig values for debugging field preservation issues
+     */
+    private void logAlertConfigValues(String context, Bookmark bookmark) {
+        if (bookmark == null) {
+            logger.debug("[ALERTCONFIG_DEBUG] {}: Bookmark is NULL", context);
+            return;
+        }
+        
+        String bookmarkId = bookmark.getBookmarkId();
+        String userId = bookmark.getUserId();
+        
+        if (bookmark.getAlertConfig() == null) {
+            logger.debug("[ALERTCONFIG_DEBUG] {}: BookmarkId={}, UserId={}, AlertConfig=NULL", 
+                context, bookmarkId, userId);
+            return;
+        }
+        
+        Bookmark.AlertConfig alertConfig = bookmark.getAlertConfig();
+        
+        logger.info("[ALERTCONFIG_DEBUG] {}: BookmarkId={}, UserId={}, " +
+            "AlertThreshold={}, LastEvaluated={}, LastTriggered={}, TriggerHistory={}", 
+            context, bookmarkId, userId,
+            alertConfig.getAlertThreshold(),
+            alertConfig.getLastEvaluated(),
+            alertConfig.getLastTriggered(),
+            alertConfig.getTriggerHistory() != null ? "[" + alertConfig.getTriggerHistory().length() + " chars]" : "null"
+        );
+    }
+    
+    /**
+     * Log DynamoDB AttributeValue structure for AlertConfig
+     */
+    private void logDynamoDbAlertConfig(String context, Map<String, AttributeValue> item) {
+        if (item == null) {
+            logger.debug("[ALERTCONFIG_DDB_DEBUG] {}: DynamoDB item is NULL", context);
+            return;
+        }
+        
+        AttributeValue userIdAttr = item.get("userId");
+        AttributeValue bookmarkIdAttr = item.get("bookmarkId");
+        AttributeValue alertConfigAttr = item.get("alertConfig");
+        
+        String userId = (userIdAttr != null && userIdAttr.s() != null) ? userIdAttr.s() : "unknown";
+        String bookmarkId = (bookmarkIdAttr != null && bookmarkIdAttr.s() != null) ? bookmarkIdAttr.s() : "unknown";
+        
+        if (alertConfigAttr == null) {
+            logger.debug("[ALERTCONFIG_DDB_DEBUG] {}: BookmarkId={}, UserId={}, AlertConfig AttributeValue=NULL", 
+                context, bookmarkId, userId);
+            return;
+        }
+        
+        if (alertConfigAttr.m() == null) {
+            logger.warn("[ALERTCONFIG_DDB_DEBUG] {}: BookmarkId={}, UserId={}, AlertConfig AttributeValue is NOT a Map: {}", 
+                context, bookmarkId, userId, alertConfigAttr);
+            return;
+        }
+        
+        Map<String, AttributeValue> alertConfigMap = alertConfigAttr.m();
+        
+        AttributeValue thresholdAttr = alertConfigMap.get("alertThreshold");
+        AttributeValue lastEvaluatedAttr = alertConfigMap.get("lastEvaluated");
+        AttributeValue lastTriggeredAttr = alertConfigMap.get("lastTriggered");
+        AttributeValue triggerHistoryAttr = alertConfigMap.get("triggerHistory");
+        
+        logger.info("[ALERTCONFIG_DDB_DEBUG] {}: BookmarkId={}, UserId={}, " +
+            "AlertThreshold=[Type:{}, Value:{}], " +
+            "LastEvaluated=[Type:{}, Value:{}], " +
+            "LastTriggered=[Type:{}, Value:{}], " +
+            "TriggerHistory=[Type:{}, Value:{}]",
+            context, bookmarkId, userId,
+            getAttributeType(thresholdAttr), getAttributeValue(thresholdAttr),
+            getAttributeType(lastEvaluatedAttr), getAttributeValue(lastEvaluatedAttr),
+            getAttributeType(lastTriggeredAttr), getAttributeValue(lastTriggeredAttr),
+            getAttributeType(triggerHistoryAttr), getTruncatedAttributeValue(triggerHistoryAttr, 50)
+        );
+    }
+    
+    private String getAttributeType(AttributeValue attr) {
+        if (attr == null) return "NULL";
+        if (attr.s() != null) return "S";
+        if (attr.n() != null) return "N";
+        if (attr.bool() != null) return "BOOL";
+        if (attr.nul() != null && attr.nul()) return "NULL";
+        if (attr.m() != null) return "M";
+        if (attr.l() != null) return "L";
+        return "UNKNOWN";
+    }
+    
+    private String getAttributeValue(AttributeValue attr) {
+        if (attr == null) return "null";
+        if (attr.s() != null) return attr.s();
+        if (attr.n() != null) return attr.n();
+        if (attr.bool() != null) return attr.bool().toString();
+        if (attr.nul() != null && attr.nul()) return "null";
+        if (attr.m() != null) return "Map[" + attr.m().keySet() + "]";
+        if (attr.l() != null) return "List[" + attr.l().size() + "]";
+        return "unknown";
+    }
+    
+    private String getTruncatedAttributeValue(AttributeValue attr, int maxLength) {
+        String value = getAttributeValue(attr);
+        if (value != null && value.length() > maxLength) {
+            return value.substring(0, maxLength) + "...";
+        }
+        return value;
     }
 }
