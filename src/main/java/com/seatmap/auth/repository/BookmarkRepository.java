@@ -256,22 +256,58 @@ public class BookmarkRepository extends DynamoDbRepository<Bookmark> {
     }
     
     /**
-     * Find bookmarks with active alerts for flights departing within the next 48 hours
+     * Find bookmarks with active alerts for flights departing within the next 14 days
      */
     public List<Bookmark> findBookmarksWithActiveAlertsForUpcomingFlights() throws SeatmapException {
         List<Bookmark> allActiveAlerts = findBookmarksWithActiveAlerts();
         
-        // Filter for flights departing within next 48 hours
-        Instant fortyEightHoursFromNow = Instant.now().plusSeconds(48 * 60 * 60);
+        // Filter for flights departing within next 14 days
+        Instant fourteenDaysFromNow = Instant.now().plusSeconds(14 * 24 * 60 * 60);
         
         return allActiveAlerts.stream()
                 .filter(bookmark -> {
-                    if (bookmark.getExpiresAt() == null) {
-                        return true; // No expiration set, include it
+                    Instant flightDepartureTime = getFlightDepartureTime(bookmark);
+                    if (flightDepartureTime == null) {
+                        return true; // Can't determine departure time, include it to be safe
                     }
-                    // Include if expires within next 48 hours (meaning flight is soon)
-                    return bookmark.getExpiresAt().isBefore(fortyEightHoursFromNow);
+                    // Include if flight departs within next 14 days
+                    return flightDepartureTime.isBefore(fourteenDaysFromNow) && flightDepartureTime.isAfter(Instant.now());
                 })
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * Extract flight departure time from bookmark data
+     */
+    private Instant getFlightDepartureTime(Bookmark bookmark) {
+        try {
+            if (bookmark.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
+                // For saved searches, use the departureDate field
+                if (bookmark.getDepartureDate() != null) {
+                    return java.time.LocalDate.parse(bookmark.getDepartureDate()).atStartOfDay().atZone(java.time.ZoneOffset.UTC).toInstant();
+                }
+            } else if (bookmark.getItemType() == Bookmark.ItemType.BOOKMARK) {
+                // For individual flight bookmarks, parse the flight offer data
+                if (bookmark.getFlightOfferData() != null) {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    com.fasterxml.jackson.databind.JsonNode flightData = mapper.readTree(bookmark.getFlightOfferData());
+                    com.fasterxml.jackson.databind.JsonNode itineraries = flightData.get("itineraries");
+                    if (itineraries != null && itineraries.size() > 0) {
+                        com.fasterxml.jackson.databind.JsonNode segments = itineraries.get(0).get("segments");
+                        if (segments != null && segments.size() > 0) {
+                            com.fasterxml.jackson.databind.JsonNode departure = segments.get(0).get("departure");
+                            if (departure != null && departure.has("at")) {
+                                String departureTime = departure.get("at").asText();
+                                return java.time.Instant.parse(departureTime);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Log error but don't fail - return null to include bookmark in processing
+            System.err.println("Error extracting departure time from bookmark " + bookmark.getBookmarkId() + ": " + e.getMessage());
+        }
+        return null;
     }
 }
