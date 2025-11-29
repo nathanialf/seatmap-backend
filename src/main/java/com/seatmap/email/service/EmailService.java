@@ -77,7 +77,7 @@ public class EmailService {
         // Extract flight details for email
         FlightDetails flightDetails = extractFlightDetails(bookmark, alertResult);
         
-        String subject = buildAlertSubject(flightDetails, bookmark.getItemType());
+        String subject = buildAlertSubject(bookmark.getTitle(), bookmark.getItemType());
         String htmlBody = buildAlertEmailHtml(firstName, bookmark, alertResult, flightDetails);
         String textBody = buildAlertEmailText(firstName, bookmark, alertResult, flightDetails);
         
@@ -149,12 +149,16 @@ public class EmailService {
             if (flight != null) {
                 return extractFlightDetailsFromResult(flight);
             }
-            // Fallback to bookmark title
-            return new FlightDetails(bookmark.getTitle(), "", "", "", "");
+            // For bookmarks, try to extract from flightOfferData
+            if (bookmark.getFlightOfferData() != null) {
+                return extractFlightDetailsFromOfferData(bookmark.getFlightOfferData());
+            }
+            // Fallback to empty details
+            return new FlightDetails("", "", "", "", "");
         } else {
             // For saved searches, use search criteria
             return new FlightDetails(
-                bookmark.getTitle(),
+                "", // No specific flight number for saved searches
                 bookmark.getOrigin() != null ? bookmark.getOrigin() : "",
                 bookmark.getDestination() != null ? bookmark.getDestination() : "",
                 bookmark.getDepartureDate() != null ? bookmark.getDepartureDate() : "",
@@ -197,20 +201,81 @@ public class EmailService {
         } catch (Exception e) {
             logger.warn("Error extracting flight details: {}", e.getMessage());
         }
-        return new FlightDetails("Flight", "", "", "", "");
+        return new FlightDetails("", "", "", "", "");
     }
     
     /**
-     * Build alert email subject line
+     * Extract flight details from bookmark's flightOfferData
      */
-    private String buildAlertSubject(FlightDetails flight, Bookmark.ItemType itemType) {
-        if (itemType == Bookmark.ItemType.BOOKMARK) {
-            return String.format("Seat Alert: %s→%s %s - %s Availability Changed", 
-                flight.origin, flight.destination, flight.departureDate, flight.flightNumber);
-        } else {
-            return String.format("Seat Alert: %s→%s %s - Flights Available", 
-                flight.origin, flight.destination, flight.departureDate);
+    private FlightDetails extractFlightDetailsFromOfferData(String flightOfferData) {
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode flightData = mapper.readTree(flightOfferData);
+            
+            com.fasterxml.jackson.databind.JsonNode itineraries = flightData.get("itineraries");
+            if (itineraries != null && itineraries.isArray() && itineraries.size() > 0) {
+                com.fasterxml.jackson.databind.JsonNode firstItinerary = itineraries.get(0);
+                com.fasterxml.jackson.databind.JsonNode segments = firstItinerary.get("segments");
+                if (segments != null && segments.isArray() && segments.size() > 0) {
+                    com.fasterxml.jackson.databind.JsonNode firstSegment = segments.get(0);
+                    com.fasterxml.jackson.databind.JsonNode departure = firstSegment.get("departure");
+                    com.fasterxml.jackson.databind.JsonNode arrival = firstSegment.get("arrival");
+                    com.fasterxml.jackson.databind.JsonNode operating = firstSegment.get("operating");
+                    
+                    String carrierCode = null;
+                    if (operating != null && operating.get("carrierCode") != null) {
+                        carrierCode = operating.get("carrierCode").asText();
+                    } else if (firstSegment.get("carrierCode") != null) {
+                        carrierCode = firstSegment.get("carrierCode").asText();
+                    }
+                    
+                    String flightNumber = null;
+                    if (operating != null && operating.get("number") != null) {
+                        flightNumber = operating.get("number").asText();
+                    } else if (firstSegment.get("number") != null) {
+                        flightNumber = firstSegment.get("number").asText();
+                    }
+                    
+                    String origin = "";
+                    if (departure != null && departure.get("iataCode") != null) {
+                        origin = departure.get("iataCode").asText();
+                    }
+                    
+                    String destination = "";
+                    if (arrival != null && arrival.get("iataCode") != null) {
+                        destination = arrival.get("iataCode").asText();
+                    }
+                    
+                    String departureDate = "";
+                    if (departure != null && departure.get("at") != null) {
+                        departureDate = departure.get("at").asText().substring(0, 10);
+                    }
+                    
+                    String fullFlightNumber = "";
+                    if (carrierCode != null && flightNumber != null) {
+                        fullFlightNumber = carrierCode + flightNumber;
+                    }
+                    
+                    return new FlightDetails(
+                        fullFlightNumber,
+                        origin,
+                        destination,
+                        departureDate,
+                        carrierCode != null ? carrierCode : ""
+                    );
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Error extracting flight details from offer data: {}", e.getMessage());
         }
+        return new FlightDetails("", "", "", "", "");
+    }
+    
+    /**
+     * Build alert email subject line using bookmark name
+     */
+    private String buildAlertSubject(String bookmarkName, Bookmark.ItemType itemType) {
+        return bookmarkName;
     }
     
     /**
@@ -220,11 +285,8 @@ public class EmailService {
                                      AlertEvaluationService.AlertEvaluationResult alertResult,
                                      FlightDetails flight) {
         String environment = System.getenv("ENVIRONMENT");
-        String frontendUrl = "dev".equals(environment) ? "https://dev.myseatmap.com" : "https://myseatmap.com";
-        String bookmarkUrl = frontendUrl + "/bookmarks/" + bookmark.getBookmarkId();
-        String alertSettingsUrl = frontendUrl + "/bookmarks";
+        String dashboardUrl = "dev".equals(environment) ? "https://dev.myseatmap.com/dashboard" : "https://myseatmap.com/dashboard";
         
-        String alertType = bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? "below" : "above";
         String thresholdUnit = bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? " seats" : "%";
         
         return """
@@ -243,10 +305,10 @@ public class EmailService {
                     <p>Your seat availability alert has been triggered:</p>
                     
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                        <h3 style="margin-top: 0; color: #2c3e50;">Flight Details</h3>
-                        <p><strong>Bookmark:</strong> %s</p>
-                        <p><strong>Route:</strong> %s → %s</p>
-                        <p><strong>Date:</strong> %s</p>
+                        <h3 style="margin-top: 0; color: #2c3e50;">Bookmark Details</h3>
+                        <p><strong>Name:</strong> %s</p>
+                        %s
+                        %s
                         %s
                     </div>
                     
@@ -259,12 +321,8 @@ public class EmailService {
                     
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="%s" 
-                           style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-right: 10px;">
-                            View Bookmark
-                        </a>
-                        <a href="%s" 
-                           style="background-color: #95a5a6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                            Manage Alerts
+                           style="background-color: #3498db; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                            View Dashboard
                         </a>
                     </div>
                     
@@ -283,17 +341,15 @@ public class EmailService {
             """.formatted(
                 firstName != null ? firstName : "there",
                 bookmark.getTitle(),
-                flight.origin,
-                flight.destination,
-                flight.departureDate,
                 flight.flightNumber.isEmpty() ? "" : String.format("<p><strong>Flight:</strong> %s</p>", flight.flightNumber),
+                (!flight.origin.isEmpty() && !flight.destination.isEmpty()) ? String.format("<p><strong>Route:</strong> %s → %s</p>", flight.origin, flight.destination) : "",
+                flight.departureDate.isEmpty() ? "" : String.format("<p><strong>Date:</strong> %s</p>", flight.departureDate),
                 alertResult.getMessage(),
                 alertResult.getThreshold(),
                 thresholdUnit,
                 alertResult.getCurrentValue(),
                 bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? "" : "%",
-                bookmarkUrl,
-                alertSettingsUrl
+                dashboardUrl
             );
     }
     
@@ -304,9 +360,7 @@ public class EmailService {
                                      AlertEvaluationService.AlertEvaluationResult alertResult,
                                      FlightDetails flight) {
         String environment = System.getenv("ENVIRONMENT");
-        String frontendUrl = "dev".equals(environment) ? "https://dev.myseatmap.com" : "https://myseatmap.com";
-        String bookmarkUrl = frontendUrl + "/bookmarks/" + bookmark.getBookmarkId();
-        String alertSettingsUrl = frontendUrl + "/bookmarks";
+        String dashboardUrl = "dev".equals(environment) ? "https://dev.myseatmap.com/dashboard" : "https://myseatmap.com/dashboard";
         
         String thresholdUnit = bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? " seats" : "%";
         
@@ -317,10 +371,10 @@ public class EmailService {
             
             Your seat availability alert has been triggered:
             
-            FLIGHT DETAILS
-            Bookmark: %s
-            Route: %s → %s
-            Date: %s
+            BOOKMARK DETAILS
+            Name: %s
+            %s
+            %s
             %s
             
             ALERT DETAILS
@@ -329,8 +383,7 @@ public class EmailService {
             Current Status: %.0f%s
             
             ACTIONS
-            View Bookmark: %s
-            Manage Alerts: %s
+            View Dashboard: %s
             
             This alert was generated based on your bookmark settings. You can modify or disable alerts at any time.
             
@@ -339,17 +392,15 @@ public class EmailService {
             """.formatted(
                 firstName != null ? firstName : "there",
                 bookmark.getTitle(),
-                flight.origin,
-                flight.destination,
-                flight.departureDate,
                 flight.flightNumber.isEmpty() ? "" : String.format("Flight: %s", flight.flightNumber),
+                (!flight.origin.isEmpty() && !flight.destination.isEmpty()) ? String.format("Route: %s → %s", flight.origin, flight.destination) : "",
+                flight.departureDate.isEmpty() ? "" : String.format("Date: %s", flight.departureDate),
                 alertResult.getMessage(),
                 alertResult.getThreshold(),
                 thresholdUnit,
                 alertResult.getCurrentValue(),
                 bookmark.getItemType() == Bookmark.ItemType.BOOKMARK ? "" : "%",
-                bookmarkUrl,
-                alertSettingsUrl
+                dashboardUrl
             );
     }
     

@@ -25,6 +25,9 @@ package com.seatmap.email.service;
  */
 
 import com.seatmap.common.exception.SeatmapException;
+import com.seatmap.alert.service.AlertEvaluationService;
+import com.seatmap.api.model.FlightSearchResult;
+import com.seatmap.common.model.Bookmark;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +39,11 @@ import software.amazon.awssdk.services.ses.SesClient;
 import software.amazon.awssdk.services.ses.model.*;
 
 import java.lang.reflect.Field;
+import java.time.Instant;
+import java.util.List;
+import java.util.ArrayList;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -271,6 +279,172 @@ class EmailServiceTest {
         
         // Reset mock for next test
         reset(mockSesClient);
+    }
+
+    @Test
+    void sendSeatAvailabilityAlert_WithBookmarkType_UsesBookmarkNameAsSubject() throws SeatmapException {
+        // Arrange
+        String email = "user@example.com";
+        String firstName = "John";
+        String bookmarkName = "My Favorite Flight AA123";
+        
+        Bookmark bookmark = createTestBookmark(bookmarkName, Bookmark.ItemType.BOOKMARK);
+        AlertEvaluationService.AlertEvaluationResult alertResult = createTestAlertResult(5.0, 3.0, "Seat availability dropped");
+        
+        SendEmailResponse mockResponse = SendEmailResponse.builder()
+            .messageId("test-alert-message-id")
+            .build();
+        
+        when(mockSesClient.sendEmail(any(SendEmailRequest.class))).thenReturn(mockResponse);
+
+        // Act
+        assertDoesNotThrow(() -> emailService.sendSeatAvailabilityAlert(email, firstName, bookmark, alertResult));
+
+        // Assert
+        verify(mockSesClient).sendEmail(any(SendEmailRequest.class));
+    }
+
+    @Test
+    void sendSeatAvailabilityAlert_WithSavedSearchType_UsesBookmarkNameAsSubject() throws SeatmapException {
+        // Arrange
+        String email = "user@example.com";
+        String firstName = "Jane";
+        String bookmarkName = "LAX to JFK Search";
+        
+        Bookmark bookmark = createTestSavedSearch(bookmarkName, "LAX", "JFK", "2025-12-01");
+        AlertEvaluationService.AlertEvaluationResult alertResult = createTestAlertResult(75.0, 50.0, "Found flights above threshold");
+        
+        SendEmailResponse mockResponse = SendEmailResponse.builder()
+            .messageId("test-search-alert-message-id")
+            .build();
+        
+        when(mockSesClient.sendEmail(any(SendEmailRequest.class))).thenReturn(mockResponse);
+
+        // Act
+        assertDoesNotThrow(() -> emailService.sendSeatAvailabilityAlert(email, firstName, bookmark, alertResult));
+
+        // Assert
+        verify(mockSesClient).sendEmail(any(SendEmailRequest.class));
+    }
+
+    @Test
+    void sendSeatAvailabilityAlert_WithBookmarkContainingFlightData_ExtractsFlightDetails() throws SeatmapException {
+        // Arrange
+        String email = "user@example.com";
+        String firstName = "Bob";
+        String bookmarkName = "Important Business Trip";
+        
+        Bookmark bookmark = createTestBookmarkWithFlightData(bookmarkName);
+        AlertEvaluationService.AlertEvaluationResult alertResult = createTestAlertResult(2.0, 5.0, "Seat availability dropped");
+        
+        SendEmailResponse mockResponse = SendEmailResponse.builder()
+            .messageId("test-flight-data-alert-id")
+            .build();
+        
+        when(mockSesClient.sendEmail(any(SendEmailRequest.class))).thenReturn(mockResponse);
+
+        // Act
+        assertDoesNotThrow(() -> emailService.sendSeatAvailabilityAlert(email, firstName, bookmark, alertResult));
+
+        // Assert
+        verify(mockSesClient).sendEmail(any(SendEmailRequest.class));
+    }
+
+    @Test
+    void sendSeatAvailabilityAlert_WithSesException_ThrowsSeatmapException() {
+        // Arrange
+        String email = "user@example.com";
+        String firstName = "Alice";
+        String bookmarkName = "Test Alert";
+        
+        Bookmark bookmark = createTestBookmark(bookmarkName, Bookmark.ItemType.BOOKMARK);
+        AlertEvaluationService.AlertEvaluationResult alertResult = createTestAlertResult(1.0, 5.0, "Alert triggered");
+        
+        when(mockSesClient.sendEmail(any(SendEmailRequest.class)))
+            .thenThrow(SesException.builder()
+                .message("Alert email send failed")
+                .statusCode(500)
+                .build());
+
+        // Act & Assert
+        SeatmapException exception = assertThrows(SeatmapException.class, () -> 
+            emailService.sendSeatAvailabilityAlert(email, firstName, bookmark, alertResult));
+        
+        assertEquals("EMAIL_SEND_ERROR", exception.getErrorCode());
+        assertEquals("Failed to send alert email", exception.getMessage());
+        assertEquals(500, exception.getHttpStatus());
+        verify(mockSesClient).sendEmail(any(SendEmailRequest.class));
+    }
+
+    private Bookmark createTestBookmark(String title, Bookmark.ItemType itemType) {
+        Bookmark bookmark = new Bookmark();
+        bookmark.setUserId("test-user-id");
+        bookmark.setBookmarkId("test-bookmark-id");
+        bookmark.setTitle(title);
+        bookmark.setItemType(itemType);
+        bookmark.setCreatedAt(Instant.now());
+        bookmark.setUpdatedAt(Instant.now());
+        
+        Bookmark.AlertConfig alertConfig = new Bookmark.AlertConfig();
+        alertConfig.setAlertThreshold(5.0);
+        bookmark.setAlertConfig(alertConfig);
+        
+        return bookmark;
+    }
+
+    private Bookmark createTestSavedSearch(String title, String origin, String destination, String departureDate) {
+        Bookmark bookmark = createTestBookmark(title, Bookmark.ItemType.SAVED_SEARCH);
+        bookmark.setOrigin(origin);
+        bookmark.setDestination(destination);
+        bookmark.setDepartureDate(departureDate);
+        return bookmark;
+    }
+
+    private Bookmark createTestBookmarkWithFlightData(String title) {
+        Bookmark bookmark = createTestBookmark(title, Bookmark.ItemType.BOOKMARK);
+        
+        // Create realistic flight offer data JSON
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode flightOfferData = mapper.createObjectNode();
+        ObjectNode itinerary = mapper.createObjectNode();
+        ObjectNode segment = mapper.createObjectNode();
+        ObjectNode departure = mapper.createObjectNode();
+        ObjectNode arrival = mapper.createObjectNode();
+        ObjectNode operating = mapper.createObjectNode();
+        
+        departure.put("iataCode", "LAX");
+        departure.put("at", "2025-12-01T08:00:00Z");
+        
+        arrival.put("iataCode", "JFK");
+        arrival.put("at", "2025-12-01T16:00:00Z");
+        
+        operating.put("carrierCode", "AA");
+        operating.put("number", "123");
+        
+        segment.set("departure", departure);
+        segment.set("arrival", arrival);
+        segment.set("operating", operating);
+        
+        itinerary.set("segments", mapper.createArrayNode().add(segment));
+        flightOfferData.set("itineraries", mapper.createArrayNode().add(itinerary));
+        
+        bookmark.setFlightOfferData(flightOfferData.toString());
+        return bookmark;
+    }
+
+    private AlertEvaluationService.AlertEvaluationResult createTestAlertResult(double currentValue, double threshold, String message) {
+        // Create a minimal FlightSearchResult for testing
+        FlightSearchResult mockFlight = new FlightSearchResult();
+        mockFlight.setId("test-flight-id");
+        mockFlight.setNumberOfBookableSeats(5);
+        mockFlight.setDataSource("AMADEUS");
+        
+        // Create minimal flight data JsonNode
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode flightNode = mapper.createObjectNode();
+        flightNode.put("id", "test-flight-id");
+        
+        return AlertEvaluationService.AlertEvaluationResult.triggered(message, currentValue, threshold, mockFlight);
     }
 
     @SuppressWarnings("unchecked")
