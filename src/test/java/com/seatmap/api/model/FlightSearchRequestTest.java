@@ -289,6 +289,21 @@ class FlightSearchRequestTest {
     }
 
     @Test
+    void validation_AlphanumericAirlineCodes_PassValidation() {
+        // Test various alphanumeric airline codes
+        String[] validCodes = {"H2", "3M", "9W", "B6", "NK", "G7", "X1"};
+        
+        for (String code : validCodes) {
+            FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
+            request.setAirlineCode(code);
+
+            Set<ConstraintViolation<FlightSearchRequest>> violations = validator.validate(request);
+
+            assertTrue(violations.isEmpty(), "Airline code '" + code + "' should be valid");
+        }
+    }
+
+    @Test
     void validation_InvalidAirlineCode_FailsValidation() {
         FlightSearchRequest request = new FlightSearchRequest("SFO", "LAX", "2025-01-15", "ECONOMY");
         request.setAirlineCode("INVALID");
@@ -297,7 +312,7 @@ class FlightSearchRequestTest {
 
         assertEquals(1, violations.size());
         ConstraintViolation<FlightSearchRequest> violation = violations.iterator().next();
-        assertEquals("Airline code must be 2-3 uppercase letters", violation.getMessage());
+        assertEquals("Airline code must be 2-3 uppercase alphanumeric characters", violation.getMessage());
     }
 
     @Test

@@ -48,7 +48,7 @@ public class Bookmark {
     @Pattern(regexp = "^(ECONOMY|PREMIUM_ECONOMY|BUSINESS|FIRST)$", message = "Travel class must be ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST")
     private String travelClass; // Optional - allow null
     
-    @Pattern(regexp = "^[A-Z]{2,3}$", message = "Airline code must be 2-3 uppercase letters")
+    @Pattern(regexp = "^[A-Z0-9]{2,3}$", message = "Airline code must be 2-3 uppercase alphanumeric characters")
     private String airlineCode; // Optional - allow null
     
     @Pattern(regexp = "^[0-9]{1,4}$", message = "Flight number must be 1-4 digits")

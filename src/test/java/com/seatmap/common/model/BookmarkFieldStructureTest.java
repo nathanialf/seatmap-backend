@@ -143,7 +143,7 @@ class BookmarkFieldStructureTest {
         boolean hasTravelClassError = violations.stream()
             .anyMatch(v -> v.getMessage().contains("Travel class must be ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST"));
         boolean hasAirlineCodeError = violations.stream()
-            .anyMatch(v -> v.getMessage().contains("Airline code must be 2-3 uppercase letters"));
+            .anyMatch(v -> v.getMessage().contains("Airline code must be 2-3 uppercase alphanumeric characters"));
         boolean hasFlightNumberError = violations.stream()
             .anyMatch(v -> v.getMessage().contains("Flight number must be 1-4 digits"));
         boolean hasMaxResultsError = violations.stream()
