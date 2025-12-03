@@ -344,15 +344,63 @@ public class AlertProcessorHandler implements RequestHandler<ScheduledEvent, Str
             return true;
         }
         
-        // Don't send notification if triggered within last 24 hours (avoid spam)
-        Instant twentyFourHoursAgo = Instant.now().minusSeconds(24 * 60 * 60);
-        if (lastTriggered.isAfter(twentyFourHoursAgo)) {
-            logger.debug("Skipping notification for bookmark {} - already notified within 24 hours", 
+        // Check if flight is departing within 3 hours - if so, always allow alert
+        Instant flightDepartureTime = getFlightDepartureTime(bookmark);
+        if (flightDepartureTime != null) {
+            Instant threeHoursFromNow = Instant.now().plusSeconds(3 * 60 * 60);
+            if (flightDepartureTime.isBefore(threeHoursFromNow)) {
+                logger.debug("Allowing notification for bookmark {} - flight departs within 3 hours", 
+                    bookmark.getBookmarkId());
+                return true;
+            }
+        }
+        
+        // Don't send notification if triggered within last 45 hours (avoid spam)
+        Instant fortyFiveHoursAgo = Instant.now().minusSeconds(45 * 60 * 60);
+        if (lastTriggered.isAfter(fortyFiveHoursAgo)) {
+            logger.debug("Skipping notification for bookmark {} - already notified within 45 hours", 
                 bookmark.getBookmarkId());
             return false;
         }
         
         return true;
+    }
+    
+    /**
+     * Extract flight departure time from bookmark data
+     */
+    private Instant getFlightDepartureTime(Bookmark bookmark) {
+        try {
+            if (bookmark.getItemType() == Bookmark.ItemType.SAVED_SEARCH) {
+                // For saved searches, use the departureDate field
+                if (bookmark.getDepartureDate() != null) {
+                    return java.time.LocalDate.parse(bookmark.getDepartureDate())
+                        .atStartOfDay()
+                        .atZone(java.time.ZoneOffset.UTC)
+                        .toInstant();
+                }
+            } else if (bookmark.getItemType() == Bookmark.ItemType.BOOKMARK) {
+                // For individual flight bookmarks, parse the flight offer data
+                if (bookmark.getFlightOfferData() != null) {
+                    var flightData = objectMapper.readTree(bookmark.getFlightOfferData());
+                    var itineraries = flightData.get("itineraries");
+                    if (itineraries != null && itineraries.size() > 0) {
+                        // Get departure time from first segment of first itinerary
+                        var segments = itineraries.get(0).get("segments");
+                        if (segments != null && segments.size() > 0) {
+                            var departureAt = segments.get(0).get("departure").get("at");
+                            if (departureAt != null) {
+                                return Instant.parse(departureAt.asText());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Error extracting flight departure time from bookmark {}: {}", 
+                bookmark.getBookmarkId(), e.getMessage());
+        }
+        return null;
     }
     
     /**

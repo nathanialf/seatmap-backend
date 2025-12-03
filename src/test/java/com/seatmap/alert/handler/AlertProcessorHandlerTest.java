@@ -101,19 +101,19 @@ class AlertProcessorHandlerTest {
         Bookmark.AlertConfig alertConfig = new Bookmark.AlertConfig(10.0);
         
         // First trigger - should send notification
-        Instant firstTrigger = Instant.now().minus(25, ChronoUnit.HOURS); // 25 hours ago
+        Instant firstTrigger = Instant.now().minus(46, ChronoUnit.HOURS); // 46 hours ago
         alertConfig.setLastTriggered(firstTrigger);
         
-        // Check if enough time has passed (should be true after 24+ hours)
-        Instant twentyFourHoursAgo = Instant.now().minus(24, ChronoUnit.HOURS);
-        boolean shouldSendNotification = alertConfig.getLastTriggered().isBefore(twentyFourHoursAgo);
+        // Check if enough time has passed (should be true after 45+ hours)
+        Instant fortyFiveHoursAgo = Instant.now().minus(45, ChronoUnit.HOURS);
+        boolean shouldSendNotification = alertConfig.getLastTriggered().isBefore(fortyFiveHoursAgo);
         assertTrue(shouldSendNotification);
         
         // Recent trigger - should not send notification
         Instant recentTrigger = Instant.now().minus(2, ChronoUnit.HOURS); // 2 hours ago
         alertConfig.setLastTriggered(recentTrigger);
         
-        shouldSendNotification = alertConfig.getLastTriggered().isBefore(twentyFourHoursAgo);
+        shouldSendNotification = alertConfig.getLastTriggered().isBefore(fortyFiveHoursAgo);
         assertFalse(shouldSendNotification);
     }
     
